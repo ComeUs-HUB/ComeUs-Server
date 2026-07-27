@@ -7,13 +7,13 @@
 ```java
 public record ApiResponse<T>(boolean success, T data, ErrorResponse error) {
     public static <T> ApiResponse<T> success(T data) { return new ApiResponse<>(true, data, null); }
-    public static ApiResponse<Void> success() { return new ApiResponse<>(true, null, null); }
     public static ApiResponse<Void> error(ErrorResponse error) { return new ApiResponse<>(false, null, error); }
 }
 ```
 
 - `data`/`error`는 항상 배타적 (동시에 값 존재 금지).
-- 삭제(DELETE) 성공 응답: 200 + `ApiResponse.success()` (`data: null`). 204 방식은 채택하지 않음.
+- 인자 없는 `success()` 정적 팩토리는 만들지 않는다 — record 컴포넌트 `success`(boolean)의 자동 생성 접근자 `success()`와 이름이 충돌해 컴파일 에러가 난다(static/instance 무관하게 동일 시그니처 금지). 데이터 없는 성공 응답은 `ApiResponse.<Void>success(null)`로 반환한다.
+- 삭제(DELETE) 성공 응답: 200 + `ApiResponse.<Void>success(null)` (`data: null`). 204 방식은 채택하지 않음.
 
 ## 2. `ErrorResponse`
 

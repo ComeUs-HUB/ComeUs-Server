@@ -1,34 +1,14 @@
 package com.toyproject.backend.global.response;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+public record ApiResponse<T>(boolean success, T data, ErrorResponse error) {
 
-@Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-@JsonInclude(JsonInclude.Include.ALWAYS)
-public class ApiResponse<T> {
-
-    private int code;
-    private String message;
-    private T data;
-
-    private ApiResponse(int code, String message, T data) {
-        this.code = code;
-        this.message = message;
-        this.data = data;
-    }
-
+    /*성공 응답*/
     public static <T> ApiResponse<T> success(T data) {
-        return new ApiResponse<>(200, "success", data);
+        return new ApiResponse<>(true, data, null);
     }
 
-    public static <T> ApiResponse<T> success(String message, T data) {
-        return new ApiResponse<>(200, message, data);
-    }
-
-    public static <T> ApiResponse<T> error(int code, String message) {
-        return new ApiResponse<>(code, message, null);
+    /*실패 응답*/
+    public static ApiResponse<Void> error(ErrorResponse error) {
+        return new ApiResponse<>(false, null, error);
     }
 }
