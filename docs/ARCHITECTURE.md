@@ -29,25 +29,25 @@
 ### 3.1 User (회원)
 
 **엔티티 주요 필드**
-- id, email, password, name, phone, address, role(USER/ADMIN), createdAt, updatedAt
+- id, email(nullable), name, phone, address, birthDate, role(USER/ADMIN), provider(KAKAO), providerId, status(ACTIVE/WITHDRAWN), withdrawnAt, createdAt, updatedAt
 
 **API 목록**
 
 | Method | URI | 설명 | 권한 |
 |--------|-----|------|------|
-| POST | /api/auth/signup | 회원가입 | 비회원 |
-| POST | /api/auth/login | 로그인 (JWT 발급) | 비회원 |
+| POST | /api/auth/kakao | 카카오 로그인 (신규 가입 포함, JWT 발급) | 비회원 |
 | POST | /api/auth/refresh | Access Token 재발급 | 비회원 |
-| POST | /api/auth/logout | 로그아웃 | 회원 |
+| POST | /api/auth/logout | 로그아웃 | 비회원 (쿠키가 자격증명) |
 | GET | /api/users/me | 내 정보 조회 | 회원 |
 | PUT | /api/users/me | 내 정보 수정 | 회원 |
 | DELETE | /api/users/me | 회원 탈퇴 | 회원 |
 
 **비즈니스 규칙**
-- 이메일 중복 불가
-- 비밀번호는 BCrypt 암호화 저장
+- **카카오 OAuth 전용 로그인** — 이메일+비밀번호 가입/로그인은 범위 밖(향후 확장)
+- `(provider, providerId)` 복합 유니크로 동일 카카오 계정 중복 가입 방지. `email`은 카카오 동의 거부 시 null 가능
 - JWT (Access Token 30분 + Refresh Token 7일) 방식 인증
-- Refresh Token은 DB `refresh_tokens` 테이블에 저장 (Rotation 방식)
+- Refresh Token은 DB `refresh_tokens` 테이블에 **SHA-256 해시로** 저장, 값 자체는 JWT가 아닌 불투명 랜덤 문자열
+- 탈퇴는 소프트 삭제(status=WITHDRAWN). 동일 카카오 계정 재로그인 시 자동 재활성화
 - ADMIN 역할은 상품·카테고리·주문 관리 권한 보유
 
 ---
@@ -187,8 +187,10 @@
 
 - Spring Security 6.x `SecurityFilterChain` 방식 (WebSecurityConfigurerAdapter 미사용)
 - JWT Access Token (30분) + Refresh Token (7일)
-- Refresh Token Rotation: 재발급 시 기존 토큰 무효화 후 신규 발급
-- Refresh Token 저장: DB `refresh_tokens` 테이블 (추후 Redis 교체 가능)
+- Access Token은 응답 바디 → FE 메모리 보관, Refresh Token은 `HttpOnly + Secure + SameSite=Strict` 쿠키(`Path=/api/auth`)
+- Refresh Token Rotation은 **적용하지 않는다** — 재사용 탐지와 함께 도입해야 실익이 있어 둘 다 향후 과제 ([[phase2-auth]] I 항목)
+- Refresh Token 저장: DB `refresh_tokens` 테이블에 SHA-256 해시 (추후 Redis 교체 가능)
+- ⚠️ `SameSite=Strict`는 FE/BE 동일 상위 도메인 배포를 전제로 한다 ([[phase7-deployment]] X 항목)
 - 401 / 403 응답은 `JwtAuthenticationEntryPoint` / `JwtAccessDeniedHandler`에서 처리
 
 ### 4.2 응답 포맷
@@ -313,7 +315,8 @@ User 엔티티, Spring Security, JWT, 인증 API 미구현
 
 ## 7. 미결 사항
 
-- [ ] 소셜 로그인(OAuth2) 지원 여부 (구글/카카오)
+- [x] 소셜 로그인 — **카카오 전용으로 확정** (구글 등 추가 provider는 `Provider` enum 상수 추가로 확장)
+- [ ] ADMIN 계정 발급 방식 ([[phase2-auth]] 향후 개선 항목)
 - [ ] 상품 이미지 저장 방식 (로컬 / AWS S3)
 - [ ] 결제 외부 PG사 연동 여부 (포트원 등) — 현재 Mock 처리
 - [ ] Redis 도입 여부 (Refresh Token 저장, 인기 상품 캐싱)

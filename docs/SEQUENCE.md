@@ -39,11 +39,11 @@
  ☑ F. PageResponse 페이지네이션 공통 구조 (구현 완료, 사용처는 아직 없음)
 
 [phase2-auth.md] 인증/인가 (선행 필수)
- ☐ G. User 엔티티 / Repository / Role Enum
- ☐ H. SecurityFilterChain + UserDetailsService + 401/403 핸들러
- ☐ I. JwtProvider (Access/Refresh Token 생성·검증) + RefreshToken 엔티티
- ☐ J. JwtAuthenticationFilter
- ☐ K. AuthController + UserController (인증 API 전체)
+ ☐ G. User/RefreshToken 엔티티 + Repository + 카카오 연동 인프라 + Flyway 도입
+ ☐ H. SecurityFilterChain + 401/403 핸들러 + CORS(쿠키 허용)
+ ☐ I. JwtProvider (Access Token) + Refresh Token 발급·검증 (rotation 미적용)
+ ☐ J. JwtAuthenticationFilter + CustomUserDetailsService
+ ☐ K. AuthController + UserController (카카오 로그인 플로우 전체)
 
 [phase3-category-product.md] 카테고리/상품
  ☐ L. Category 도메인 (계층 구조, 트리 조회, 삭제 방어)

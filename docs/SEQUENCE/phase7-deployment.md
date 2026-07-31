@@ -83,11 +83,13 @@
 - 애플리케이션 포트는 외부에 직접 노출하지 않고, 리버스 프록시를 통해서만 접근하도록 방화벽 정책을 구성.
 - HTTPS 인증서 발급 및 자동 갱신 방식을 결정.
 - HTTP 요청은 HTTPS로 강제 리다이렉트되도록 설정.
+- ⚠️ **FE 배포 위치(확정)**: FE는 BE와 **동일 상위 도메인의 서브도메인**으로 배포한다(예: `app.example.com` / `api.example.com`). [[phase2-auth]] H·K 항목의 refresh token 쿠키가 `SameSite=Strict`이므로, FE를 별도 사이트(Vercel·Netlify 등)로 분리하면 브라우저가 cross-site 요청에 쿠키를 **아예 첨부하지 않아 `/api/auth/refresh`·`/logout`이 전면 동작 불능**이 된다 — 보안 약화가 아니라 인증 기능 파손이다. 분리 배포가 불가피해지면 `SameSite=None; Secure` 전환과 CSRF 토큰 도입을 **함께** 진행해야 한다.
 
 **체크포인트**
 - [ ] 헬스체크 엔드포인트가 HTTPS로 정상 응답
 - [ ] HTTP → HTTPS 리다이렉트 동작 확인
 - [ ] 애플리케이션 포트 외부 직접 접근 차단 확인
+- [ ] FE/BE가 동일 상위 도메인으로 배포되어 refresh 쿠키가 정상 왕복하는지 확인 (로그인 → 새로고침 → silent refresh 성공)
 
 ---
 

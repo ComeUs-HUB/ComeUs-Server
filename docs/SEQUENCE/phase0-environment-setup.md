@@ -37,10 +37,12 @@
 
 **개발 방향**
 - 이후 도메인 구현 중 추가 의존성이 필요해지면(예: QueryDSL, Redis, S3 SDK) 이 시점에 build.gradle.kts를 갱신 — 미리 추가하지 않는다.
+- **Flyway 도입(신규)**: `org.flywaydb:flyway-core`, MySQL 사용 시 `org.flywaydb:flyway-mysql`을 [[phase2-auth]] G 항목(User/RefreshToken 테이블 생성) 착수 시점에 함께 추가한다. 테이블이 2개뿐인 지금이 도입 비용이 가장 낮은 시점 — Phase 3~5에서 Product/Category/Cart/Order/Payment/Review까지 늘어난 뒤에 도입하면 "local에서 Hibernate가 자동 생성한 스키마를 손으로 prod DDL에 반영"하는 작업이 테이블 수만큼 위험해진다.
 
 **체크포인트**
 - [x] `./gradlew dependencies` 실행 시 의존성 충돌 없음
 - [x] Lombok 어노테이션 정상 동작 확인
+- [ ] `flyway-core`(+ `flyway-mysql`) 의존성 추가 ([[phase2-auth]] G 항목과 함께 진행)
 
 ---
 
@@ -59,8 +61,10 @@
 **개발 방향**
 - 운영 환경 체크리스트(`ddl-auto`, `show-sql`, 로그 레벨, DB 접속 정보의 환경변수화 등)는 [[phase7-deployment]] V 항목에서 다시 다루므로 여기서는 dev/local·prod 분리 원칙만 유지.
 - actuator 헬스체크를 추가할 시점과 노출 범위(`health`, `info` 등)는 배포 단계 진입 직전에 결정.
+- **Flyway 도입에 따른 `ddl-auto` 변경(신규)**: [[phase2-auth]] G 항목에서 Flyway를 도입하면 `application-local.yml`의 `ddl-auto: update`를 `application-prod.yml`과 동일하게 `validate`로 통일한다. 이후 스키마 변경은 Hibernate 자동생성이 아니라 `src/main/resources/db/migration/V{n}__description.sql` 마이그레이션 파일 작성으로만 이루어진다 — 로컬/운영 스키마가 항상 동일한 마이그레이션 이력을 거치게 되어 드리프트를 방지. `spring.flyway.enabled: true`, `spring.flyway.locations: classpath:db/migration` 설정을 `application.yml`(공통)에 추가.
 
 **체크포인트**
 - [x] 로컬 환경에서 MySQL 연결 성공
 - [x] `application-prod.yml`이 Git에 올라가지 않음 확인
 - [ ] actuator 헬스체크 엔드포인트 노출 설정
+- [ ] `ddl-auto`를 local/prod 모두 `validate`로 통일, `spring.flyway.*` 설정 추가 ([[phase2-auth]] G 항목과 함께 진행)
