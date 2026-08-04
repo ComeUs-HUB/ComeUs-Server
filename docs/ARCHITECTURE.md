@@ -35,7 +35,8 @@
 
 | Method | URI | 설명 | 권한 |
 |--------|-----|------|------|
-| POST | /api/auth/kakao | 카카오 로그인 (신규 가입 포함, JWT 발급) | 비회원 |
+| GET | /api/auth/kakao/authorize | 카카오 로그인 시작 (302 → 카카오) | 비회원 |
+| GET | /api/auth/kakao/callback | 카카오 리다이렉트 착지점 (302 → FE) | 비회원 |
 | POST | /api/auth/refresh | Access Token 재발급 | 비회원 |
 | POST | /api/auth/logout | 로그아웃 | 비회원 (쿠키가 자격증명) |
 | GET | /api/users/me | 내 정보 조회 | 회원 |
@@ -44,6 +45,7 @@
 
 **비즈니스 규칙**
 - **카카오 OAuth 전용 로그인** — 이메일+비밀번호 가입/로그인은 범위 밖(향후 확장)
+- **`redirect_uri`는 백엔드가 소유** — 카카오는 BE 콜백으로 리다이렉트하고, 인가코드는 FE에 도달하지 않는다 (Authorization Code Grant의 confidential client 모델). CSRF 방어로 `state` 필수
 - `(provider, providerId)` 복합 유니크로 동일 카카오 계정 중복 가입 방지. `email`은 카카오 동의 거부 시 null 가능
 - JWT (Access Token 30분 + Refresh Token 7일) 방식 인증
 - Refresh Token은 DB `refresh_tokens` 테이블에 **SHA-256 해시로** 저장, 값 자체는 JWT가 아닌 불투명 랜덤 문자열
@@ -187,7 +189,8 @@
 
 - Spring Security 6.x `SecurityFilterChain` 방식 (WebSecurityConfigurerAdapter 미사용)
 - JWT Access Token (30분) + Refresh Token (7일)
-- Access Token은 응답 바디 → FE 메모리 보관, Refresh Token은 `HttpOnly + Secure + SameSite=Strict` 쿠키(`Path=/api/auth`)
+- Access Token은 응답 바디 → FE 메모리 보관, Refresh Token은 `HttpOnly + Secure + SameSite=Strict` 쿠키(`Path=/api/auth`). access token은 URL에 싣지 않는다
+- OAuth 인가 왕복용 `oauth_state` 쿠키는 `SameSite=Lax` — 콜백이 cross-site 네비게이션이라 `Strict`면 전송되지 않는다
 - Refresh Token Rotation은 **적용하지 않는다** — 재사용 탐지와 함께 도입해야 실익이 있어 둘 다 향후 과제 ([[phase2-auth]] I 항목)
 - Refresh Token 저장: DB `refresh_tokens` 테이블에 SHA-256 해시 (추후 Redis 교체 가능)
 - ⚠️ `SameSite=Strict`는 FE/BE 동일 상위 도메인 배포를 전제로 한다 ([[phase7-deployment]] X 항목)
