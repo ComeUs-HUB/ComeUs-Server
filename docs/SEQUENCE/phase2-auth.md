@@ -96,7 +96,10 @@
 
 ## H. Spring Security 설정
 
-`global/config/SecurityConfig`, `global/security/JwtAuthenticationEntryPoint`(401), `JwtAccessDeniedHandler`(403)
+`global/config/SecurityConfig`, `global/security/JwtAuthenticationEntryPoint`
+
+- **인증 실패 응답은 `JwtAuthenticationEntryPoint` 하나가 전담한다.** 401뿐 아니라 **403(`WITHDRAWN_USER`)도 여기서 나간다**
+- `AccessDeniedHandler`를 두지 않는 근거: J 항목의 필터가 예외 시 `SecurityContext`를 비운 채 체인을 통과시키므로, Spring Security는 이를 **미인증(anonymous)** 으로 보고 항상 `AuthenticationEntryPoint`를 호출한다. `AccessDeniedHandler`는 *인증은 됐는데 권한이 부족한* 경우에만 불리므로 현재 설계에는 도달 경로가 없다 (ADMIN 권한 체크가 들어오는 [[phase6-finalization]]에서 재검토)
 
 | 엔드포인트 | 인증 |
 |---|---|
@@ -113,10 +116,11 @@
 - **CORS `allowCredentials(true)` 필수** (쿠키 왕복). `allowedOrigins`는 `app.cors.allowed-origins` 명시 목록
   - CORS가 필요한 것은 `/refresh`·`/logout`·`/users/me` **뿐**이다. `/kakao/authorize`·`/kakao/callback`은 XHR이 아니라 브라우저 top-level 네비게이션이라 CORS가 적용되지 않는다
 - 401/403 응답도 공통 `ApiResponse` 포맷을 따라야 하는데 필터 단계라 `GlobalExceptionHandler`를 타지 않는다 → 핸들러에서 `ObjectMapper`로 직접 JSON 작성
-- ⚠️ 이때 **HTTP 상태를 하드코딩하지 말고 `errorCode.getHttpStatus()` 사용** — 인증 경로인데 403인 코드(`WITHDRAWN_USER`)가 있다
+- ⚠️ 이때 **HTTP 상태를 하드코딩하지 말고 `errorCode.getHttpStatus()` 사용** — EntryPoint가 403(`WITHDRAWN_USER`)까지 함께 내리므로, `401`을 박아두면 U010이 401로 뭉개진다
 
 **체크포인트**
 - [ ] 비인증 접근 시 401(U003), CORS 통과/차단 동작 (preflight 포함, `credentials: 'include'`)
+- [ ] EntryPoint가 `errorCode.getHttpStatus()`로 401/403을 분기 (U010이 401로 뭉개지지 않는지)
 
 ---
 
@@ -146,7 +150,7 @@
   - **매 요청 DB 조회** — JWT claim만 믿지 않고 탈퇴 등 최신 상태를 즉시 반영하기 위함
   - **거부 사유를 구분해서 던진다**: 미존재 `UsernameNotFoundException` / WITHDRAWN `DisabledException`
 - `JwtAuthenticationFilter`(`OncePerRequestFilter`): `Bearer` 토큰 없으면 그냥 통과. 있으면 파싱 → 조회 → `SecurityContextHolder` 설정
-  - **예외 시 short-circuit 하지 않는다.** request attribute에만 사유를 남기고 체인을 계속 진행 → 응답은 H 항목의 EntryPoint/DeniedHandler가 attribute를 읽어 결정
+  - **예외 시 short-circuit 하지 않는다.** request attribute에만 사유를 남기고 체인을 계속 진행 → 응답은 H 항목의 `JwtAuthenticationEntryPoint`가 attribute를 읽어 결정(401·403 모두)
 
 | 상황 | ErrorCode |
 |---|---|
