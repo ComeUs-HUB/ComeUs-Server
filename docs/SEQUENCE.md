@@ -14,14 +14,14 @@
 |-------|------|------|------|-----------|
 | 0 | A ~ C | 환경 설정 — 프로젝트 초기화, 의존성, 설정 파일 | 부분 구현 | [phase0-environment-setup.md](SEQUENCE/phase0-environment-setup.md) |
 | 1 | D ~ F | 글로벌 기반 — 공통 응답, 예외 처리, 페이지네이션 | 구현 완료 | [phase1-global-foundation.md](SEQUENCE/phase1-global-foundation.md) |
-| 2 | G ~ K | 인증/인가 — User 도메인, Security, JWT | 미구현 | [phase2-auth.md](SEQUENCE/phase2-auth.md) |
+| 2 | G ~ K | 인증/인가 — user/auth 도메인, Security, JWT | 미구현 | [phase2-auth.md](SEQUENCE/phase2-auth.md) |
 | 3 | L ~ M | 카테고리/상품 — Category, Product 도메인 | 미구현 | [phase3-category-product.md](SEQUENCE/phase3-category-product.md) |
 | 4 | N ~ P | 구매 플로우 — Cart, Order, Payment 도메인 | 미구현 | [phase4-purchase-flow.md](SEQUENCE/phase4-purchase-flow.md) |
 | 5 | Q | 리뷰 — Review 도메인 | 미구현 | [phase5-review.md](SEQUENCE/phase5-review.md) |
 | 6 | R ~ S | 마무리 — RBAC 완성, 테스트 코드 | 미구현 | [phase6-finalization.md](SEQUENCE/phase6-finalization.md) |
 | 7 | T ~ Z | 배포 — Docker, CI/CD, 서버 배포, 모니터링 | 미구현 | [phase7-deployment.md](SEQUENCE/phase7-deployment.md) |
 
-현재 코드베이스는 **Phase 0~1(A~F)까지 구현**되어 있으며, Phase 2(G, User 도메인)부터 이어서 진행하면 된다.
+현재 코드베이스는 **Phase 0~1(A~F)까지 구현**되어 있으며, Phase 2(G, user/auth 도메인)부터 이어서 진행하면 된다.
 
 ---
 

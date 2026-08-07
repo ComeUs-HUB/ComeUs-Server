@@ -11,7 +11,7 @@ package com.toyproject.backend.global.security;
  * <ul>
  *   <li>{@code AuthenticationEntryPoint}를 구현한다.</li>
  *   <li>{@link JwtAuthenticationFilter}가 남긴 request attribute에서 {@code ErrorCode}를 읽는다.
- *       없으면 {@code UNAUTHORIZED}(U003)로 폴백한다(토큰 없이 보호 자원에 접근한 경우).</li>
+ *       없으면 {@code UNAUTHORIZED}(A001)로 폴백한다(토큰 없이 보호 자원에 접근한 경우).</li>
  *   <li>필터 단계라 {@code GlobalExceptionHandler}를 타지 않는다. 공통 {@code ApiResponse} 포맷을
  *       {@code ObjectMapper}로 <b>직접 직렬화</b>해야 한다.</li>
  *   <li>{@code Content-Type: application/json} + {@code charset=UTF-8}을 명시한다(한글 메시지가 깨진다).</li>
@@ -25,7 +25,7 @@ package com.toyproject.backend.global.security;
  *
  * <p><b>주의</b><br>
  * ⚠️ HTTP 상태를 <b>하드코딩하지 말고 {@code errorCode.getHttpStatus()}를 쓴다.</b>
- * 이 EntryPoint는 403(U010)까지 함께 내리므로, {@code 401}을 박아두면 U010이 401로 뭉개져
+ * 이 EntryPoint는 403(A008)까지 함께 내리므로, {@code 401}을 박아두면 A008이 401로 뭉개져
  * "탈퇴 회원"과 "인증 필요"를 클라이언트가 구분할 수 없게 된다.
  */
 public class JwtAuthenticationEntryPoint {

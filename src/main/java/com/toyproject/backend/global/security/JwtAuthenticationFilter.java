@@ -24,17 +24,17 @@ package com.toyproject.backend.global.security;
  * <p><b>사유별 매핑</b>
  * <table border="1">
  *   <tr><th>상황</th><th>ErrorCode</th></tr>
- *   <tr><td>토큰 없음 / 사용자 미존재 등 기타</td><td>{@code UNAUTHORIZED}(U003, 401)</td></tr>
- *   <tr><td>서명 위조·형식 오류 ({@code JwtException})</td><td>{@code INVALID_TOKEN}(U005, 401)</td></tr>
- *   <tr><td>만료 ({@code ExpiredJwtException})</td><td>{@code EXPIRED_TOKEN}(U006, 401)</td></tr>
- *   <tr><td>탈퇴 회원 ({@code DisabledException})</td><td><b>{@code WITHDRAWN_USER}(U010, 403)</b></td></tr>
+ *   <tr><td>토큰 없음 / 사용자 미존재 등 기타</td><td>{@code UNAUTHORIZED}(A001, 401)</td></tr>
+ *   <tr><td>서명 위조·형식 오류 ({@code JwtException})</td><td>{@code INVALID_TOKEN}(A003, 401)</td></tr>
+ *   <tr><td>만료 ({@code ExpiredJwtException})</td><td>{@code EXPIRED_TOKEN}(A004, 401)</td></tr>
+ *   <tr><td>탈퇴 회원 ({@code DisabledException})</td><td><b>{@code WITHDRAWN_USER}(A008, 403)</b></td></tr>
  * </table>
  *
  * <p><b>주의</b>
  * <ul>
  *   <li>{@code ExpiredJwtException}은 {@code JwtException}의 하위 타입이므로 <b>catch 순서가 중요하다.</b>
- *       {@code JwtException}을 먼저 잡으면 U006이 U005로 뭉개진다.</li>
- *   <li>탈퇴 사유를 attribute로 넘기지 않으면 U010은 절대 반환되지 않는다(전부 U003이 된다).</li>
+ *       {@code JwtException}을 먼저 잡으면 A004가 A003으로 뭉개진다.</li>
+ *   <li>탈퇴 사유를 attribute로 넘기지 않으면 A008은 절대 반환되지 않는다(전부 A001이 된다).</li>
  *   <li>attribute 키는 상수로 공개해 EntryPoint가 같은 키를 참조하게 한다.</li>
  * </ul>
  */

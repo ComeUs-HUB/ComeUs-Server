@@ -1,4 +1,4 @@
-package com.toyproject.backend.domain.user.client.dto;
+package com.toyproject.backend.domain.auth.client.dto;
 
 /**
  * [3단계 · G] 카카오 사용자 정보 응답 DTO — 프로토타입 (구현 전)

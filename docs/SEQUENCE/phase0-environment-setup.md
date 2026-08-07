@@ -1,6 +1,7 @@
 # Phase 0 — 환경 설정 (A~C)
 
-> 상태: 부분 구현 — 프로젝트 골격과 의존성은 준비됐지만 `domain/*`, `global/security` 패키지는 아직 없음
+> 상태: 부분 구현 — 프로젝트 골격과 의존성은 준비됨. `domain/user`·`domain/auth`·`global/security`에는
+> 본문이 빈 프로토타입 골격만 있고, 나머지 도메인은 `*ErrorCode`만 존재
 
 프로젝트 초기 골격(패키지 구조, 의존성, 실행 환경 설정)을 잡는 단계.
 
@@ -13,7 +14,7 @@
 **구현 현황 — 부분 구현**
 
 - Gradle(Kotlin DSL) + Java 21 + Spring Boot 3.5.0 골격, `BackendApplication.java`, Git 저장소 초기화까지는 완료.
-- 다만 목표로 했던 `com.toyproject.backend.domain.{user,product,category,cart,order,payment,review}` 패키지는 아직 하나도 만들어지지 않았고, `global.security` 패키지도 없음. 현재 존재하는 `global` 하위는 `config`, `exception`, `response` 뿐.
+- `com.toyproject.backend.domain.{user,auth}`와 `global.{security,util}` 패키지는 생성됐지만 클래스 본문은 비어 있는 프로토타입 골격 상태. `domain.{product,category,cart,order,payment,review}`는 `exception/*ErrorCode`만 존재.
 - 도메인 패키지는 뒤에 이어지는 Phase(인증/카테고리·상품/구매 플로우/리뷰) 작업을 시작할 때 그 시점에 필요한 하위 폴더(`controller`, `service`, `repository`, `entity`, `dto`)부터 만들어 나가는 방식을 권장 — 미리 빈 패키지를 다 만들어두기보다 실제 클래스가 생길 때 같이 생성.
 
 **개발 방향**
@@ -22,7 +23,7 @@
 
 **체크포인트**
 - [x] `./gradlew bootRun` 으로 서버 정상 기동 확인
-- [ ] 도메인 패키지 구조 생성 완료 (User 도메인부터 시작 — [[phase2-auth]] 참고)
+- [ ] 도메인 패키지 구조 생성 완료 (user/auth 도메인부터 시작 — [[phase2-auth]] 참고)
 
 ---
 

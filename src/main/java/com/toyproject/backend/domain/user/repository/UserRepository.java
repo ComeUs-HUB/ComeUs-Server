@@ -10,6 +10,8 @@ package com.toyproject.backend.domain.user.repository;
  * <ul>
  *   <li>{@code JpaRepository<User, Long>}를 확장한다. 쿼리 메서드 이름만으로 해결되므로
  *       {@code @Query}는 두지 않는다.</li>
+ *   <li><b>이 Repository는 user 패키지 안에서만 주입한다.</b> auth 도메인이 회원 데이터에 접근할 때는
+ *       {@code UserService}를 경유해야 회원 생성 규칙이 한 곳에 남는다.</li>
  * </ul>
  *
  * <p><b>예정 메서드</b>

@@ -1,4 +1,4 @@
-package com.toyproject.backend.domain.user.controller;
+package com.toyproject.backend.domain.auth.controller;
 
 /**
  * [8단계 · K] 인증 API — 프로토타입 (구현 전)
@@ -24,7 +24,7 @@ package com.toyproject.backend.domain.user.controller;
  *   <li><b>{@code /kakao/authorize}·{@code /kakao/callback}은 JSON을 반환하지 않는다. 항상 302다.</b>
  *       브라우저 네비게이션이라 {@code ApiResponse} 포맷이 사용자 화면에 노출되면 안 된다.</li>
  *   <li><b>실패도 예외를 던지지 않는다.</b> {@code {FE}/oauth/complete?error={code}}로 302해
- *       <b>FE가 에러 UI를 소유</b>하게 한다. U007·U008·U011이 이 경로로 전달된다.</li>
+ *       <b>FE가 에러 UI를 소유</b>하게 한다. A005·A006·A009가 이 경로로 전달된다.</li>
  *   <li>쿠키 값은 {@code CookieUtil}에서만 만든다.</li>
  * </ul>
  *
@@ -34,7 +34,7 @@ package com.toyproject.backend.domain.user.controller;
  * <p><b>{@code /callback} 처리 순서</b>
  * <ol>
  *   <li>카카오가 {@code ?error=}를 실어 보낸 경우(동의 거부 등) → 그대로 FE로 302 {@code ?error=}</li>
- *   <li>{@code oauth_state} 쿠키와 쿼리 {@code state} 대조 → 불일치·누락이면 {@code INVALID_OAUTH_STATE}(U011)</li>
+ *   <li>{@code oauth_state} 쿠키와 쿼리 {@code state} 대조 → 불일치·누락이면 {@code INVALID_OAUTH_STATE}(A009)</li>
  *   <li><b>{@code oauth_state} 쿠키 즉시 삭제</b>(1회용). 뒤로가기로 콜백을 재사용해도 여기서 걸린다</li>
  *   <li>{@code authService.kakaoLogin(code)}</li>
  *   <li>refresh 원문을 {@code refresh_token} 쿠키로 설정</li>

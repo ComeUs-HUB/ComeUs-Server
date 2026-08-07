@@ -1,4 +1,4 @@
-package com.toyproject.backend.global.security;
+package com.toyproject.backend.domain.auth.token;
 
 /**
  * [5단계 · I] 불투명 랜덤 토큰 생성기 — 프로토타입 (구현 전)

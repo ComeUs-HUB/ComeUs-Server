@@ -1,4 +1,4 @@
-package com.toyproject.backend.domain.user.dto;
+package com.toyproject.backend.domain.auth.dto;
 
 /**
  * [8단계 · K] 토큰 응답 DTO — 프로토타입 (구현 전)

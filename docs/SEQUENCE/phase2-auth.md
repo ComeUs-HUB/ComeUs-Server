@@ -1,9 +1,28 @@
-# Phase 2 — 인증/인가 (User 도메인, G~K)
+# Phase 2 — 인증/인가 (user/auth 도메인, G~K)
 
-> 상태: 미구현. `domain/user`, `global/security` 패키지 없음.
-> 선반영됨: `UserErrorCode`(U001~U006), `application.yml`의 `jwt.*`, `JpaConfig`의 `@EnableJpaAuditing`.
+> 상태: 미구현. `domain/user`, `domain/auth`, `global/security` 패키지에 **본문이 빈 프로토타입 골격**만 존재한다.
+> 선반영됨: `UserErrorCode`(U001), `AuthErrorCode`(A001~A009), `application.yml`의 `jwt.*`,
+> `JpaConfig`의 `@EnableJpaAuditing`, `BackendApplication`의 `@ConfigurationPropertiesScan`.
 
 이후 모든 도메인이 "로그인한 사용자"에 의존하므로 가장 먼저 진행한다.
+
+---
+
+## 도메인 분리 (user / auth)
+
+인증 책임을 `domain/auth`로 분리했다. 아래 규칙을 구현 중 깨지 않도록 한다.
+
+| 도메인 | 소유 |
+|---|---|
+| `domain/user` | `User`·`Role`·`UserStatus`·`Provider`, `UserRepository`, `UserService`, `UserController`, `UserErrorCode` |
+| `domain/auth` | `RefreshToken`, `KakaoOAuthClient`, `JwtProvider`·`SecureTokenGenerator`, `JwtProperties`·`KakaoProperties`·`RestClientConfig`, `AuthService`, `AuthController`, `AuthErrorCode` |
+| `global/security` | Spring Security 어댑터만 — `JwtAuthenticationFilter`, `JwtAuthenticationEntryPoint`, `CustomUserDetailsService`, `UserPrincipal` |
+
+- **의존 방향은 `auth → user` 단방향.** user는 auth를 참조하지 않는다
+- **auth는 `UserRepository`를 직접 주입하지 않는다** — `UserService`의 공개 메서드만 경유한다. 회원 생성 규칙이 한 곳(user)에 남게 하기 위함
+- `Provider` enum은 `User.provider`의 타입이므로 **user에 남긴다**
+- `AppProperties`는 `SecurityConfig`(CORS)와 `AuthController`(FE 복귀 주소)가 함께 쓰므로 `global/config`에 남긴다
+- 탈퇴만 두 도메인을 함께 건드리는데, 순서를 `UserController`가 소유해 순환 의존을 막는다 (K 항목 참고)
 
 ---
 
@@ -45,7 +64,7 @@
 - Setter 없이 `updateProfile(phone, address, birthDate)`, `withdraw()`, `reactivate()` 도메인 메서드로만 상태 변경
 - `Provider`/`Role`/`UserStatus`는 별도 enum 파일
 
-### RefreshToken (`domain/user/entity/RefreshToken.java`)
+### RefreshToken (`domain/auth/entity/RefreshToken.java`)
 
 | 필드 | 타입 | 비고 |
 |---|---|---|
@@ -62,17 +81,29 @@
 
 ### Repository
 
-- `UserRepository`: `findByProviderAndProviderId(Provider, String)`, `existsByEmail(String)`
-- `RefreshTokenRepository`
+- `UserRepository`(user): `findByProviderAndProviderId(Provider, String)`, `existsByEmail(String)`
+  - **user 패키지 밖에서 주입하지 않는다.** auth가 회원 데이터에 접근할 땐 `UserService`를 경유한다
+- `RefreshTokenRepository`(auth)
   - `findByTokenHash(String)` — `@EntityGraph(attributePaths = "user")` (재발급 시 User가 항상 필요)
-  - `deleteByTokenHash(String)`, `deleteAllByUser(User)` — 둘 다 `@Modifying @Query` 벌크 삭제
+  - `deleteByTokenHash(String)`, `deleteAllByUserId(Long)` — 둘 다 `@Modifying @Query` 벌크 삭제
+    - `deleteAllByUserId`는 `@ManyToOne User user`의 속성 경로로 파생된다. `User` 엔티티를 넘기지 않으므로 탈퇴 시 auth가 회원을 로딩할 필요가 없다
+    - `@Modifying(clearAutomatically = true)`만 붙이면 된다. 탈퇴 흐름에서 `user.withdraw()`와 이 삭제는 **서로 다른 트랜잭션**이라 flush 순서가 얽히지 않는다 (`flushAutomatically` 불필요)
+
+### user / auth 경계 메서드
+
+- `UserService.findOrCreateKakaoUser(providerId, email, nickname)` → `KakaoUserResolution(User, boolean isNewUser)`
+  - 조회 → ACTIVE 재사용 / WITHDRAWN `reactivate()` / 없으면 신규 생성(email 중복이면 email만 null)
+  - **이 판단 전체를 user가 소유한다.** auth는 카카오에서 받은 값만 넘긴다
+  - 재활성화는 기존 회원이므로 `isNewUser=false`
+- `UserService.withdraw(userId)` → `String providerId` (소프트 삭제만 수행)
+- `AuthService.revokeAllTokens(userId)` / `AuthService.unlinkKakao(providerId)` — 탈퇴 시 `UserController`가 호출
 
 ### 카카오 연동
 
-- `global/config/KakaoProperties`(`prefix="kakao"`): `clientId, clientSecret, adminKey, redirectUri, authorizeUri, tokenUri, userInfoUri, unlinkUri`
+- `domain/auth/config/KakaoProperties`(`prefix="kakao"`): `clientId, clientSecret, adminKey, redirectUri, authorizeUri, tokenUri, userInfoUri, unlinkUri`
   - **`redirectUri`는 BE 콜백 주소**(`{api-host}/api/auth/kakao/callback`)다. FE 주소가 아니다
-- `global/config/RestClientConfig`: kauth/kapi용 `RestClient` Bean 2개 (신규 의존성 불필요 — `RestClient`는 `starter-web`에 포함. `starter-oauth2-client`·webflux 사용 안 함)
-- `domain/user/client/KakaoOAuthClient`: `requestToken(code)`, `fetchUserInfo(kakaoAccessToken)`, `unlink(providerId)`
+- `domain/auth/config/RestClientConfig`: kauth/kapi용 `RestClient` Bean 2개 (신규 의존성 불필요 — `RestClient`는 `starter-web`에 포함. `starter-oauth2-client`·webflux 사용 안 함)
+- `domain/auth/client/KakaoOAuthClient`: `requestToken(code)`, `fetchUserInfo(kakaoAccessToken)`, `unlink(providerId)`
   - **카카오 호출 실패는 이 경계에서 `BusinessException`으로 변환** — 상위 계층이 카카오의 존재를 모르게 한다
   - 토큰 요청 form: `grant_type=authorization_code`, `client_id`, `client_secret`, `redirect_uri`(설정값), `code`
 - `client/dto/KakaoTokenResponse`, `KakaoUserInfoResponse`(+중첩 `KakaoAccount`, `Profile`) — record + `@JsonNaming(SnakeCaseStrategy)`
@@ -116,22 +147,24 @@
 - **CORS `allowCredentials(true)` 필수** (쿠키 왕복). `allowedOrigins`는 `app.cors.allowed-origins` 명시 목록
   - CORS가 필요한 것은 `/refresh`·`/logout`·`/users/me` **뿐**이다. `/kakao/authorize`·`/kakao/callback`은 XHR이 아니라 브라우저 top-level 네비게이션이라 CORS가 적용되지 않는다
 - 401/403 응답도 공통 `ApiResponse` 포맷을 따라야 하는데 필터 단계라 `GlobalExceptionHandler`를 타지 않는다 → 핸들러에서 `ObjectMapper`로 직접 JSON 작성
-- ⚠️ 이때 **HTTP 상태를 하드코딩하지 말고 `errorCode.getHttpStatus()` 사용** — EntryPoint가 403(`WITHDRAWN_USER`)까지 함께 내리므로, `401`을 박아두면 U010이 401로 뭉개진다
+- ⚠️ 이때 **HTTP 상태를 하드코딩하지 말고 `errorCode.getHttpStatus()` 사용** — EntryPoint가 403(`WITHDRAWN_USER`)까지 함께 내리므로, `401`을 박아두면 A008이 401로 뭉개진다
 
 **체크포인트**
-- [ ] 비인증 접근 시 401(U003), CORS 통과/차단 동작 (preflight 포함, `credentials: 'include'`)
-- [ ] EntryPoint가 `errorCode.getHttpStatus()`로 401/403을 분기 (U010이 401로 뭉개지지 않는지)
+- [ ] 비인증 접근 시 401(A001), CORS 통과/차단 동작 (preflight 포함, `credentials: 'include'`)
+- [ ] EntryPoint가 `errorCode.getHttpStatus()`로 401/403을 분기 (A008이 401로 뭉개지지 않는지)
 
 ---
 
 ## I. JwtProvider + Refresh Token 발급·검증
+
+`domain/auth/token/JwtProvider`, `domain/auth/token/SecureTokenGenerator`
 
 - jjwt 0.12.x. 키는 `Keys.hmacShaKeyFor(secret.getBytes(UTF_8))` — HS256이므로 `jwt.secret` 최소 32바이트
 - `createAccessToken(User)`: subject=userId, claim `role`, `jwt.access-expiration`(30분)
 - `parseClaims(token)`: `ExpiredJwtException`/`JwtException`을 그대로 던져 필터가 종류별로 구분하게 함
 - **`JwtProvider`는 access token만 담당** — refresh token 생성은 `SecureRandom` 32바이트 → base64url 43자, 별도 컴포넌트가 맡는다
 - `jwt.refresh-expiration`(7일)의 용도는 `RefreshToken.expiresAt` 계산 + 쿠키 `Max-Age` (JWT `exp` 아님)
-- **재발급**: 쿠키 원문을 SHA-256 해시 → `findByTokenHash` → row 존재 && 미만료면 **신규 access token만 발급**. 미존재·만료 모두 `REFRESH_TOKEN_NOT_FOUND`(U009)
+- **재발급**: 쿠키 원문을 SHA-256 해시 → `findByTokenHash` → row 존재 && 미만료면 **신규 access token만 발급**. 미존재·만료 모두 `REFRESH_TOKEN_NOT_FOUND`(A007)
 - rotation을 하지 않으므로 **재발급 응답에 `Set-Cookie`가 없다.** 여러 탭이 동시에 호출해도 모두 성공한다
 - 만료 row 정리 배치는 후속 과제 (`expiresAt` 검사로 거절되므로 기능상 무해)
 
@@ -139,8 +172,8 @@
 - [ ] 재발급 시 access token만 갱신되고 refresh 쿠키는 유지 (응답에 `Set-Cookie` 없음)
 - [ ] 동일 refresh token으로 연속 재발급 시 매번 성공
 - [ ] `token_hash`에 원문이 아닌 SHA-256 해시가 저장됨
-- [ ] `expiresAt` 지난 토큰으로 재발급 시 U009 (row가 남아 있어도 거절)
-- [ ] 로그아웃 직후 같은 토큰으로 재발급 시 U009
+- [ ] `expiresAt` 지난 토큰으로 재발급 시 A007 (row가 남아 있어도 거절)
+- [ ] 로그아웃 직후 같은 토큰으로 재발급 시 A007
 
 ---
 
@@ -154,16 +187,16 @@
 
 | 상황 | ErrorCode |
 |---|---|
-| 토큰 없음 / 기타 | `UNAUTHORIZED`(U003, 401) |
-| 서명 위조·형식 오류 | `INVALID_TOKEN`(U005, 401) |
-| 만료 | `EXPIRED_TOKEN`(U006, 401) |
-| 탈퇴 회원 | **`WITHDRAWN_USER`(U010, 403)** |
+| 토큰 없음 / 기타 | `UNAUTHORIZED`(A001, 401) |
+| 서명 위조·형식 오류 | `INVALID_TOKEN`(A003, 401) |
+| 만료 | `EXPIRED_TOKEN`(A004, 401) |
+| 탈퇴 회원 | **`WITHDRAWN_USER`(A008, 403)** |
 
-⚠️ 탈퇴 사유를 attribute로 넘기지 않으면 U010은 **절대 반환되지 않는 죽은 코드**가 된다(전부 U003으로 뭉개짐).
+⚠️ 탈퇴 사유를 attribute로 넘기지 않으면 A008은 **절대 반환되지 않는 죽은 코드**가 된다(전부 A001으로 뭉개짐).
 
 **체크포인트**
-- [ ] 만료/위조 토큰이 U006/U005로 **구분**되어 응답
-- [ ] 탈퇴 회원의 유효한 access token → **U010(403)** (U003으로 뭉개지면 실패)
+- [ ] 만료/위조 토큰이 A004/A003로 **구분**되어 응답
+- [ ] 탈퇴 회원의 유효한 access token → **A008(403)** (A001으로 뭉개지면 실패)
 
 ---
 
@@ -220,12 +253,13 @@
 
 **`/callback` 처리 순서**
 1. 카카오가 `?error=`를 실어 보낸 경우(사용자가 동의 거부 등) → 그대로 FE로 302 `?error=`
-2. `oauth_state` 쿠키와 쿼리 `state` 대조 → 불일치·누락이면 `INVALID_OAUTH_STATE`(U011)
+2. `oauth_state` 쿠키와 쿼리 `state` 대조 → 불일치·누락이면 `INVALID_OAUTH_STATE`(A009)
 3. **`oauth_state` 쿠키 즉시 삭제** (1회용)
 4. `requestToken(code)` → `fetchUserInfo` → kakaoId, email(nullable), nickname
-5. `findByProviderAndProviderId(KAKAO, kakaoId)`
-   - ACTIVE → 그대로 사용 / WITHDRAWN → `reactivate()` (자동 재활성화)
+5. `userService.findOrCreateKakaoUser(kakaoId, email, nickname)` → `KakaoUserResolution(User, isNewUser)`
+   - ACTIVE → 그대로 사용 / WITHDRAWN → `reactivate()` (자동 재활성화). 둘 다 `isNewUser=false`
    - 없음 → 신규 생성, `isNewUser=true`. **email이 중복이면 email만 null 처리하고 가입은 계속 진행**
+   - ⚠️ 이 판단은 **user 도메인 안에서** 한다. `AuthService`가 `UserRepository`를 직접 호출하지 않는다
 6. refresh 원문 생성 → 해시를 `RefreshToken` row로 저장 → 원문을 `refresh_token` 쿠키로 설정
 7. `{app.frontend.base-url}/oauth/complete`로 302. 신규 가입이면 `?isNewUser=true`
    (`isNewUser`는 자격증명이 아니라 "추가 정보 입력" UX 용도이므로 query param으로 안전. 게이팅 아님)
@@ -235,20 +269,43 @@
 
 ### 회원 탈퇴 (`DELETE /api/users/me`)
 
-소프트 삭제(`status=WITHDRAWN`, `withdrawnAt` 기록) + 해당 유저 `RefreshToken` 전체 삭제 + 쿠키 만료.
-카카오 unlink는 **best-effort** — 실패해도 로그만 남기고 탈퇴는 계속 진행(카카오 장애로 탈퇴가 막히면 안 됨).
-
-### 신규 ErrorCode (`UserErrorCode`, U007부터 이어서)
+user와 auth 양쪽을 건드리는 **유일한 흐름**이다. 순서를 `UserController`가 소유해
+`UserService`가 `AuthService`를 참조하지 않게 하고, 그 결과 의존 방향이 `auth → user` 단방향으로 유지된다.
 
 ```
-KAKAO_AUTH_FAILED(400, U007, "카카오 인증에 실패했습니다.")
-KAKAO_API_ERROR(502, U008, "카카오 서버 연동 중 오류가 발생했습니다.")
-REFRESH_TOKEN_NOT_FOUND(401, U009, "유효하지 않거나 만료된 리프레시 토큰입니다.")
-WITHDRAWN_USER(403, U010, "탈퇴한 회원입니다.")
-INVALID_OAUTH_STATE(400, U011, "잘못된 인증 요청입니다.")
+1. authService.revokeAllTokens(userId)          # RefreshToken 전수 삭제
+2. String providerId = userService.withdraw(userId)   # 소프트 삭제 + providerId 획득
+3. authService.unlinkKakao(providerId)          # 카카오 연결 해제 (best-effort)
+4. refresh_token 쿠키 만료 (Path=/api/auth 필수)
 ```
-- 기존 `INVALID_TOKEN`(U005)/`EXPIRED_TOKEN`(U006)은 JWT 자체의 서명/만료 오류에 재사용
-- U007·U008·U011은 콜백에서 발생하는데 **콜백은 JSON을 반환하지 않으므로**, 이 코드들은 FE 복귀 URL의 `?error=` 값으로 전달된다 (`{FE}/oauth/complete?error=U011`)
+
+- 1은 **fail-closed** — 실패하면 예외가 전파되어 탈퇴가 중단되고 회원은 ACTIVE로 남는다(재로그인으로 복구 가능)
+- 3은 **best-effort** — 실패해도 로그만 남기고 탈퇴는 성립한다(카카오 장애로 탈퇴가 막히면 안 됨).
+  예외를 삼키는 판단은 호출자가 아니라 `AuthService` 안에서 한다
+- ⚠️ **순서를 뒤집지 말 것.** 2를 먼저 하면 WITHDRAWN인데 `refresh_tokens` row가 남는 상태가 생긴다
+- 1과 2는 별도 트랜잭션이라 원자적이지 않다. 어느 쪽이 실패해도 결과가 fail-safe하고, 카카오 `unlink`는 외부 호출이라
+  애초에 트랜잭션으로 묶을 수 없다. 원자성이 필요해지면 도메인 이벤트로 전환한다(**현 단계에서는 도입하지 않음**)
+
+### ErrorCode (`AuthErrorCode`, `domain/auth/exception`)
+
+인증 관련 코드는 전부 `AuthErrorCode`(A 접두사)에 있다. `UserErrorCode`에는 `DUPLICATE_EMAIL`(U001)만 남는다.
+
+```
+UNAUTHORIZED(401, A001, "인증이 필요합니다.")
+FORBIDDEN(403, A002, "접근 권한이 없습니다.")
+INVALID_TOKEN(401, A003, "유효하지 않은 토큰입니다.")
+EXPIRED_TOKEN(401, A004, "만료된 토큰입니다.")
+KAKAO_AUTH_FAILED(400, A005, "카카오 인증에 실패했습니다.")
+KAKAO_API_ERROR(502, A006, "카카오 서버 연동 중 오류가 발생했습니다.")
+REFRESH_TOKEN_NOT_FOUND(401, A007, "유효하지 않거나 만료된 리프레시 토큰입니다.")
+WITHDRAWN_USER(403, A008, "탈퇴한 회원입니다.")
+INVALID_OAUTH_STATE(400, A009, "잘못된 인증 요청입니다.")
+```
+- `INVALID_TOKEN`(A003)/`EXPIRED_TOKEN`(A004)은 JWT 자체의 서명/만료 오류에 쓴다
+- `WITHDRAWN_USER`(A008)가 auth에 있는 이유: 회원 상태에서 파생되지만 실제 발생 지점은
+  `CustomUserDetailsService`/`JwtAuthenticationFilter`이고 "인증 거절 사유"로 소비된다
+- A005·A006·A009는 콜백에서 발생하는데 **콜백은 JSON을 반환하지 않으므로**, 이 코드들은 FE 복귀 URL의 `?error=` 값으로 전달된다 (`{FE}/oauth/complete?error=A009`)
+- `INVALID_CREDENTIALS`(옛 U002)는 카카오 전용 설계에서 도달 경로가 없어 **삭제**했다. LOCAL 로그인 도입 시 `AuthErrorCode`에 다시 추가한다
 
 ### 설정 값
 
@@ -273,14 +330,21 @@ FE는 **인가코드를 다루지 않는다.** authorize URL 조립도, 콜백 `
 **체크포인트**
 - [ ] `/kakao/authorize` 접속 → 카카오 로그인 → `/oauth/complete` 복귀 → silent refresh → `GET /api/users/me`까지 **브라우저에서 전체 플로우 통과**
 - [ ] **`oauth_state` 쿠키가 콜백 요청에 실제로 실려 오는지** (`Lax`가 아니면 여기서 깨진다 — 가장 먼저 확인할 것)
-- [ ] state 불일치·누락 시 U011로 FE에 `?error=` 전달, 콜백 재사용(뒤로가기) 시에도 U011
+- [ ] state 불일치·누락 시 A009로 FE에 `?error=` 전달, 콜백 재사용(뒤로가기) 시에도 A009
 - [ ] 카카오 동의 화면에서 취소 시 FE로 `?error=` 전달 (예외 페이지 노출 없음)
 - [ ] 콜백 응답이 **JSON이 아니라 302**인지, `ApiResponse` 포맷이 브라우저에 노출되지 않는지
 - [ ] **어떤 응답에도 access token이 URL/쿼리스트링에 실리지 않는지**
 - [ ] 동일 계정 재로그인 시 기존 User로 인증 (신규 생성 아님) / 탈퇴 후 재로그인 시 자동 재활성화(ACTIVE)
 - [ ] `refresh_token` 쿠키에 `HttpOnly`/`Secure`/`SameSite=Strict`/`Path=/api/auth` 전부 포함
-- [ ] 쿠키 없이 `/api/auth/refresh` → U009(401)
+- [ ] 쿠키 없이 `/api/auth/refresh` → A007(401)
 - [ ] 로그아웃·탈퇴 후 브라우저에서 쿠키가 **실제로 사라지는지** (`Path` 누락 시 안 지워짐)
+
+**도메인 경계 체크포인트**
+- [ ] `domain/user` 어디에도 `domain.auth` import가 없는지 (역방향 의존 없음)
+- [ ] `domain/auth` 어디에도 `UserRepository` 주입이 없는지 (`UserService`만 경유)
+- [ ] 신규 카카오 로그인 시 User가 `AuthService`가 아니라 `UserService.findOrCreateKakaoUser`에서 생성되는지
+- [ ] 탈퇴 중 `revokeAllTokens`가 실패하면 회원이 ACTIVE로 남는지 (fail-closed)
+- [ ] 카카오 `unlink` 실패가 탈퇴를 막지 않는지 (로그만 남고 200)
 
 ---
 

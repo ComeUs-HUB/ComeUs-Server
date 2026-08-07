@@ -22,7 +22,7 @@ package com.toyproject.backend.global.security;
  *   <li>사용자 미존재 → {@code UsernameNotFoundException}</li>
  *   <li>{@code WITHDRAWN} → {@code DisabledException}</li>
  * </ul>
- * 둘을 같은 예외로 던지면 필터가 U010(403)과 U003(401)을 갈라낼 근거를 잃고,
+ * 둘을 같은 예외로 던지면 필터가 A008(403)과 A001(401)을 갈라낼 근거를 잃고,
  * {@code WITHDRAWN_USER}는 <b>절대 반환되지 않는 죽은 코드</b>가 된다.
  */
 public class CustomUserDetailsService {

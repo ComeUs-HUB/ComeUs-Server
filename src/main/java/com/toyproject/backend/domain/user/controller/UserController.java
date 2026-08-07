@@ -24,9 +24,27 @@ package com.toyproject.backend.domain.user.controller;
  *   <li>응답은 공통 {@code ApiResponse}로 감싼다.</li>
  * </ul>
  *
- * <p><b>주의</b><br>
- * DELETE(탈퇴)는 발급된 refresh token이 전부 삭제되므로 <b>쿠키도 함께 만료</b>시켜야 한다.
- * 이때도 {@code Path=/api/auth}를 함께 지정하지 않으면 브라우저에서 실제로 지워지지 않는다.
+ * <p><b>탈퇴(DELETE) 호출 순서</b><br>
+ * 탈퇴는 user와 auth 양쪽을 건드리는 유일한 흐름이다. <b>순서를 이 컨트롤러가 소유</b>해
+ * {@code UserService}가 {@code AuthService}를 참조하지 않게 하고, 그 결과 의존 방향이
+ * {@code auth → user} 단방향으로 유지된다.
+ * <ol>
+ *   <li>{@code authService.revokeAllTokens(userId)} — refresh token 전수 삭제.
+ *       <b>fail-closed</b>: 실패하면 예외가 전파되어 탈퇴 자체가 중단되고 회원은 ACTIVE로 남는다(재로그인으로 복구 가능)</li>
+ *   <li>{@code String providerId = userService.withdraw(userId)} — 소프트 삭제 + {@code providerId} 획득</li>
+ *   <li>{@code authService.unlinkKakao(providerId)} — 카카오 연결 해제. <b>best-effort</b>, 실패해도 탈퇴는 성립</li>
+ *   <li>{@code refresh_token} 쿠키 만료</li>
+ * </ol>
+ *
+ * <p><b>주의</b>
+ * <ul>
+ *   <li>순서를 뒤집지 말 것. 2를 먼저 하면 WITHDRAWN인데 refresh token row가 남는 상태가 생긴다.</li>
+ *   <li>1과 2는 <b>별도 트랜잭션</b>이다. 원자적이지 않지만 어느 쪽이 실패해도 결과가 fail-safe하고,
+ *       카카오 {@code unlink}는 외부 호출이라 애초에 트랜잭션으로 묶을 수 없다.
+ *       원자성이 필요해지면 도메인 이벤트로 전환한다(현 단계에서는 도입하지 않음).</li>
+ *   <li>탈퇴는 발급된 refresh token이 전부 삭제되므로 <b>쿠키도 함께 만료</b>시켜야 한다.
+ *       이때도 {@code Path=/api/auth}를 함께 지정하지 않으면 브라우저에서 실제로 지워지지 않는다.</li>
+ * </ul>
  */
 public class UserController {
 }

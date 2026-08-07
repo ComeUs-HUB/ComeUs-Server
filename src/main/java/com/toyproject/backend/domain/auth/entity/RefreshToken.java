@@ -1,4 +1,4 @@
-package com.toyproject.backend.domain.user.entity;
+package com.toyproject.backend.domain.auth.entity;
 
 /**
  * [1단계 · G] 리프레시 토큰 엔티티 — 프로토타입 (구현 전)

@@ -14,7 +14,8 @@
 
 | 도메인 | 설명 |
 |--------|------|
-| User | 회원 가입 · 로그인 · 프로필 관리 |
+| User | 회원 프로필 관리 · 회원 생명주기(가입 · 탈퇴) |
+| Auth | 카카오 소셜 로그인 · JWT/Refresh Token 발급 · 검증 |
 | Product | 상품 등록 · 조회 · 수정 · 삭제 |
 | Category | 상품 카테고리 관리 |
 | Cart | 장바구니 담기 · 조회 · 수정 · 삭제 |
@@ -26,22 +27,25 @@
 
 ## 3. 도메인별 기능 요구사항
 
-### 3.1 User (회원)
+### 3.1 User / Auth (회원 · 인증)
+
+두 도메인으로 분리되어 있다. 패키지 경계와 의존 규칙은 §5 참고.
 
 **엔티티 주요 필드**
-- id, email(nullable), name, phone, address, birthDate, role(USER/ADMIN), provider(KAKAO), providerId, status(ACTIVE/WITHDRAWN), withdrawnAt, createdAt, updatedAt
+- `User`(user) — id, email(nullable), name, phone, address, birthDate, role(USER/ADMIN), provider(KAKAO), providerId, status(ACTIVE/WITHDRAWN), withdrawnAt, createdAt, updatedAt
+- `RefreshToken`(auth) — id, user(`@ManyToOne`), tokenHash(SHA-256 hex, unique), expiresAt, createdAt
 
 **API 목록**
 
-| Method | URI | 설명 | 권한 |
-|--------|-----|------|------|
-| GET | /api/auth/kakao/authorize | 카카오 로그인 시작 (302 → 카카오) | 비회원 |
-| GET | /api/auth/kakao/callback | 카카오 리다이렉트 착지점 (302 → FE) | 비회원 |
-| POST | /api/auth/refresh | Access Token 재발급 | 비회원 |
-| POST | /api/auth/logout | 로그아웃 | 비회원 (쿠키가 자격증명) |
-| GET | /api/users/me | 내 정보 조회 | 회원 |
-| PUT | /api/users/me | 내 정보 수정 | 회원 |
-| DELETE | /api/users/me | 회원 탈퇴 | 회원 |
+| Method | URI | 설명 | 권한 | 도메인 |
+|--------|-----|------|------|--------|
+| GET | /api/auth/kakao/authorize | 카카오 로그인 시작 (302 → 카카오) | 비회원 | auth |
+| GET | /api/auth/kakao/callback | 카카오 리다이렉트 착지점 (302 → FE) | 비회원 | auth |
+| POST | /api/auth/refresh | Access Token 재발급 | 비회원 | auth |
+| POST | /api/auth/logout | 로그아웃 | 비회원 (쿠키가 자격증명) | auth |
+| GET | /api/users/me | 내 정보 조회 | 회원 | user |
+| PUT | /api/users/me | 내 정보 수정 | 회원 | user |
+| DELETE | /api/users/me | 회원 탈퇴 | 회원 | user (+auth 호출) |
 
 **비즈니스 규칙**
 - **카카오 OAuth 전용 로그인** — 이메일+비밀번호 가입/로그인은 범위 밖(향후 확장)
@@ -194,7 +198,7 @@
 - Refresh Token Rotation은 **적용하지 않는다** — 재사용 탐지와 함께 도입해야 실익이 있어 둘 다 향후 과제 ([[phase2-auth]] I 항목)
 - Refresh Token 저장: DB `refresh_tokens` 테이블에 SHA-256 해시 (추후 Redis 교체 가능)
 - ⚠️ `SameSite=Strict`는 FE/BE 동일 상위 도메인 배포를 전제로 한다 ([[phase7-deployment]] X 항목)
-- 401 / 403 응답은 `JwtAuthenticationEntryPoint` / `JwtAccessDeniedHandler`에서 처리
+- 401 / 403 응답은 `JwtAuthenticationEntryPoint` **하나가 전담** — `AccessDeniedHandler`는 두지 않는다 ([[phase2-auth]] H 항목)
 
 ### 4.2 응답 포맷
 
@@ -258,12 +262,23 @@ RuntimeException
 ```
 com.toyproject.backend
 ├── domain
-│   ├── user
+│   ├── user                    # 회원 프로필 · 생명주기
 │   │   ├── controller
 │   │   ├── service
 │   │   ├── repository
-│   │   ├── entity
-│   │   └── dto
+│   │   ├── entity              # User, Role, UserStatus, Provider
+│   │   ├── dto
+│   │   └── exception           # UserErrorCode
+│   ├── auth                    # 카카오 로그인 · 토큰
+│   │   ├── controller
+│   │   ├── service
+│   │   ├── client              # KakaoOAuthClient (+dto)
+│   │   ├── token               # JwtProvider, SecureTokenGenerator
+│   │   ├── config              # JwtProperties, KakaoProperties, RestClientConfig
+│   │   ├── entity              # RefreshToken
+│   │   ├── repository
+│   │   ├── dto
+│   │   └── exception           # AuthErrorCode
 │   ├── product
 │   ├── category
 │   ├── cart
@@ -271,11 +286,23 @@ com.toyproject.backend
 │   ├── payment
 │   └── review
 └── global
-    ├── config        # SecurityConfig, JpaConfig
+    ├── config        # SecurityConfig, AppProperties, JpaConfig
     ├── exception     # GlobalExceptionHandler, BusinessException, ErrorCode
     ├── response      # ApiResponse, PageResponse
-    └── security      # JwtProvider, JwtAuthenticationFilter, CustomUserDetailsService
+    ├── security      # JwtAuthenticationFilter, JwtAuthenticationEntryPoint,
+    │                 #   CustomUserDetailsService, UserPrincipal
+    └── util          # CookieUtil
 ```
+
+### user / auth 분리 원칙
+
+| 항목 | 규칙 |
+|---|---|
+| 의존 방향 | **`auth → user` 단방향.** user는 auth를 참조하지 않는다 |
+| 회원 데이터 접근 | auth는 `UserService`의 공개 메서드만 경유. `UserRepository`는 user 패키지 안에 가둔다 |
+| 회원 생성 규칙 | `UserService.findOrCreateKakaoUser`가 소유 (재사용/재활성화/신규 생성 판단) |
+| 탈퇴 | `UserController`가 `authService.revokeAllTokens` → `userService.withdraw` → `authService.unlinkKakao` 순으로 호출해 순환 의존을 차단 |
+| `global/security` | Spring Security 어댑터만 남긴다. 도메인을 참조하는 방향은 허용(프레임워크 결합 지점) |
 
 ---
 
@@ -304,9 +331,10 @@ com.toyproject.backend
 | `GlobalExceptionHandler` — 전역 예외 처리 | ✅ | `global/exception/GlobalExceptionHandler.java` |
 | `PageResponse<T>` — 페이지네이션 응답 | ✅ | `global/response/PageResponse.java` |
 
-### Phase 2 — 인증/인가 (User 도메인) ⬜
+### Phase 2 — 인증/인가 (user/auth 도메인) ⬜
 
-User 엔티티, Spring Security, JWT, 인증 API 미구현
+미구현. `domain/user`·`domain/auth`·`global/security`에 **본문이 빈 프로토타입 골격**만 존재한다.
+선반영: `UserErrorCode`(U001), `AuthErrorCode`(A001~A009), `BackendApplication`의 `@ConfigurationPropertiesScan`.
 
 ### Phase 3 — 카테고리 / 상품 ⬜
 

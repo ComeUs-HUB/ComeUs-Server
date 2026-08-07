@@ -1,4 +1,4 @@
-package com.toyproject.backend.global.security;
+package com.toyproject.backend.domain.auth.token;
 
 /**
  * [5단계 · I] Access Token 생성·파싱 — 프로토타입 (구현 전)
@@ -23,7 +23,7 @@ package com.toyproject.backend.global.security;
  * <p><b>주의</b><br>
  * {@code parseClaims}는 예외를 <b>삼키거나 뭉개지 않고 그대로 던진다.</b>
  * {@code ExpiredJwtException}(만료)과 그 밖의 {@code JwtException}(서명 위조·형식 오류)을
- * 필터가 각각 U006/U005로 구분해야 하는데, 여기서 {@code Optional}이나 boolean으로 뭉개면
+ * 필터가 각각 A004/A003으로 구분해야 하는데, 여기서 {@code Optional}이나 boolean으로 뭉개면
  * 그 구분이 영영 불가능해진다.
  */
 public class JwtProvider {

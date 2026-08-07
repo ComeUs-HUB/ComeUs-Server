@@ -1,4 +1,4 @@
-package com.toyproject.backend.global.config;
+package com.toyproject.backend.domain.auth.config;
 
 /**
  * [5단계 · I] JWT 설정 — 프로토타입 (구현 전)

@@ -1,4 +1,4 @@
-package com.toyproject.backend.domain.user.client;
+package com.toyproject.backend.domain.auth.client;
 
 /**
  * [3단계 · G] 카카오 API 클라이언트 — 프로토타입 (구현 전)
@@ -10,8 +10,8 @@ package com.toyproject.backend.domain.user.client;
  * <ul>
  *   <li><b>카카오 호출 실패는 전부 이 경계에서 {@code BusinessException}으로 변환</b>한다.
  *       {@code RestClientException}이 서비스·컨트롤러로 새어 나가면 상위 계층이 HTTP 세부사항을 알게 된다.</li>
- *   <li>4xx는 우리 요청이 잘못된 것 → {@code KAKAO_AUTH_FAILED}(U007, 400)<br>
- *       5xx·통신 오류는 카카오 장애 → {@code KAKAO_API_ERROR}(U008, 502)</li>
+ *   <li>4xx는 우리 요청이 잘못된 것 → {@code KAKAO_AUTH_FAILED}(A005, 400)<br>
+ *       5xx·통신 오류는 카카오 장애 → {@code KAKAO_API_ERROR}(A006, 502)</li>
  *   <li>{@code @Qualifier}로 kauth/kapi 클라이언트를 구분해 주입받는다.</li>
  * </ul>
  *
@@ -34,7 +34,7 @@ package com.toyproject.backend.domain.user.client;
  * {@code unlink}는 호출부에서 <b>best-effort</b>로 다뤄진다. 여기서는 평소처럼 예외를 던지고,
  * 삼키는 판단은 {@code UserService}가 한다(카카오 장애로 탈퇴가 막히면 안 된다).
  *
- * <p><b>검증</b>: {@code MockRestServiceServer}로 4xx/5xx 응답이 각각 U007/U008로 변환되는지 확인한다.
+ * <p><b>검증</b>: {@code MockRestServiceServer}로 4xx/5xx 응답이 각각 A005/A006으로 변환되는지 확인한다.
  */
 public class KakaoOAuthClient {
 }
