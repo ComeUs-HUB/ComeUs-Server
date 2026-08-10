@@ -127,7 +127,8 @@ Flyway 전환이 여기 해당한다. `ddl-auto: update` 위에서 Repository를
 | createdAt / updatedAt | LocalDateTime | `@CreatedDate` / `@LastModifiedDate` | `@EntityListeners(AuditingEntityListener.class)` 추가 |
 
 - 유니크: `email` 단일, `(provider, providerId)` 복합(중복 가입 방지)
-- Setter 없이 `updateProfile(phone, address, birthDate)`, `withdraw()`, `reactivate()` 도메인 메서드로만 상태 변경
+- Setter 없이 `ofKakao(providerId, email, name)`, `updateProfile(name, phone, address, birthDate)`, `withdraw()`, `reactivate()`, `isWithdrawn()` 도메인 메서드로만 상태 변경
+- 테이블명은 `users` — `USER`는 MySQL 8.0 예약어다
 - `Provider`/`Role`/`UserStatus`는 별도 enum 파일
 
 ### RefreshToken (1단계 · `domain/auth/entity/RefreshToken.java`)
@@ -151,6 +152,8 @@ Flyway 전환이 여기 해당한다. `ddl-auto: update` 위에서 Repository를
 - `application.yml`: `spring.flyway.enabled: true`, `locations: classpath:db/migration`
 - **`ddl-auto`를 local/prod 모두 `validate`로 통일** — `application-prod.yml`은 이미 `validate`, `application-local.yml`은 미지정이라 `application.yml`의 `update`만 고치면 된다
 - `db/migration/V1__init.sql`에 `users`, `refresh_tokens` DDL을 위 엔티티 표와 1:1로 작성
+  - 1단계 엔티티가 H2에서 생성하는 DDL을 기준으로 삼는다: enum 3종은 `varchar(20)`, `token_hash`는 `char(64)`, 유니크는 `uk_users_email`·`uk_users_provider_provider_id`·`uk_refresh_tokens_token_hash`
+  - Hibernate 6이 enum 컬럼에 `check (role in ('USER','ADMIN'))` 같은 제약을 자동 생성한다. `validate`는 check 제약을 검사하지 않으므로 SQL에 옮겨 적을지는 선택 사항 — 다만 **옮기지 않으면 H2 테스트에만 있고 MySQL엔 없는 제약**이 된다
 - 이후 Phase에서는 `V2__`, `V3__`… 추가만 하고 기존 파일은 수정하지 않는다
 - ⚠️ `src/test/resources/application.yml`에 `spring.flyway.enabled: false` 추가 — 테스트는 H2라 MySQL DDL을 못 돌린다
 
