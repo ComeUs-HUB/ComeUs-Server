@@ -4,6 +4,10 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+  # 테스트는 H2라 MySQL 문법으로 쓰인 V1__init.sql을 실행할 수 없다.
+  # 스키마는 아래 create-drop이 엔티티 매핑으로부터 만든다.
+  flyway:
+    enabled: false
   jpa:
     hibernate:
       ddl-auto: create-drop

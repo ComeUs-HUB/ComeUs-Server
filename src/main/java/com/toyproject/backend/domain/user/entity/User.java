@@ -40,7 +40,8 @@ import java.time.LocalDateTime;
  *
  * <p><b>주의</b>
  * <ul>
- *   <li>테이블명이 {@code users}인 이유: {@code USER}는 MySQL 8.0 예약어다.</li>
+ *   <li>테이블명이 {@code users}인 이유: {@code USER}는 표준 SQL 및 PostgreSQL 등에서 예약어라
+ *       DB를 옮길 때 인용부호가 필요해진다(MySQL에서는 비예약 키워드라 당장은 무해하다).</li>
  *   <li>enum 필드에 {@code @Enumerated(STRING)}만 붙이면 MySQL 방언이 네이티브 {@code enum(...)} 컬럼을
  *       생성해 마이그레이션의 {@code VARCHAR(20)}과 어긋난다({@code ddl-auto: validate} 실패).
  *       {@code @JdbcTypeCode(SqlTypes.VARCHAR)}로 고정한다.</li>

@@ -54,8 +54,8 @@ Flyway 전환이 여기 해당한다. `ddl-auto: update` 위에서 Repository를
 | 단계 | 항목 | 파일 | 완료 조건 |
 |---|---|---|---|
 | 0 | 글로벌 기반 ✅ | — | `*ErrorCode`, `ApiResponse`, `GlobalExceptionHandler`, `JpaConfig`, `@ConfigurationPropertiesScan` |
-| 1 · G | 엔티티 | 5 | 컴파일. 실행 검증은 2단계에서 함께 한다 |
-| 2 · G | **Flyway + 스키마** | 0 (SQL·yml) | `bootRun` 시 Flyway가 두 테이블 생성 + `validate` 통과 |
+| 1 · G | 엔티티 ✅ | 5 | 컴파일. 실행 검증은 2단계에서 함께 한다 |
+| 2 · G | **Flyway + 스키마** ✅ | 0 (SQL·yml) | 앱 기동 시 Flyway가 두 테이블 생성 + `validate` 통과 |
 | 3 · G | Repository | 2 | `@DataJpaTest` — 조회·벌크 삭제·`(provider, providerId)` 중복 차단 |
 | 4 · G | 카카오 연동 | 5 | `MockRestServiceServer`로 4xx→A005, 5xx→A006 변환 |
 | 5 · I | 토큰 부품 | 3 | 단위 테스트 — 생성·파싱 왕복, 만료/위조 예외 구분, 해시 64자 |
@@ -128,7 +128,7 @@ Flyway 전환이 여기 해당한다. `ddl-auto: update` 위에서 Repository를
 
 - 유니크: `email` 단일, `(provider, providerId)` 복합(중복 가입 방지)
 - Setter 없이 `ofKakao(providerId, email, name)`, `updateProfile(name, phone, address, birthDate)`, `withdraw()`, `reactivate()`, `isWithdrawn()` 도메인 메서드로만 상태 변경
-- 테이블명은 `users` — `USER`는 MySQL 8.0 예약어다
+- 테이블명은 `users` — `USER`는 표준 SQL·PostgreSQL 등에서 예약어라 이식성을 위해 피한다 (MySQL에선 비예약 키워드)
 - `Provider`/`Role`/`UserStatus`는 별도 enum 파일
 
 ### RefreshToken (1단계 · `domain/auth/entity/RefreshToken.java`)
@@ -153,9 +153,19 @@ Flyway 전환이 여기 해당한다. `ddl-auto: update` 위에서 Repository를
 - **`ddl-auto`를 local/prod 모두 `validate`로 통일** — `application-prod.yml`은 이미 `validate`, `application-local.yml`은 미지정이라 `application.yml`의 `update`만 고치면 된다
 - `db/migration/V1__init.sql`에 `users`, `refresh_tokens` DDL을 위 엔티티 표와 1:1로 작성
   - 1단계 엔티티가 H2에서 생성하는 DDL을 기준으로 삼는다: enum 3종은 `varchar(20)`, `token_hash`는 `char(64)`, 유니크는 `uk_users_email`·`uk_users_provider_provider_id`·`uk_refresh_tokens_token_hash`
-  - Hibernate 6이 enum 컬럼에 `check (role in ('USER','ADMIN'))` 같은 제약을 자동 생성한다. `validate`는 check 제약을 검사하지 않으므로 SQL에 옮겨 적을지는 선택 사항 — 다만 **옮기지 않으면 H2 테스트에만 있고 MySQL엔 없는 제약**이 된다
+  - Hibernate 6이 enum 컬럼에 `check (role in ('USER','ADMIN'))` 같은 제약을 자동 생성하는데, **`V1__init.sql`에는 옮기지 않기로 했다**. `validate`가 check 제약을 검사하지 않아 기동에 영향이 없고, 넣으면 enum 상수를 하나 추가할 때마다 마이그레이션이 강제된다(`Provider.GOOGLE` 추가 등). 이 컬럼에 쓰는 주체는 Java enum을 다루는 JPA뿐이라 무효값이 들어올 경로가 없다. 결과적으로 H2 테스트에만 있는 제약이 되지만 무해하다
 - 이후 Phase에서는 `V2__`, `V3__`… 추가만 하고 기존 파일은 수정하지 않는다
 - ⚠️ `src/test/resources/application.yml`에 `spring.flyway.enabled: false` 추가 — 테스트는 H2라 MySQL DDL을 못 돌린다
+
+**검증** — 실행 수단은 무관하다. IDE 실행이든 `./gradlew bootRun`이든 **앱이 MySQL에 기동되기만 하면** 된다.
+`flyway.enabled: true` + `ddl-auto: validate` 상태에서 컨텍스트가 뜬다는 것 자체가
+"Flyway가 마이그레이션을 적용했고 엔티티↔스키마 대조를 통과했다"는 뜻이기 때문이다.
+기동 후 DB에서 직접 확인하려면:
+
+```sql
+SELECT version, description, success FROM flyway_schema_history;   -- 1 | init | 1
+SHOW TABLES;                                                       -- users, refresh_tokens, flyway_schema_history
+```
 
 ### Repository (3단계)
 

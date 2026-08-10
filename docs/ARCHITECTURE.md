@@ -333,7 +333,9 @@ com.toyproject.backend
 
 ### Phase 2 — 인증/인가 (user/auth 도메인) ⬜
 
-미구현. `domain/user`·`domain/auth`·`global/security`에 **본문이 빈 프로토타입 골격**만 존재한다.
+**1·2단계 완료.** `User`/`RefreshToken` 엔티티와 enum 3종이 구현됐고, Flyway가 `V1__init.sql`로
+`users`·`refresh_tokens` 스키마를 소유한다(`ddl-auto: validate`로 통일). 다음은 3단계 Repository.
+나머지 클래스는 `domain/user`·`domain/auth`·`global/security`에 **본문이 빈 프로토타입 골격**으로 있다.
 선반영: `UserErrorCode`(U001), `AuthErrorCode`(A001~A009), `BackendApplication`의 `@ConfigurationPropertiesScan`.
 
 구현 순서는 **1~9단계**로 확정돼 있다 — [[phase2-auth]] "구현 순서" 절 참고.

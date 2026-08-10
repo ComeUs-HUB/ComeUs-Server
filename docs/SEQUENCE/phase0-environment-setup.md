@@ -64,8 +64,27 @@
 - actuator 헬스체크를 추가할 시점과 노출 범위(`health`, `info` 등)는 배포 단계 진입 직전에 결정.
 - **Flyway 도입에 따른 `ddl-auto` 변경(신규)**: [[phase2-auth]] G 항목에서 Flyway를 도입하면 `application-local.yml`의 `ddl-auto: update`를 `application-prod.yml`과 동일하게 `validate`로 통일한다. 이후 스키마 변경은 Hibernate 자동생성이 아니라 `src/main/resources/db/migration/V{n}__description.sql` 마이그레이션 파일 작성으로만 이루어진다 — 로컬/운영 스키마가 항상 동일한 마이그레이션 이력을 거치게 되어 드리프트를 방지. `spring.flyway.enabled: true`, `spring.flyway.locations: classpath:db/migration` 설정을 `application.yml`(공통)에 추가.
 
+### 로컬 실행 준비 (새 환경에서 클론했을 때)
+
+`application-local.yml`은 `.gitignore` 대상이라 **저장소에 없다.** 클론 직후 가장 먼저 막히는 지점이므로 아래 순서로 준비한다.
+
+1. **`toyproject` 스키마를 미리 만든다** — `CREATE DATABASE toyproject;`
+   Flyway는 테이블을 만들지 **스키마(database)를 만들지 않는다.** 없으면 접속 단계에서 실패한다
+2. `src/main/resources/application-local.yml`을 직접 작성한다 (datasource 블록만)
+3. **DB 자격증명은 IDE 실행 구성의 환경변수로 주입한다** — `LOCAL_DB_USERNAME`, `LOCAL_DB_PASSWORD`
+   비밀번호가 셸 히스토리나 `ps` 출력에 남지 않는다. **IDE 실행이 이 프로젝트의 표준 실행 방식이다**
+
+⚠️ 터미널에서 `./gradlew bootRun`을 써야 한다면, 인라인 환경변수(`LOCAL_DB_PASSWORD=... ./gradlew bootRun`)는
+**이미 떠 있는 Gradle 데몬에 반영되지 않아** `application-local.yml`의 기본값으로 폴백할 수 있다. 확실한 방법은 둘 중 하나다.
+
+```bash
+./gradlew bootRun --args='--spring.datasource.username=계정 --spring.datasource.password=비밀번호'
+# 또는 데몬을 먼저 정리
+./gradlew --stop && export LOCAL_DB_USERNAME=계정 LOCAL_DB_PASSWORD=비밀번호 && ./gradlew bootRun
+```
+
 **체크포인트**
 - [x] 로컬 환경에서 MySQL 연결 성공
 - [x] `application-prod.yml`이 Git에 올라가지 않음 확인
 - [ ] actuator 헬스체크 엔드포인트 노출 설정
-- [ ] `ddl-auto`를 local/prod 모두 `validate`로 통일, `spring.flyway.*` 설정 추가 ([[phase2-auth]] G 항목과 함께 진행)
+- [x] `ddl-auto`를 local/prod 모두 `validate`로 통일, `spring.flyway.*` 설정 추가 ([[phase2-auth]] 2단계에서 완료)
