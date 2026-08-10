@@ -1,7 +1,7 @@
 package com.toyproject.backend.domain.auth.repository;
 
 /**
- * [2단계 · G] 리프레시 토큰 Repository — 프로토타입 (구현 전)
+ * [3단계 · G] 리프레시 토큰 Repository — 프로토타입 (구현 전)
  *
  * <p><b>역할</b><br>
  * 재발급 시 토큰 조회, 로그아웃/탈퇴 시 토큰 무효화를 담당한다.

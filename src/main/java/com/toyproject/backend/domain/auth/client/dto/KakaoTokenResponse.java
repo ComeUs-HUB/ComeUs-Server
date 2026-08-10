@@ -1,7 +1,7 @@
 package com.toyproject.backend.domain.auth.client.dto;
 
 /**
- * [3단계 · G] 카카오 토큰 응답 DTO — 프로토타입 (구현 전)
+ * [4단계 · G] 카카오 토큰 응답 DTO — 프로토타입 (구현 전)
  *
  * <p><b>역할</b><br>
  * {@code POST https://kauth.kakao.com/oauth/token} 응답 매핑. 인가 코드를 교환한 결과다.

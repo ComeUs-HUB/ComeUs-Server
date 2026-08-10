@@ -1,7 +1,7 @@
 package com.toyproject.backend.domain.user.repository;
 
 /**
- * [2단계 · G] 회원 Repository — 프로토타입 (구현 전)
+ * [3단계 · G] 회원 Repository — 프로토타입 (구현 전)
  *
  * <p><b>역할</b><br>
  * {@code User}의 영속성 경계. 카카오 로그인 시 "기존 회원인가 신규인가"를 판정하는 조회를 제공한다.

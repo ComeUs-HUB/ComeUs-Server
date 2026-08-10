@@ -1,7 +1,7 @@
 package com.toyproject.backend.domain.auth.client.dto;
 
 /**
- * [3단계 · G] 카카오 사용자 정보 응답 DTO — 프로토타입 (구현 전)
+ * [4단계 · G] 카카오 사용자 정보 응답 DTO — 프로토타입 (구현 전)
  *
  * <p><b>역할</b><br>
  * {@code GET https://kapi.kakao.com/v2/user/me} 응답 매핑. 회원 생성·조회의 원천 데이터다.

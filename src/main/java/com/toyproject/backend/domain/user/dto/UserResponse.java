@@ -1,7 +1,7 @@
 package com.toyproject.backend.domain.user.dto;
 
 /**
- * [8단계 · K] 회원 정보 응답 DTO — 프로토타입 (구현 전)
+ * [9단계 · K] 회원 정보 응답 DTO — 프로토타입 (구현 전)
  *
  * <p><b>역할</b><br>
  * {@code GET /api/users/me}와 {@code PUT /api/users/me}의 공통 응답 바디.

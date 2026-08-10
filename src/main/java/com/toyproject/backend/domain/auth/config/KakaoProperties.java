@@ -1,7 +1,7 @@
 package com.toyproject.backend.domain.auth.config;
 
 /**
- * [3단계 · G] 카카오 연동 설정 — 프로토타입 (구현 전)
+ * [4단계 · G] 카카오 연동 설정 — 프로토타입 (구현 전)
  *
  * <p><b>역할</b><br>
  * {@code kakao.*} 설정을 타입 안전하게 묶는다. 고정 엔드포인트는 {@code application.yml}에,

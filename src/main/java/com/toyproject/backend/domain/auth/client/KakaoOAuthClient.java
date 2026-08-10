@@ -1,7 +1,7 @@
 package com.toyproject.backend.domain.auth.client;
 
 /**
- * [3단계 · G] 카카오 API 클라이언트 — 프로토타입 (구현 전)
+ * [4단계 · G] 카카오 API 클라이언트 — 프로토타입 (구현 전)
  *
  * <p><b>역할</b><br>
  * 카카오 REST API와 통신하는 <b>유일한 경계</b>. 이 클래스 바깥에서는 카카오의 존재를 모른다.

@@ -1,7 +1,7 @@
 package com.toyproject.backend.domain.user.dto;
 
 /**
- * [2단계 · G·K] 카카오 회원 조회/생성 결과 — 프로토타입 (구현 전)
+ * [7단계 · K] 카카오 회원 조회/생성 결과 — 프로토타입 (구현 전)
  *
  * <p><b>역할</b><br>
  * {@code UserService.findOrCreateKakaoUser}의 반환 타입. user 도메인이 auth 도메인에게

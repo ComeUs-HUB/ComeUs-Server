@@ -1,7 +1,7 @@
 package com.toyproject.backend.domain.user.controller;
 
 /**
- * [8단계 · K] 회원 API — 프로토타입 (구현 전)
+ * [9단계 · K] 회원 API — 프로토타입 (구현 전)
  *
  * <p><b>역할</b><br>
  * 로그인한 사용자의 내 정보 조회·수정·탈퇴 엔드포인트.

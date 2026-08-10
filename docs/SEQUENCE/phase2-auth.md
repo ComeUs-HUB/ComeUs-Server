@@ -26,6 +26,68 @@
 
 ---
 
+## 구현 순서 (1~9단계)
+
+아래 G~K 항목이 **설계**라면 이 절은 **순서와 완료 조건**이다. 각 클래스의 Javadoc 첫 줄에 `[N단계 · G]` 형태로 소속 단계가 표기돼 있다.
+
+### 순서를 정한 근거
+
+**1. 의존 그래프의 위상 정렬 — 하한선**
+컴파일조차 안 되는 순서는 애초에 배제된다. 다만 이것만으로 순서가 유일하게 결정되지는 않는다(카카오 클라이언트와 JWT 부품은 서로 독립이라 어느 쪽이 먼저여도 컴파일된다). 나머지는 아래 원칙이 결정한다.
+
+**2. 각 단계는 그 단계에서 검증이 끝나야 한다 — 가장 중요한 기준**
+"다음 단계를 해야 확인 가능"한 배치를 피한다. 이 원칙이 6단계(Security)를 7단계(서비스)보다 **앞에** 두는 이유다. 인증의 *거절* 경로(401/403)는 토큰 발급 없이도 전부 검증된다 — 테스트에서 `JwtProvider`로 토큰을 직접 만들어 넣으면 된다. 순서를 뒤집으면 6단계 검증이 8단계까지 밀린다.
+
+**3. 되돌리기 비용이 큰 결정을 앞으로**
+Flyway 전환이 여기 해당한다. `ddl-auto: update` 위에서 Repository를 검증해두면, 나중에 `validate`로 바꾸는 순간 **이미 통과했던 테스트가 다시 깨진다** — Hibernate가 발명한 스키마와 손으로 쓴 DDL이 다르기 때문이다. 그래서 스키마를 엔티티 직후(2단계)에 확정하고, `update`에는 한 번도 의존하지 않는다. 테이블이 2개일 때가 전환 비용도 최소다.
+
+**4. 외부 의존을 앞으로**
+카카오 개발자 콘솔의 Redirect URI 등록은 코드가 아니라 외부 작업이고, 누락되면 카카오가 `KOE006`으로 거부해 **8단계가 통째로 막힌다**. 4단계에서 카카오 연동을 하면 이 준비물이 그 시점에 드러난다.
+
+**5. 마지막은 실패 지점을 좁히는 방향으로 쪼갠다**
+8·9단계 분리가 여기 해당한다. OAuth 왕복·쿠키 속성·리다이렉트·토큰 발급이 한 단계에 몰리면 브라우저에서 처음 실패했을 때 원인 후보가 너무 많다. 8단계는 "로그인이 되는가", 9단계는 "그 세션을 쓸 수 있는가"만 본다.
+
+### 단계 표
+
+완료 조건은 "컴파일된다"가 아니라 아래 검증이 통과하는 것이다.
+
+| 단계 | 항목 | 파일 | 완료 조건 |
+|---|---|---|---|
+| 0 | 글로벌 기반 ✅ | — | `*ErrorCode`, `ApiResponse`, `GlobalExceptionHandler`, `JpaConfig`, `@ConfigurationPropertiesScan` |
+| 1 · G | 엔티티 | 5 | 컴파일. 실행 검증은 2단계에서 함께 한다 |
+| 2 · G | **Flyway + 스키마** | 0 (SQL·yml) | `bootRun` 시 Flyway가 두 테이블 생성 + `validate` 통과 |
+| 3 · G | Repository | 2 | `@DataJpaTest` — 조회·벌크 삭제·`(provider, providerId)` 중복 차단 |
+| 4 · G | 카카오 연동 | 5 | `MockRestServiceServer`로 4xx→A005, 5xx→A006 변환 |
+| 5 · I | 토큰 부품 | 3 | 단위 테스트 — 생성·파싱 왕복, 만료/위조 예외 구분, 해시 64자 |
+| 6 · H·J | Security 배선 | 6 | 미인증 401(A001), 위조 A003 / 만료 A004 / 탈퇴 **A008(403)** 구분 |
+| 7 · I·K | 서비스 | 3 | `findOrCreateKakaoUser` 3분기, 재발급 유효성, `logout` 멱등 |
+| 8 · K | 로그인 API | 4 | **브라우저에서** 카카오 로그인 → 쿠키 심김 → `/refresh`가 accessToken 반환 |
+| 9 · K | 회원 API | 3 | 그 accessToken으로 `/api/users/me` GET·PUT·DELETE, 탈퇴 후 재로그인 재활성화 |
+
+단계별 상세 설계는 G~K 항목을 참고한다. 파일 합계 31개(2단계는 Java 파일 없음).
+
+### 단계별 배치 근거
+
+- **1 → 2**: 엔티티 매핑과 DDL을 즉시 대조한다. `validate`가 1단계 결과물의 첫 실행 검증 역할을 한다. `@Enumerated(STRING)`이 네이티브 `enum` 컬럼을 만드는 함정이 여기서 터진다
+- **2 → 3**: Repository 테스트가 Hibernate가 발명한 스키마가 아니라 확정된 스키마 위에서 돈다
+- **4가 7보다 앞**: 카카오 클라이언트는 외부 경계라 나머지와 독립적으로 검증된다. `AuthService` 조립 시점에는 이미 검증된 부품이어야 한다
+- **5가 6보다 앞**: 필터가 `JwtProvider`를 요구한다
+- **6이 7보다 앞**: 위 원칙 2. 특히 **A008이 죽은 코드가 아닌지를 컨트롤러 없이 검증할 수 있다** — `CustomUserDetailsService`가 `UsernameNotFoundException`/`DisabledException`을 구분해 던지지 않으면 전부 A001로 뭉개지는데, 그걸 이 단계에서 잡는다
+- **8 → 9**: 6단계에서 검증한 건 "거절"이고, 9단계에서 비로소 "통과"가 검증된다. 탈퇴 오케스트레이션(`auth → user → auth`)도 두 도메인이 모두 완성된 이 시점에만 가능하다
+
+### ⚠️ 단계별 설정 함정
+
+각 단계에서 함께 처리하지 않으면 그 자리에서 빌드가 깨지는 항목들이다.
+
+| 단계 | 함정 | 조치 |
+|---|---|---|
+| 2 | 테스트는 H2(`MODE=MySQL`)라 MySQL DDL을 못 돌린다 | `src/test/resources/application.yml`에 `spring.flyway.enabled: false` 추가. 없으면 `contextLoads`가 깨진다 |
+| 3 | `@DataJpaTest`는 H2에서 **엔티티 매핑으로부터** 스키마를 만든다 | 유니크 제약을 `V1__init.sql`에만 쓰면 테스트에서 재현되지 않아 중복 가입 테스트가 통과해버린다. `@Table(uniqueConstraints = ...)`로 **엔티티에도** 선언 |
+| 5 | `JwtProperties`가 실제 빈이 되는 순간 `jwt.*`가 없어 컨텍스트 로딩이 깨진다 | 테스트 yml은 main `application.yml`을 대체(shadow)한다. `jwt.secret`(HS256이라 32바이트 이상) 더미 값 추가. 지금 통과하는 건 아직 아무도 `${JWT_SECRET}`을 바인딩하지 않기 때문 |
+| 4·8 | `kakao.*`·`app.*` 설정이 `application-local.yml`(gitignore)에 있다 | 새 환경에서 클론하면 이 파일이 없다. 필요한 키 목록은 아래 "설정 값" 절 참고 |
+
+---
+
 ## 확정 사항 (임의로 되돌리지 말 것)
 
 일반적인 "모범 사례"와 다르게 결정한 항목들이다. 각 결정에는 이유가 있으니 구현 중 임의로 추가하지 말고, 바꿔야 한다면 먼저 문의할 것.
@@ -43,9 +105,13 @@
 
 ---
 
-## G. User/RefreshToken 엔티티 + Repository + 카카오 연동 + Flyway
+## G. 엔티티 + Flyway + Repository + 카카오 연동
 
-### User (`domain/user/entity/User.java`)
+> **1단계 엔티티 → 2단계 Flyway → 3단계 Repository → 4단계 카카오 연동** 순으로 서술한다.
+> Flyway가 Repository보다 앞서는 근거는 위 "구현 순서" 절 원칙 3.
+> ("user / auth 경계 메서드"만 7단계 항목인데, Repository 사용 규칙과 붙어 있어야 읽히므로 여기 둔다.)
+
+### User (1단계 · `domain/user/entity/User.java`)
 
 | 필드 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -64,7 +130,7 @@
 - Setter 없이 `updateProfile(phone, address, birthDate)`, `withdraw()`, `reactivate()` 도메인 메서드로만 상태 변경
 - `Provider`/`Role`/`UserStatus`는 별도 enum 파일
 
-### RefreshToken (`domain/auth/entity/RefreshToken.java`)
+### RefreshToken (1단계 · `domain/auth/entity/RefreshToken.java`)
 
 | 필드 | 타입 | 비고 |
 |---|---|---|
@@ -79,7 +145,16 @@
 - **유효성 = row 존재 AND `expiresAt > now()`** — row 존재만 보면 만료 토큰이 영구히 유효해진다
 - 로그아웃: 해당 row만 삭제 / 탈퇴: 해당 유저 전체 row 삭제
 
-### Repository
+### Flyway 도입 (2단계)
+
+- `build.gradle.kts`에 `flyway-core`, `flyway-mysql` 추가
+- `application.yml`: `spring.flyway.enabled: true`, `locations: classpath:db/migration`
+- **`ddl-auto`를 local/prod 모두 `validate`로 통일** — `application-prod.yml`은 이미 `validate`, `application-local.yml`은 미지정이라 `application.yml`의 `update`만 고치면 된다
+- `db/migration/V1__init.sql`에 `users`, `refresh_tokens` DDL을 위 엔티티 표와 1:1로 작성
+- 이후 Phase에서는 `V2__`, `V3__`… 추가만 하고 기존 파일은 수정하지 않는다
+- ⚠️ `src/test/resources/application.yml`에 `spring.flyway.enabled: false` 추가 — 테스트는 H2라 MySQL DDL을 못 돌린다
+
+### Repository (3단계)
 
 - `UserRepository`(user): `findByProviderAndProviderId(Provider, String)`, `existsByEmail(String)`
   - **user 패키지 밖에서 주입하지 않는다.** auth가 회원 데이터에 접근할 땐 `UserService`를 경유한다
@@ -89,7 +164,7 @@
     - `deleteAllByUserId`는 `@ManyToOne User user`의 속성 경로로 파생된다. `User` 엔티티를 넘기지 않으므로 탈퇴 시 auth가 회원을 로딩할 필요가 없다
     - `@Modifying(clearAutomatically = true)`만 붙이면 된다. 탈퇴 흐름에서 `user.withdraw()`와 이 삭제는 **서로 다른 트랜잭션**이라 flush 순서가 얽히지 않는다 (`flushAutomatically` 불필요)
 
-### user / auth 경계 메서드
+### user / auth 경계 메서드 (7단계에서 구현)
 
 - `UserService.findOrCreateKakaoUser(providerId, email, nickname)` → `KakaoUserResolution(User, boolean isNewUser)`
   - 조회 → ACTIVE 재사용 / WITHDRAWN `reactivate()` / 없으면 신규 생성(email 중복이면 email만 null)
@@ -98,7 +173,7 @@
 - `UserService.withdraw(userId)` → `String providerId` (소프트 삭제만 수행)
 - `AuthService.revokeAllTokens(userId)` / `AuthService.unlinkKakao(providerId)` — 탈퇴 시 `UserController`가 호출
 
-### 카카오 연동
+### 카카오 연동 (4단계)
 
 - `domain/auth/config/KakaoProperties`(`prefix="kakao"`): `clientId, clientSecret, adminKey, redirectUri, authorizeUri, tokenUri, userInfoUri, unlinkUri`
   - **`redirectUri`는 BE 콜백 주소**(`{api-host}/api/auth/kakao/callback`)다. FE 주소가 아니다
@@ -109,23 +184,15 @@
 - `client/dto/KakaoTokenResponse`, `KakaoUserInfoResponse`(+중첩 `KakaoAccount`, `Profile`) — record + `@JsonNaming(SnakeCaseStrategy)`
 - 엔드포인트: 인가 `GET https://kauth.kakao.com/oauth/authorize` · 토큰 `POST https://kauth.kakao.com/oauth/token` · 사용자정보 `GET https://kapi.kakao.com/v2/user/me` · 연결해제 `POST https://kapi.kakao.com/v1/user/unlink`(Admin Key)
 
-### Flyway 도입
-
-- `build.gradle.kts`에 `flyway-core`, `flyway-mysql` 추가
-- `application.yml`: `spring.flyway.enabled: true`, `locations: classpath:db/migration`
-- **`ddl-auto`를 local/prod 모두 `validate`로 통일** (local의 기존 `update` 제거)
-- `db/migration/V1__init.sql`에 `users`, `refresh_tokens` DDL을 위 엔티티 표와 1:1로 작성
-- 이후 Phase에서는 `V2__`, `V3__`… 추가만 하고 기존 파일은 수정하지 않는다
-
 **체크포인트**
 - [ ] **(선행) 카카오 개발자 콘솔 Redirect URI를 BE 콜백 주소로 등록** — local(`http://localhost:8080/api/auth/kakao/callback`)·prod 둘 다. 누락 시 카카오가 `KOE006`으로 거부해 첫 시도부터 실패한다
-- [ ] Flyway가 두 테이블을 정상 생성하고 `validate` 통과
-- [ ] `(provider, providerId)` 중복 가입 방지
-- [ ] `KakaoOAuthClient`가 API 실패 시 `BusinessException`으로 변환 (`MockRestServiceServer`)
+- [ ] (2단계) Flyway가 두 테이블을 정상 생성하고 `validate` 통과
+- [ ] (3단계) `(provider, providerId)` 중복 가입 방지 — 유니크 제약이 엔티티에도 선언돼 H2 테스트에서 재현되는지 함께 확인
+- [ ] (4단계) `KakaoOAuthClient`가 API 실패 시 `BusinessException`으로 변환 (`MockRestServiceServer`)
 
 ---
 
-## H. Spring Security 설정
+## H. Spring Security 설정 (6단계)
 
 `global/config/SecurityConfig`, `global/security/JwtAuthenticationEntryPoint`
 
@@ -155,7 +222,7 @@
 
 ---
 
-## I. JwtProvider + Refresh Token 발급·검증
+## I. JwtProvider + Refresh Token 발급·검증 (5·7단계)
 
 `domain/auth/token/JwtProvider`, `domain/auth/token/SecureTokenGenerator`
 
@@ -177,7 +244,7 @@
 
 ---
 
-## J. JwtAuthenticationFilter + CustomUserDetailsService
+## J. JwtAuthenticationFilter + CustomUserDetailsService (6단계)
 
 - `CustomUserDetailsService`(`global/security`): `loadUserByUsername(userId)` → `findById` → `UserPrincipal` 반환
   - **매 요청 DB 조회** — JWT claim만 믿지 않고 탈퇴 등 최신 상태를 즉시 반영하기 위함
@@ -200,7 +267,7 @@
 
 ---
 
-## K. AuthController / UserController
+## K. AuthController / UserController (7~9단계)
 
 | Method | URI | 인증 | 요청 | 응답 |
 |---|---|---|---|---|

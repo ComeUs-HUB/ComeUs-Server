@@ -1,7 +1,7 @@
 package com.toyproject.backend.domain.auth.config;
 
 /**
- * [3단계 · G] 카카오 호출용 RestClient 설정 — 프로토타입 (구현 전)
+ * [4단계 · G] 카카오 호출용 RestClient 설정 — 프로토타입 (구현 전)
  *
  * <p><b>역할</b><br>
  * {@code KakaoOAuthClient}가 쓸 HTTP 클라이언트 Bean을 제공한다.

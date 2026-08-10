@@ -1,7 +1,7 @@
 package com.toyproject.backend.domain.user.dto;
 
 /**
- * [8단계 · K] 회원 정보 수정 요청 DTO — 프로토타입 (구현 전)
+ * [9단계 · K] 회원 정보 수정 요청 DTO — 프로토타입 (구현 전)
  *
  * <p><b>역할</b><br>
  * {@code PUT /api/users/me}의 요청 바디.

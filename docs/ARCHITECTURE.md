@@ -336,6 +336,10 @@ com.toyproject.backend
 미구현. `domain/user`·`domain/auth`·`global/security`에 **본문이 빈 프로토타입 골격**만 존재한다.
 선반영: `UserErrorCode`(U001), `AuthErrorCode`(A001~A009), `BackendApplication`의 `@ConfigurationPropertiesScan`.
 
+구현 순서는 **1~9단계**로 확정돼 있다 — [[phase2-auth]] "구현 순서" 절 참고.
+각 클래스 Javadoc 첫 줄의 `[N단계 · G]` 표기가 소속 단계다.
+엔티티(1) → Flyway(2) → Repository(3) → 카카오 연동(4) → 토큰 부품(5) → Security 배선(6) → 서비스(7) → 로그인 API(8) → 회원 API(9).
+
 ### Phase 3 — 카테고리 / 상품 ⬜
 
 ### Phase 4 — 구매 플로우 (Cart · Order · Payment) ⬜
