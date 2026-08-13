@@ -26,6 +26,15 @@ jwt:
   access-expiration: 1800000    # 30분 (ms)
   refresh-expiration: 604800000 # 7일 (ms)
 
+# 카카오 고정 엔드포인트. 환경에 무관하므로 여기 둔다.
+# client-id / client-secret / admin-key / redirect-uri 는 환경마다 다르고 비밀값이라
+# 프로파일별 파일(application-local.yml / application-prod.yml, .gitignore 대상)에 둔다.
+kakao:
+  authorize-uri: https://kauth.kakao.com/oauth/authorize
+  token-uri: https://kauth.kakao.com/oauth/token
+  user-info-uri: https://kapi.kakao.com/v2/user/me
+  unlink-uri: https://kapi.kakao.com/v1/user/unlink
+
 logging:
   level:
     org.hibernate.SQL: debug
