@@ -77,7 +77,7 @@ public class UserService {
      * 의존 방향이 {@code auth → user} 단방향으로 유지된다.
      *
      * @return 카카오 고유 사용자 id
-     * @throws BusinessException 회원이 없거나 이미 탈퇴한 경우 A001 ({@link #getActiveUser} 참고)
+     * @throws BusinessException 회원이 없으면 A001(401), 이미 탈퇴했으면 A008(403) ({@link #getActiveUser} 참고)
      */
     @Transactional
     public String withdraw(Long userId) {
@@ -119,22 +119,44 @@ public class UserService {
     }
 
     /**
-     * 인증된 요청의 {@code userId}로 활성 회원을 읽는다. 탈퇴 회원은 "없음"으로 취급한다.
+     * 인증된 요청의 {@code userId}로 활성 회원을 읽는다.
      *
      * <p><b>여기에 도달하는 실패는 "없는 회원"이 아니라 경합이다.</b> {@code userId}는 항상
      * {@code @AuthenticationPrincipal}에서 오고, 그 앞에서 {@code CustomUserDetailsService}가
-     * 매 요청 DB를 다시 읽어 미존재는 A001, 탈퇴는 A008로 이미 걸러낸다. 그러니 이 시점의 실패는
-     * <b>필터 통과 직후 회원이 사라진 경우</b>뿐이고, 클라이언트에게 필요한 조치는 재로그인이다.
-     * 그래서 404가 아니라 A001(401)로 내려 FE의 401 인터셉터가 그대로 흡수하게 한다.
+     * 매 요청 DB를 다시 읽어 미존재와 탈퇴를 이미 걸러낸다. 그러니 이 시점의 실패는
+     * <b>필터 통과 직후에 상태가 바뀐 경우</b>뿐이다 — 탈퇴 요청을 두 번 눌렀을 때가 가장 현실적이다.
      *
-     * <p>이 분기는 정상 운영에서 거의 발생하지 않으므로, 진단을 위해 {@code userId}를 로그로 남긴다.
+     * <p><b>거부 사유를 필터와 동일하게 구분해 던진다.</b>
+     * <table border="1">
+     *   <tr><th>상황</th><th>ErrorCode</th><th>필터에서의 대응</th></tr>
+     *   <tr><td>row 없음</td><td>{@code UNAUTHORIZED}(A001, 401)</td>
+     *       <td>{@code UsernameNotFoundException}</td></tr>
+     *   <tr><td>탈퇴 회원</td><td>{@code WITHDRAWN_USER}(A008, 403)</td>
+     *       <td>{@code DisabledException}</td></tr>
+     * </table>
+     *
+     * <p>⚠️ <b>둘을 A001로 뭉개지 말 것.</b> 같은 회원 상태가 어느 계층이 먼저 알아채느냐에 따라
+     * 401/403으로 갈리면, 탈퇴 더블 클릭에서 응답이 흔들린다. A007이 미존재와 만료를 뭉개는 것은
+     * <b>토큰 존재 여부를 흘리지 않으려는 정보 은닉</b>이 목적이라 사정이 다르다 —
+     * 여기서는 자기 자신의 상태이고 이미 A008로 알려주고 있어 은닉할 대상이 없다.
+     *
+     * <p>미존재를 404가 아니라 401로 내리는 이유: 이 API는 클라이언트가 회원을 <b>지목하지 않는다</b>
+     * (경로에 {@code {userId}}가 없다). "네가 지목한 것이 없다"가 아니라 "세션이 더는 유효하지 않다"이므로,
+     * FE의 401 인터셉터가 그대로 재로그인으로 흡수하게 한다.
+     *
+     * <p>두 분기 모두 정상 운영에서 거의 발생하지 않으므로, 진단을 위해 {@code userId}를 로그로 남긴다.
      */
     private User getActiveUser(Long userId) {
-        return userRepository.findById(userId)
-                .filter(user -> !user.isWithdrawn())
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
-                    log.warn("인증 통과 후 회원 소실/탈퇴 — userId={}", userId);
+                    log.warn("인증 통과 후 회원 소실 — userId={}", userId);
                     return new BusinessException(AuthErrorCode.UNAUTHORIZED);
                 });
+
+        if (user.isWithdrawn()) {
+            log.warn("인증 통과 후 탈퇴 — userId={}", userId);
+            throw new BusinessException(AuthErrorCode.WITHDRAWN_USER);
+        }
+        return user;
     }
 }
