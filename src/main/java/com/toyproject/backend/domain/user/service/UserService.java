@@ -1,52 +1,140 @@
 package com.toyproject.backend.domain.user.service;
 
+import com.toyproject.backend.domain.auth.exception.AuthErrorCode;
+import com.toyproject.backend.domain.user.dto.KakaoUserResolution;
+import com.toyproject.backend.domain.user.entity.Provider;
+import com.toyproject.backend.domain.user.entity.User;
+import com.toyproject.backend.domain.user.repository.UserRepository;
+import com.toyproject.backend.global.exception.BusinessException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 /**
- * [7단계 · K] 회원 서비스 — 프로토타입 (구현 전)
+ * [7단계 · K] 회원 서비스
  *
  * <p><b>역할</b><br>
  * 회원 프로필 조회·수정과 회원 생명주기(가입·탈퇴). <b>회원 레코드를 만드는 규칙은 전부 여기에 있다</b> —
  * auth 도메인은 카카오에서 받은 값만 넘기고 생성 규칙은 알지 못한다.
  *
- * <p><b>개발 방향</b>
+ * <p>7단계에서는 auth가 호출하는 경계 메서드 두 개({@link #findOrCreateKakaoUser}, {@link #withdraw})만
+ * 구현한다. {@code getMyInfo}/{@code updateMyInfo}는 {@code UserResponse}·{@code UserUpdateRequest}와
+ * 함께 9단계에서 추가하며, 그때 {@link #getActiveUser(Long)}를 재사용한다.
+ *
+ * <p><b>설계</b>
  * <ul>
  *   <li>{@code userId}는 {@code @AuthenticationPrincipal}에서 받은 값이므로 소유권 검사가 따로 필요 없다
  *       (자기 자신만 다루는 API다).</li>
- *   <li>수정은 엔티티의 {@code updateProfile}에 위임하고 더티 체킹으로 반영한다.
- *       서비스에서 필드를 직접 세팅하지 않는다.</li>
+ *   <li>상태 변경은 엔티티의 도메인 메서드({@code reactivate}, {@code withdraw})에 위임하고
+ *       더티 체킹으로 반영한다. 서비스에서 필드를 직접 세팅하거나 {@code save}를 다시 부르지 않는다.</li>
  *   <li><b>{@code UserRepository}는 user 패키지 밖으로 노출하지 않는다.</b>
- *       auth가 회원 데이터에 접근하는 경로는 아래 공개 메서드뿐이다.</li>
+ *       auth가 회원 데이터에 접근하는 경로는 이 클래스의 공개 메서드뿐이다.</li>
  * </ul>
  *
- * <p><b>예정 메서드</b>
- * <ul>
- *   <li>{@code UserResponse getMyInfo(Long userId)}</li>
- *   <li>{@code UserResponse updateMyInfo(Long userId, UserUpdateRequest)} — null 필드는 미변경</li>
- *   <li>{@code KakaoUserResolution findOrCreateKakaoUser(String providerId, String email, String nickname)}
- *       — 카카오 로그인 시 {@code AuthService}가 호출하는 진입점.
- *       조회된/생성된 {@code User}와 신규 생성 여부를 함께 반환한다</li>
- *   <li>{@code String withdraw(Long userId)} — 소프트 삭제 후 카카오 {@code unlink}에 필요한
- *       {@code providerId}를 반환한다</li>
- * </ul>
- *
- * <p><b>{@code findOrCreateKakaoUser} 규칙</b>
- * <ol>
- *   <li>{@code findByProviderAndProviderId(KAKAO, providerId)}로 조회</li>
- *   <li>ACTIVE면 그대로 사용 / WITHDRAWN이면 {@code reactivate()}(자동 재활성화).
- *       둘 다 기존 회원이므로 {@code isNewUser=false}</li>
- *   <li>없으면 신규 생성({@code isNewUser=true}).
- *       <b>email이 이미 쓰이고 있으면 email만 null로 두고 가입은 계속 진행</b>한다
- *       (중복 이메일로 소셜 가입이 막히면 안 된다)</li>
- * </ol>
- *
- * <p><b>{@code withdraw} 처리</b><br>
- * {@code user.withdraw()}로 소프트 삭제({@code status=WITHDRAWN}, {@code withdrawnAt} 기록)만 하고
- * {@code providerId}를 반환한다. <b>refresh token 삭제와 카카오 {@code unlink}는 여기서 하지 않는다</b> —
- * auth 도메인의 책임이고, 호출 순서는 {@code UserController}가 소유한다.
- * user가 auth를 참조하지 않아야 의존 방향이 {@code auth → user} 단방향으로 유지된다.
- *
- * <p><b>주의</b><br>
- * 탈퇴 회원 조회는 "없음"으로 취급한다(이미 탈퇴한 계정에 다시 접근하는 경우).
- * 단 {@code findOrCreateKakaoUser}는 예외다 — WITHDRAWN 계정을 찾아 재활성화하는 것이 목적이다.
+ * <p><b>{@code AuthErrorCode}를 참조하는 이유</b><br>
+ * 의존 방향은 {@code auth → user} 단방향이지만, <b>ErrorCode enum은 공유 어휘이지 동작 의존이 아니다.</b>
+ * 경계에서 막는 것은 auth의 <i>컴포넌트</i>({@code AuthService}·{@code RefreshTokenRepository}·
+ * {@code KakaoOAuthClient})를 주입하는 일이며, 그런 주입은 여기에 없다.
+ * 문서도 A008({@code WITHDRAWN_USER})을 "회원 상태에서 파생되지만 인증 거절 사유로 소비되므로 auth에 둔다"고
+ * 이미 정리해 두었다 — A001도 같은 성격이다.
  */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class UserService {
+
+    private final UserRepository userRepository;
+
+    /**
+     * 카카오 로그인 시 회원을 찾거나 만든다. <b>{@code AuthService}가 호출하는 진입점</b>이다.
+     *
+     * <p>세 갈래로 갈린다.
+     * <ol>
+     *   <li>가입 이력 있음 · ACTIVE → 그대로 사용 ({@code isNewUser=false})</li>
+     *   <li>가입 이력 있음 · WITHDRAWN → {@code reactivate()}로 자동 재활성화.
+     *       <b>기존 회원이므로 {@code isNewUser=false}</b></li>
+     *   <li>가입 이력 없음 → 신규 생성 ({@code isNewUser=true})</li>
+     * </ol>
+     *
+     * @param providerId 카카오 고유 사용자 id
+     * @param email      카카오 이메일. 미동의면 {@code null}
+     * @param nickname   카카오 닉네임. 미동의면 {@code null}
+     */
+    @Transactional
+    public KakaoUserResolution findOrCreateKakaoUser(String providerId, String email, String nickname) {
+        return userRepository.findByProviderAndProviderId(Provider.KAKAO, providerId)
+                .map(this::reuse)
+                .orElseGet(() -> create(providerId, email, nickname));
+    }
+
+    /**
+     * 회원 탈퇴 — <b>소프트 삭제만</b> 수행하고 카카오 {@code unlink}에 필요한 {@code providerId}를 돌려준다.
+     *
+     * <p>refresh token 삭제와 카카오 연결 해제는 <b>여기서 하지 않는다.</b> auth 도메인의 책임이고,
+     * 호출 순서는 {@code UserController}가 소유한다. user가 auth를 참조하지 않아야
+     * 의존 방향이 {@code auth → user} 단방향으로 유지된다.
+     *
+     * @return 카카오 고유 사용자 id
+     * @throws BusinessException 회원이 없거나 이미 탈퇴한 경우 A001 ({@link #getActiveUser} 참고)
+     */
+    @Transactional
+    public String withdraw(Long userId) {
+        User user = getActiveUser(userId);
+        user.withdraw();
+        return user.getProviderId();
+    }
+
+    /**
+     * 가입 이력이 있는 회원을 재사용한다. WITHDRAWN이면 재활성화한다.
+     *
+     * <p>{@code reactivate()}는 더티 체킹으로 반영되므로 {@code save}를 부르지 않는다.
+     */
+    private KakaoUserResolution reuse(User user) {
+        if (user.isWithdrawn()) {
+            user.reactivate();
+        }
+        return KakaoUserResolution.existing(user);
+    }
+
+    private KakaoUserResolution create(String providerId, String email, String nickname) {
+        User user = userRepository.save(User.ofKakao(providerId, adoptableEmail(email), nickname));
+        return KakaoUserResolution.created(user);
+    }
+
+    /**
+     * 신규 가입에 쓸 이메일을 고른다. <b>중복이어도 가입을 막지 않는다</b> — email만 비우고 진행한다.
+     *
+     * <p>⚠️ {@code email}이 {@code null}이면 {@code existsByEmail}을 <b>호출하지 않는다.</b>
+     * 넘기면 SQL이 {@code email = null}이 되어 항상 false를 반환하는, 의미 없는 쿼리가 나간다.
+     *
+     * @return 채택한 이메일. 미동의거나 이미 사용 중이면 {@code null}
+     */
+    private String adoptableEmail(String email) {
+        if (email == null) {
+            return null;
+        }
+        return userRepository.existsByEmail(email) ? null : email;
+    }
+
+    /**
+     * 인증된 요청의 {@code userId}로 활성 회원을 읽는다. 탈퇴 회원은 "없음"으로 취급한다.
+     *
+     * <p><b>여기에 도달하는 실패는 "없는 회원"이 아니라 경합이다.</b> {@code userId}는 항상
+     * {@code @AuthenticationPrincipal}에서 오고, 그 앞에서 {@code CustomUserDetailsService}가
+     * 매 요청 DB를 다시 읽어 미존재는 A001, 탈퇴는 A008로 이미 걸러낸다. 그러니 이 시점의 실패는
+     * <b>필터 통과 직후 회원이 사라진 경우</b>뿐이고, 클라이언트에게 필요한 조치는 재로그인이다.
+     * 그래서 404가 아니라 A001(401)로 내려 FE의 401 인터셉터가 그대로 흡수하게 한다.
+     *
+     * <p>이 분기는 정상 운영에서 거의 발생하지 않으므로, 진단을 위해 {@code userId}를 로그로 남긴다.
+     */
+    private User getActiveUser(Long userId) {
+        return userRepository.findById(userId)
+                .filter(user -> !user.isWithdrawn())
+                .orElseThrow(() -> {
+                    log.warn("인증 통과 후 회원 소실/탈퇴 — userId={}", userId);
+                    return new BusinessException(AuthErrorCode.UNAUTHORIZED);
+                });
+    }
 }

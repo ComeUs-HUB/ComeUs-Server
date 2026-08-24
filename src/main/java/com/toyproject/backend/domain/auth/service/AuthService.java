@@ -1,60 +1,166 @@
 package com.toyproject.backend.domain.auth.service;
 
+import com.toyproject.backend.domain.auth.client.KakaoOAuthClient;
+import com.toyproject.backend.domain.auth.config.JwtProperties;
+import com.toyproject.backend.domain.auth.dto.TokenResponse;
+import com.toyproject.backend.domain.auth.entity.RefreshToken;
+import com.toyproject.backend.domain.auth.exception.AuthErrorCode;
+import com.toyproject.backend.domain.auth.repository.RefreshTokenRepository;
+import com.toyproject.backend.domain.auth.token.JwtProvider;
+import com.toyproject.backend.domain.auth.token.SecureTokenGenerator;
+import com.toyproject.backend.global.exception.BusinessException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.time.Duration;
+
 /**
- * [7단계 · I·K] 인증 서비스 — 프로토타입 (구현 전)
+ * [7단계 · I·K] 인증 서비스
  *
  * <p><b>역할</b><br>
- * 로그인·재발급·로그아웃의 비즈니스 로직. HTTP(쿠키·리다이렉트)는 전혀 모르고,
+ * 재발급·로그아웃·탈퇴 보조의 비즈니스 로직. HTTP(쿠키·리다이렉트)는 전혀 모르고,
  * 그 조립은 {@code AuthController}가 맡는다.
  *
- * <p><b>개발 방향</b>
+ * <p>7단계 범위는 <b>컨트롤러 없이 검증되는 것</b>까지다. 카카오 로그인 본체
+ * ({@code kakaoLogin} + {@code KakaoLoginResult})는 8단계에서 추가한다 —
+ * 그때 {@link #getRefreshTokenMaxAge()}로 {@code expiresAt}을 계산해
+ * {@code RefreshToken} row를 만든다.
+ *
+ * <p><b>설계</b>
  * <ul>
  *   <li>클래스에 {@code @Transactional(readOnly = true)}, 쓰기 메서드에만 {@code @Transactional}.</li>
- *   <li>refresh token <b>원문은 반환값으로만</b> 흘려보낸다. 필드·로그·응답 DTO에 남기지 않는다.</li>
+ *   <li>refresh token <b>원문은 인자·반환값으로만</b> 흘려보낸다. 필드·로그·응답 DTO에 남기지 않는다.</li>
  *   <li>회원 데이터 접근은 {@code UserService}를 <b>반드시 경유</b>한다.
- *       {@code UserRepository}를 직접 주입하지 않는다 — 회원 생성 규칙이 auth로 새어나오는 것을 막는다.</li>
+ *       {@code UserRepository}를 직접 주입하지 않는다 — 회원 생성 규칙이 auth로 새어나오는 것을 막는다.
+ *       (이번 단계에는 회원을 읽는 경로 자체가 없다. {@code reissue}는
+ *       {@code @EntityGraph}로 함께 로딩된 {@code RefreshToken.user}를 쓴다.)</li>
  * </ul>
  *
- * <p><b>예정 메서드</b>
- * <ul>
- *   <li>{@code String generateOAuthState()} — 인가 요청에 실을 state 생성</li>
- *   <li>{@code KakaoLoginResult kakaoLogin(String code)} — 로그인 본체(아래 흐름 참고)</li>
- *   <li>{@code TokenResponse reissue(String rawRefreshToken)} — 재발급</li>
- *   <li>{@code void logout(String rawRefreshToken)} — 해당 기기 토큰 1건 삭제</li>
- *   <li>{@code Duration getRefreshTokenMaxAge()} — 쿠키 {@code Max-Age}와 {@code expiresAt}이
- *       같은 값을 쓰도록 한 곳에서 제공</li>
- * </ul>
- *
- * <p><b>탈퇴 흐름에서 {@code UserController}가 호출하는 메서드</b>
- * <ul>
- *   <li>{@code void revokeAllTokens(Long userId)} — 해당 유저 {@code RefreshToken} row 전수 삭제.
- *       실패 시 예외를 그대로 던진다(fail-closed — 탈퇴가 중단되어야 한다)</li>
- *   <li>{@code void unlinkKakao(String providerId)} — 카카오 연결 해제.
- *       <b>best-effort</b>: 실패해도 로그만 남기고 예외를 던지지 않는다.
- *       카카오 장애로 탈퇴가 막히면 안 되고, 예외를 삼키는 판단은 호출자가 아니라 여기서 한다</li>
- * </ul>
- * 호출 순서는 {@code UserController}가 소유한다. 여기서 {@code UserService.withdraw}를 부르지 않는다.
- *
- * <p><b>{@code kakaoLogin} 처리 순서</b>
- * <ol>
- *   <li>{@code requestToken(code)} → {@code fetchUserInfo()} → kakaoId, email(nullable), nickname</li>
- *   <li>{@code userService.findOrCreateKakaoUser(kakaoId, email, nickname)}
- *       — 조회·재활성화·신규 생성 판단은 <b>전부 user 도메인이 소유</b>한다.
- *       반환된 {@code KakaoUserResolution}에서 {@code User}와 {@code isNewUser}를 함께 받는다</li>
- *   <li>refresh 원문 생성 → 해시를 {@code RefreshToken} row로 저장 → 원문을 반환</li>
- * </ol>
- *
- * <p><b>주의</b>
- * <ul>
- *   <li><b>여기서 access token을 발급하지 않는다.</b> FE가 복귀 후 {@code POST /api/auth/refresh}로 얻는다.
- *       그 결과 access token이 URL에 실리는 경로가 <b>설계상 존재하지 않고</b>,
- *       로그인 직후와 새로고침 후의 세션 획득 경로가 동일해진다.</li>
- *   <li>재발급 유효성 = <b>row 존재 AND 미만료</b>. 둘 중 하나라도 아니면 {@code REFRESH_TOKEN_NOT_FOUND}(A007).
- *       "없음"과 "만료"를 같은 코드로 응답해 토큰 존재 여부를 흘리지 않는다.</li>
- *   <li>rotation을 하지 않으므로 재발급 시 <b>기존 row를 건드리지 않는다.</b>
- *       여러 탭이 동시에 호출해도 모두 성공해야 한다.</li>
- *   <li>{@code logout}은 쿠키가 없거나 이미 무효여도 <b>예외 없이 성공</b> 처리한다.</li>
- * </ul>
+ * <p><b>탈퇴 흐름에서 {@code UserController}가 호출하는 메서드</b><br>
+ * {@link #revokeAllTokens(Long)}(fail-closed) → {@code userService.withdraw} →
+ * {@link #unlinkKakao(String)}(best-effort) 순이며, <b>호출 순서는 {@code UserController}가 소유</b>한다.
+ * 여기서 {@code UserService.withdraw}를 부르지 않는다.
  */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class AuthService {
+
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final SecureTokenGenerator secureTokenGenerator;
+    private final JwtProvider jwtProvider;
+    private final JwtProperties jwtProperties;
+    private final KakaoOAuthClient kakaoOAuthClient;
+
+    /**
+     * refresh token으로 access token을 재발급한다.
+     *
+     * <p><b>유효성 = row 존재 AND 미만료.</b> 둘 중 하나라도 아니면 {@code REFRESH_TOKEN_NOT_FOUND}(A007)다 —
+     * "없음"과 "만료"를 같은 코드로 응답해 토큰 존재 여부를 흘리지 않는다.
+     *
+     * <p>rotation을 하지 않으므로 <b>기존 row를 건드리지 않고 새 쿠키도 내려보내지 않는다.</b>
+     * 여러 탭이 같은 토큰으로 동시에 호출해도 모두 성공한다.
+     *
+     * <p>만료된 row는 <b>지우지 않고 그대로 둔다.</b> {@code expiresAt} 검사가 이미 거절하므로 기능상 무해하고,
+     * 정리 배치는 후속 과제다.
+     *
+     * @param rawRefreshToken 쿠키에서 꺼낸 <b>원문</b> (해시가 아니다)
+     * @throws BusinessException A007 — 쿠키 없음/빈 값, 미존재, 만료
+     */
+    public TokenResponse reissue(String rawRefreshToken) {
+        RefreshToken refreshToken = findValidToken(rawRefreshToken);
+
+        return TokenResponse.of(
+                jwtProvider.createAccessToken(refreshToken.getUser()),
+                jwtProvider.getAccessExpirationSeconds());
+    }
+
+    /**
+     * 요청한 기기의 refresh token 1건을 무효화한다.
+     *
+     * <p><b>멱등하다.</b> 쿠키가 없거나 이미 삭제된 토큰이어도 예외 없이 성공한다 —
+     * {@code deleteByTokenHash}가 없는 해시에 대해 {@code 0}을 반환하므로 <b>삭제 건수를 검사하지 않는다.</b>
+     * 로그아웃은 "세션을 없애 달라"는 요청이고, 이미 없으면 그 요청은 이미 충족된 것이다.
+     *
+     * <p>{@code token_hash}가 유니크라 다른 기기의 세션은 유지된다(멀티 디바이스 전제).
+     *
+     * @param rawRefreshToken 쿠키에서 꺼낸 원문. {@code null}·빈 값 허용
+     */
+    @Transactional
+    public void logout(String rawRefreshToken) {
+        if (!StringUtils.hasText(rawRefreshToken)) {
+            return;
+        }
+        refreshTokenRepository.deleteByTokenHash(secureTokenGenerator.sha256Hex(rawRefreshToken));
+    }
+
+    /**
+     * 한 회원의 refresh token을 전부 무효화한다. <b>회원 탈퇴의 1단계</b>다.
+     *
+     * <p><b>fail-closed</b> — 예외를 잡지 않는다. 실패하면 그대로 전파되어 탈퇴가 중단되고
+     * 회원은 ACTIVE로 남는다(재로그인으로 복구 가능). 토큰이 살아 있는데 회원만 WITHDRAWN인 상태보다
+     * 안전하다.
+     */
+    @Transactional
+    public void revokeAllTokens(Long userId) {
+        refreshTokenRepository.deleteAllByUserId(userId);
+    }
+
+    /**
+     * 카카오 계정 연결을 해제한다. <b>회원 탈퇴의 마지막 단계</b>다.
+     *
+     * <p><b>best-effort</b> — 실패해도 로그만 남기고 예외를 던지지 않는다. 카카오 장애로 탈퇴가 막히면
+     * 안 되기 때문이다. <b>예외를 삼키는 판단은 호출자가 아니라 여기서 한다</b> —
+     * {@code KakaoOAuthClient}는 평소처럼 던지고, 그 정책을 이 메서드가 소유한다.
+     *
+     * <p>DB를 건드리지 않는 외부 호출이라 쓰기 트랜잭션을 열지 않는다.
+     */
+    public void unlinkKakao(String providerId) {
+        try {
+            kakaoOAuthClient.unlink(providerId);
+        } catch (BusinessException e) {
+            log.warn("카카오 연결 해제 실패 — 탈퇴는 그대로 진행한다. providerId={}, code={}",
+                    providerId, e.getErrorCode().getCode());
+        }
+    }
+
+    /**
+     * 인가 요청에 실을 {@code state}를 만든다. CSRF 방어용이며 {@code oauth_state} 쿠키와 대조된다.
+     *
+     * <p>{@code SecureTokenGenerator}를 재사용한다 — 여기서 {@code SecureRandom}을 새로 만들지 않는다.
+     * state는 쿠키 값과 대조만 하면 되므로 refresh token과 같은 43자로 충분하다.
+     */
+    public String generateOAuthState() {
+        return secureTokenGenerator.generate();
+    }
+
+    /**
+     * refresh token의 수명. {@code RefreshToken.expiresAt} 계산과 쿠키 {@code Max-Age}가
+     * <b>같은 값</b>을 쓰도록 한 곳에서 제공한다 (둘이 어긋나면 쿠키는 살아 있는데 서버가 거절하거나 그 반대가 된다).
+     *
+     * <p>설정값은 ms이므로 여기서 {@code Duration}으로 감싼다. JWT의 {@code exp}가 아니다.
+     */
+    public Duration getRefreshTokenMaxAge() {
+        return Duration.ofMillis(jwtProperties.refreshExpiration());
+    }
+
+    /**
+     * 원문을 SHA-256으로 해시해 조회하고 만료를 검사한다.
+     *
+     * <p>서버는 원문을 보관하지 않으므로 <b>조회 키는 반드시 해시</b>다.
+     * 실패 사유(빈 값·미존재·만료)를 구분하지 않고 전부 A007로 뭉갠다.
+     */
+    private RefreshToken findValidToken(String rawRefreshToken) {
+        if (!StringUtils.hasText(rawRefreshToken)) {
+            throw new BusinessException(AuthErrorCode.REFRESH_TOKEN_NOT_FOUND);
+        }
+
+        return refreshTokenRepository.findByTokenHash(secureTokenGenerator.sha256Hex(rawRefreshToken))
+                .filter(token -> !token.isExpired())
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.REFRESH_TOKEN_NOT_FOUND));
+    }
 }
