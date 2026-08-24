@@ -16,6 +16,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -169,16 +170,22 @@ class UserServiceTest {
         }
 
         @Test
-        @DisplayName("이미 탈퇴한 회원은 '없음'으로 취급해 A001을 던진다")
-        void treatsWithdrawnUserAsMissing() {
+        @DisplayName("이미 탈퇴한 회원이면 A008(403) — 필터와 같은 규칙으로 사유를 구분한다")
+        void throwsWithdrawnUserWhenAlreadyWithdrawn() {
             User withdrawn = User.ofKakao(PROVIDER_ID, EMAIL, NICKNAME);
             withdrawn.withdraw();
+            LocalDateTime withdrawnAt = withdrawn.getWithdrawnAt();
             given(userRepository.findById(USER_ID)).willReturn(Optional.of(withdrawn));
 
             assertThatThrownBy(() -> userService.withdraw(USER_ID))
+                    .as("A001로 뭉개면 탈퇴 더블 클릭에서 같은 상태가 401/403으로 흔들린다")
                     .isInstanceOf(BusinessException.class)
                     .extracting(e -> ((BusinessException) e).getErrorCode())
-                    .isEqualTo(AuthErrorCode.UNAUTHORIZED);
+                    .isEqualTo(AuthErrorCode.WITHDRAWN_USER);
+
+            assertThat(withdrawn.getWithdrawnAt())
+                    .as("두 번째 호출이 withdraw()를 다시 불러 탈퇴 시각을 덮어쓰면 안 된다")
+                    .isEqualTo(withdrawnAt);
         }
     }
 }
