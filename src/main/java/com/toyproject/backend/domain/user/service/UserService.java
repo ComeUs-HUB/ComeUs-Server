@@ -2,6 +2,8 @@ package com.toyproject.backend.domain.user.service;
 
 import com.toyproject.backend.domain.auth.exception.AuthErrorCode;
 import com.toyproject.backend.domain.user.dto.KakaoUserResolution;
+import com.toyproject.backend.domain.user.dto.UserResponse;
+import com.toyproject.backend.domain.user.dto.UserUpdateRequest;
 import com.toyproject.backend.domain.user.entity.Provider;
 import com.toyproject.backend.domain.user.entity.User;
 import com.toyproject.backend.domain.user.repository.UserRepository;
@@ -18,9 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 회원 프로필 조회·수정과 회원 생명주기(가입·탈퇴). <b>회원 레코드를 만드는 규칙은 전부 여기에 있다</b> —
  * auth 도메인은 카카오에서 받은 값만 넘기고 생성 규칙은 알지 못한다.
  *
- * <p>7단계에서는 auth가 호출하는 경계 메서드 두 개({@link #findOrCreateKakaoUser}, {@link #withdraw})만
- * 구현한다. {@code getMyInfo}/{@code updateMyInfo}는 {@code UserResponse}·{@code UserUpdateRequest}와
- * 함께 9단계에서 추가하며, 그때 {@link #getActiveUser(Long)}를 재사용한다.
+ * <p>7단계에서 auth가 호출하는 경계 메서드({@link #findOrCreateKakaoUser}, {@link #withdraw})를,
+ * 9단계에서 프로필 조회·수정({@link #getMyInfo}, {@link #updateMyInfo})을 붙였다.
+ * 넷 모두 {@link #getActiveUser(Long)}이나 그에 준하는 조회를 공유한다.
  *
  * <p><b>설계</b>
  * <ul>
@@ -46,6 +48,36 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserRepository userRepository;
+
+    /**
+     * 내 정보 조회. {@code GET /api/users/me}
+     *
+     * <p>필터가 이미 {@code findById}로 회원을 읽었지만 그 결과({@code UserPrincipal})는
+     * {@code id}·{@code role}·{@code status}만 담고 있어 응답 바디를 만들 수 없다.
+     * 그래서 여기서 엔티티를 <b>다시 읽는다</b> — 요청 1회당 조회가 2회인 것은
+     * "JWT claim만 믿지 않고 매 요청 최신 상태를 확인한다"는 6단계 결정의 비용이다.
+     */
+    public UserResponse getMyInfo(Long userId) {
+        return UserResponse.from(getActiveUser(userId));
+    }
+
+    /**
+     * 내 정보 수정. {@code PUT /api/users/me}
+     *
+     * <p>{@code null}인 필드는 <b>변경하지 않는다.</b> 판단은 서비스가 아니라
+     * {@code User.updateProfile}이 소유하고, 변경은 더티 체킹으로 반영된다 —
+     * 여기서 필드를 직접 세팅하거나 {@code save}를 부르지 않는다.
+     *
+     * <p>수정 후의 엔티티를 그대로 응답으로 바꾼다. 트랜잭션이 아직 열려 있어
+     * 아직 flush되지 않았지만, 우리가 방금 바꾼 값이므로 반환값과 커밋될 값이 같다.
+     */
+    @Transactional
+    public UserResponse updateMyInfo(Long userId, UserUpdateRequest request) {
+        User user = getActiveUser(userId);
+        user.updateProfile(request.name(), request.phone(), request.address(), request.birthDate());
+
+        return UserResponse.from(user);
+    }
 
     /**
      * 카카오 로그인 시 회원을 찾거나 만든다. <b>{@code AuthService}가 호출하는 진입점</b>이다.
