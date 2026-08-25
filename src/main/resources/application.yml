@@ -1,6 +1,14 @@
 spring:
   application:
     name: backend
+  # 로컬 비밀값은 프로젝트 루트 .env에서 읽는다(.gitignore 42행).
+  # Spring은 .env를 자동으로 읽지 않으므로 명시적으로 import한다 — 이 한 줄이 없으면
+  # 실행 주체(IDE / 터미널 / java -jar)마다 환경변수를 따로 주입해야 한다.
+  # [.properties]는 확장자 없는 파일의 형식을 알려주는 힌트다.
+  # optional: 이 없으면 .env가 없는 환경(CI·운영)에서 기동이 실패한다 — 거기서는
+  # 진짜 환경변수로 주입되므로 파일이 없는 것이 정상이다.
+  config:
+    import: optional:file:./.env[.properties]
   profiles:
     active: local
   # datasource는 프로필별 파일에만 둔다 (application-local.yml / application-prod.yml).
