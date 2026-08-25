@@ -15,6 +15,7 @@ import com.toyproject.backend.domain.user.dto.KakaoUserResolution;
 import com.toyproject.backend.domain.user.entity.User;
 import com.toyproject.backend.domain.user.service.UserService;
 import com.toyproject.backend.global.exception.BusinessException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -23,6 +24,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -39,6 +42,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 
 /**
@@ -83,6 +87,17 @@ class AuthServiceTest {
             REFRESH_EXPIRATION_MILLIS
     );
 
+    /**
+     * 콜백을 그대로 실행하는 최소 템플릿. {@code execute}는 {@code getTransaction} →
+     * {@code doInTransaction} → {@code commit} 순으로 도는데, 매니저가 mock이면
+     * 앞뒤가 no-op이 되고 <b>콜백만 실행된다.</b>
+     *
+     * <p>여기서 검증할 것은 트랜잭션 <b>안에서 무엇을 하는가</b>이지 실제 롤백이 아니다 —
+     * 롤백은 {@code KakaoLoginTransactionTest}가 실제 트랜잭션으로 확인한다.
+     */
+    private final TransactionTemplate transactionTemplate =
+            new TransactionTemplate(mock(PlatformTransactionManager.class));
+
     private AuthService authService;
     private User user;
     private String tokenHash;
@@ -91,7 +106,7 @@ class AuthServiceTest {
     void setUp() {
         authService = new AuthService(
                 refreshTokenRepository, secureTokenGenerator, jwtProvider, jwtProperties,
-                kakaoOAuthClient, userService);
+                kakaoOAuthClient, userService, transactionTemplate);
         user = User.ofKakao(PROVIDER_ID, "user@kakao.com", "민준");
         tokenHash = secureTokenGenerator.sha256Hex(RAW_TOKEN);
     }
@@ -192,6 +207,20 @@ class AuthServiceTest {
 
             then(jwtProvider)
                     .shouldHaveNoInteractions();
+        }
+
+        @Test
+        @DisplayName("토큰 저장이 실패하면 예외가 그대로 전파된다 — 트랜잭션이 롤백을 맡는다")
+        void propagatesTokenPersistenceFailure() {
+            givenKakaoRoundTrip();
+            given(userService.findOrCreateKakaoUser(KAKAO_ID, KAKAO_EMAIL, KAKAO_NICKNAME))
+                    .willReturn(KakaoUserResolution.created(user));
+            willThrow(new DataAccessResourceFailureException("커넥션 타임아웃"))
+                    .given(refreshTokenRepository).save(any(RefreshToken.class));
+
+            assertThatThrownBy(() -> authService.kakaoLogin(CODE))
+                    .as("삼키면 회원만 남고 세션이 없는 상태가 커밋된다")
+                    .isInstanceOf(DataAccessResourceFailureException.class);
         }
 
         @Test

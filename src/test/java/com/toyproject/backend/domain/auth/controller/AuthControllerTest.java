@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -256,6 +257,24 @@ class AuthControllerTest {
             assertThat(location(result))
                     .as("ApiResponse JSON이 브라우저 주소창에 노출되면 안 된다")
                     .isEqualTo(FRONTEND_COMPLETE + "?error=A006");
+        }
+        @Test
+        @DisplayName("DB 장애처럼 예상 밖의 오류도 JSON 500이 아니라 302 ?error=C003이다")
+        void convertsUnexpectedExceptionToRedirect() throws Exception {
+            willThrow(new DataAccessResourceFailureException("커넥션 타임아웃"))
+                    .given(authService).kakaoLogin(CODE);
+
+            MvcResult result = mockMvc.perform(get(CALLBACK_URI)
+                            .param("code", CODE)
+                            .param("state", STATE)
+                            .cookie(new Cookie(CookieUtil.OAUTH_STATE, STATE)))
+                    .andExpect(status().isFound())
+                    .andReturn();
+
+            assertThat(location(result))
+                    .as("BusinessException만 잡으면 GlobalExceptionHandler까지 올라가 "
+                            + "ApiResponse JSON 500이 브라우저 주소창에 렌더링된다")
+                    .isEqualTo(FRONTEND_COMPLETE + "?error=C003");
         }
     }
 
