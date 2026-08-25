@@ -1,6 +1,9 @@
 package com.toyproject.backend.global.util;
 
+import com.toyproject.backend.global.config.AppProperties;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseCookie;
+import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 
@@ -13,7 +16,10 @@ import java.time.Duration;
  *
  * <p><b>설계</b>
  * <ul>
- *   <li>{@code ResponseCookie}를 반환하는 정적 팩터리 유틸. 상태가 없으므로 Bean으로 만들지 않는다.</li>
+ *   <li>{@code ResponseCookie}를 반환하는 팩터리. <b>원래는 상태가 없어 정적 유틸이었지만</b>
+ *       {@code Secure}를 환경별로 나눠야 해서({@link AppProperties.Cookie} 참고) 빈으로 바꿨다.
+ *       쿠키 <b>이름 상수는 {@code static}으로 남긴다</b> — {@code @CookieValue}의 속성이라
+ *       컴파일 타임 상수여야 한다.</li>
  *   <li>공통 속성은 {@link #base}에 모으고, 각 팩터리는 이름·값·수명·{@code SameSite}만 정한다.</li>
  *   <li>삭제도 같은 헬퍼를 통과시킨다 — {@code Path}를 빠뜨릴 수 있는 경로를 아예 없앤다.</li>
  * </ul>
@@ -39,10 +45,15 @@ import java.time.Duration;
  *       — SameSite는 브라우저가 쿠키를 <i>보낼 때</i>만 관여한다.</li>
  *   <li>⚠️ <b>삭제 시에도 {@code Path=/api/auth}를 반드시 함께 지정</b>한다.
  *       {@code Max-Age=0}만 내리면 Path가 {@code /}로 해석돼 매칭되지 않아 쿠키가 지워지지 않는다.</li>
- *   <li>{@code Secure}는 로컬 개발에도 문제없다(브라우저가 {@code http://localhost}를 secure context로 취급).</li>
+ *   <li>⚠️ <b>{@code Secure}는 로컬 개발에서 문제가 된다.</b> Chrome·Firefox는
+ *       {@code http://localhost}를 신뢰 출처로 보고 허용하지만 <b>Safari는 거부</b>해
+ *       {@code oauth_state}가 저장되지 않고 콜백이 전부 A009로 실패한다.
+ *       그래서 {@code app.cookie.secure}로 분리했다(local {@code false} / prod {@code true}).</li>
  * </ul>
  */
-public final class CookieUtil {
+@Component
+@RequiredArgsConstructor
+public class CookieUtil {
 
     /** 재발급·로그아웃의 자격증명. 원문이 담긴다. */
     public static final String REFRESH_TOKEN = "refresh_token";
@@ -61,24 +72,23 @@ public final class CookieUtil {
     /** 인가 왕복에만 필요한 값이라 짧게 잡는다. 사용자가 카카오 화면에 머무는 시간을 감안한 값이다. */
     private static final Duration OAUTH_STATE_MAX_AGE = Duration.ofMinutes(5);
 
-    private CookieUtil() {
-    }
+    private final AppProperties appProperties;
 
     /**
      * @param rawRefreshToken 토큰 <b>원문</b>. 해시가 아니다 — DB에 저장하는 값과 다르다
      * @param maxAge          {@code AuthService.getRefreshTokenMaxAge()}. {@code RefreshToken.expiresAt}과
      *                        같은 설정값에서 나와야 쿠키는 살아 있는데 서버가 거절하는 상황이 안 생긴다
      */
-    public static ResponseCookie refreshTokenCookie(String rawRefreshToken, Duration maxAge) {
+    public ResponseCookie refreshTokenCookie(String rawRefreshToken, Duration maxAge) {
         return base(REFRESH_TOKEN, rawRefreshToken, maxAge, "Strict");
     }
 
     /** 로그아웃·탈퇴 시 브라우저에서 실제로 지워지도록 {@code Path}까지 맞춰 내린다. */
-    public static ResponseCookie deleteRefreshTokenCookie() {
+    public ResponseCookie deleteRefreshTokenCookie() {
         return base(REFRESH_TOKEN, "", Duration.ZERO, "Strict");
     }
 
-    public static ResponseCookie oauthStateCookie(String state) {
+    public ResponseCookie oauthStateCookie(String state) {
         return base(OAUTH_STATE, state, OAUTH_STATE_MAX_AGE, "Lax");
     }
 
@@ -87,7 +97,7 @@ public final class CookieUtil {
      *
      * <p>대조에 실패한 경우에도 함께 내린다 — 실패한 state를 남겨둘 이유가 없다.
      */
-    public static ResponseCookie deleteOauthStateCookie() {
+    public ResponseCookie deleteOauthStateCookie() {
         return base(OAUTH_STATE, "", Duration.ZERO, "Lax");
     }
 
@@ -95,10 +105,10 @@ public final class CookieUtil {
      * 공통 속성을 적용한다. {@code domain}은 설정하지 않아 host-only 쿠키가 된다
      * — 상위 도메인에 걸면 다른 서브도메인에도 실려 나간다.
      */
-    private static ResponseCookie base(String name, String value, Duration maxAge, String sameSite) {
+    private ResponseCookie base(String name, String value, Duration maxAge, String sameSite) {
         return ResponseCookie.from(name, value)
                 .httpOnly(true)
-                .secure(true)
+                .secure(appProperties.cookie().secure())
                 .path(COOKIE_PATH)
                 .sameSite(sameSite)
                 .maxAge(maxAge)

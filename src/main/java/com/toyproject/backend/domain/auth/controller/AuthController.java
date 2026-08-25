@@ -79,6 +79,7 @@ public class AuthController {
     private final AuthService authService;
     private final KakaoProperties kakaoProperties;
     private final AppProperties appProperties;
+    private final CookieUtil cookieUtil;
 
     /**
      * 로그인 시작 — state를 심고 카카오 인가 화면으로 보낸다.
@@ -90,7 +91,7 @@ public class AuthController {
     public ResponseEntity<Void> kakaoAuthorize() {
         String state = authService.generateOAuthState();
 
-        return redirect(kakaoAuthorizeUri(state), CookieUtil.oauthStateCookie(state));
+        return redirect(kakaoAuthorizeUri(state), cookieUtil.oauthStateCookie(state));
     }
 
     /**
@@ -116,7 +117,7 @@ public class AuthController {
             @CookieValue(name = CookieUtil.OAUTH_STATE, required = false) String stateCookie) {
 
         // Oauth_state 명시적 삭제 (max = Duration_ZERO)
-        ResponseCookie stateCleanup = CookieUtil.deleteOauthStateCookie();
+        ResponseCookie stateCleanup = cookieUtil.deleteOauthStateCookie();
 
         if (StringUtils.hasText(kakaoError)) {
             log.info("카카오 인가 거부 — error={}", kakaoError);
@@ -139,7 +140,7 @@ public class AuthController {
                     : frontendCompleteUri();
 
             return redirect(location, stateCleanup,
-                    CookieUtil.refreshTokenCookie(result.rawRefreshToken(), authService.getRefreshTokenMaxAge()));
+                    cookieUtil.refreshTokenCookie(result.rawRefreshToken(), authService.getRefreshTokenMaxAge()));
 
         } catch (BusinessException e) {
             log.warn("카카오 로그인 실패 — code={}", e.getErrorCode().getCode());
@@ -184,7 +185,7 @@ public class AuthController {
         authService.logout(rawRefreshToken);
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, CookieUtil.deleteRefreshTokenCookie().toString())
+                .header(HttpHeaders.SET_COOKIE, cookieUtil.deleteRefreshTokenCookie().toString())
                 .body(ApiResponse.success(null));
     }
 

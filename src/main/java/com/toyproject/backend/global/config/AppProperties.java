@@ -33,17 +33,20 @@ import java.util.List;
  *
  * @param frontend 로그인 완료 후 302로 복귀할 FE 주소 묶음 (8단계에서 사용)
  * @param cors     CORS 허용 origin 묶음
+ * @param cookie   인증 쿠키 속성 묶음 (8단계에서 사용)
  */
 @ConfigurationProperties(prefix = "app")
 public record AppProperties(
 
         Frontend frontend,
-        Cors cors
+        Cors cors,
+        Cookie cookie
 ) {
 
     public AppProperties {
         frontend = (frontend != null) ? frontend : new Frontend(null);
         cors = (cors != null) ? cors : new Cors(null);
+        cookie = (cookie != null) ? cookie : new Cookie(null);
     }
 
     /**
@@ -59,6 +62,29 @@ public record AppProperties(
 
         public Cors {
             allowedOrigins = (allowedOrigins != null) ? List.copyOf(allowedOrigins) : List.of();
+        }
+    }
+
+    /**
+     * 인증 쿠키 속성. {@code CookieUtil}이 참조한다.
+     *
+     * <p><b>{@code secure}를 환경별로 나눈 이유</b><br>
+     * Chrome·Firefox는 {@code http://localhost}를 "신뢰할 수 있는 출처"로 보고 평문 HTTP에서도
+     * {@code Secure} 쿠키를 저장하지만, <b>WebKit(Safari)은 그 예외를 두지 않아 거부한다.</b>
+     * 그러면 {@code oauth_state}가 저장되지 않아 콜백이 전부 A009로 실패한다 —
+     * 로컬 개발이 브라우저에 따라 불가능해진다.
+     *
+     * <p>⚠️ <b>기본값은 {@code true}다.</b> 설정을 빠뜨렸을 때 {@code Secure}가 꺼지는 쪽으로
+     * 실패하면 안 된다. 끄는 것은 로컬 프로파일에서 <b>명시적으로</b> 선언해야 한다.
+     * {@code Boolean}(래퍼)을 쓰는 이유도 같다 — {@code boolean}이면 {@code app.cookie}만 있고
+     * {@code secure}가 없을 때 조용히 {@code false}로 바인딩된다.
+     *
+     * @param secure 쿠키에 {@code Secure} 속성을 붙일지. 미설정 시 {@code true}
+     */
+    public record Cookie(Boolean secure) {
+
+        public Cookie {
+            secure = (secure == null) || secure;
         }
     }
 }
