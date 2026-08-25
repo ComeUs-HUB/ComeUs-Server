@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.time.Duration;
@@ -62,6 +63,7 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final KakaoOAuthClient kakaoOAuthClient;
     private final UserService userService;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 인가 코드를 받아 로그인을 성립시킨다. <b>콜백의 본체</b>다.
@@ -77,17 +79,19 @@ public class AuthService {
      * 그 결과 access token이 URL에 실리는 경로가 <b>설계상 존재하지 않고</b>,
      * 로그인 직후와 새로고침 후의 세션 획득 경로가 같아진다.
      *
-     * <p>⚠️ <b>{@code Propagation.NOT_SUPPORTED}인 이유</b> — 두 가지다.
+     * <p><b>구간이 둘로 나뉘고, 경계가 정확히 그 사이에 있다.</b>
      * <ul>
-     *   <li>클래스의 {@code readOnly = true}를 그대로 물려받으면 Hibernate가 {@code FlushMode.MANUAL}로
-     *       동작해 <b>{@code RefreshToken} INSERT가 조용히 사라진다.</b> 예외도 나지 않아 로그인은
-     *       성공한 것처럼 보이는데 재발급만 A007로 실패한다</li>
-     *   <li>반대로 {@code @Transactional}로 열면 <b>카카오 왕복 2회 내내 DB 커넥션을 점유</b>한다.
-     *       카카오가 느려지면 커넥션 풀이 먼저 마른다</li>
+     *   <li><b>카카오 왕복 — 트랜잭션 밖.</b> {@code @Transactional}로 열면 왕복 2회
+     *       (connect 3s + read 5s씩) 내내 DB 커넥션을 점유한다. 카카오가 느려지면
+     *       커넥션 풀이 먼저 마른다</li>
+     *   <li><b>DB 작업 — 하나의 트랜잭션.</b> {@link #issueLoginSession} 참고</li>
      * </ul>
-     * 그래서 트랜잭션을 아예 열지 않고, 쓰기는 각자 자기 경계를 갖게 한다 —
-     * {@code findOrCreateKakaoUser}는 스스로 {@code @Transactional}이고,
-     * {@code save}는 {@code SimpleJpaRepository}가 트랜잭션을 연다.
+     *
+     * <p>⚠️ <b>{@code Propagation.NOT_SUPPORTED}를 유지하는 이유</b><br>
+     * 클래스의 {@code readOnly = true}가 카카오 왕복까지 감싸는 것을 막는다.
+     * 물려받으면 Hibernate가 {@code FlushMode.MANUAL}로 동작해 <b>안쪽 INSERT가 조용히 사라진다</b>
+     * (예외도 나지 않아 로그인은 성공한 것처럼 보이는데 재발급만 A007로 실패한다).
+     * 안쪽 {@code TransactionTemplate}은 별개로 자기 트랜잭션을 열므로 충돌하지 않는다.
      *
      * @param code 카카오가 콜백 쿼리로 넘긴 인가 코드 (1회용)
      * @throws BusinessException 카카오 호출 실패 시 A005/A006 ({@code KakaoOAuthClient}가 변환)
@@ -97,6 +101,34 @@ public class AuthService {
         KakaoTokenResponse token = kakaoOAuthClient.requestToken(code);
         KakaoUserInfoResponse userInfo = kakaoOAuthClient.fetchUserInfo(token.accessToken());
 
+        return transactionTemplate.execute(status -> issueLoginSession(userInfo));
+    }
+
+    /**
+     * 회원 해소와 refresh token 발급을 <b>한 트랜잭션에서</b> 수행한다.
+     *
+     * <p><b>왜 묶는가</b><br>
+     * 나뉘어 있으면 회원만 생성되고 토큰 발급이 실패하는 상태가 생긴다. 로그인 자체는 재시도로
+     * 복구되지만(같은 회원을 찾아 토큰을 새로 발급한다) <b>{@code isNewUser}는 복구되지 않는다</b> —
+     * 2차 시도에서 기존 회원으로 잡혀 {@code false}가 되고, FE의 "추가 정보 입력" UX가 영영 뜨지 않는다.
+     * 재시도로 지워지지 않는 유일한 손실이라 여기만 원자적이면 된다.
+     *
+     * <p>⚠️ <b>{@code @Transactional}을 붙이지 않는다.</b> 자기 호출은 프록시를 타지 않아
+     * 애노테이션이 <b>조용히 무효</b>가 된다 — 컴파일도 되고 테스트도 통과하는데 트랜잭션만 안 열린다.
+     * 경계의 소유자는 호출자의 {@code transactionTemplate.execute}이며,
+     * 이 메서드는 <b>그 안에서만</b> 호출한다.
+     *
+     * <p>{@code findOrCreateKakaoUser}는 {@code REQUIRED}라 바깥 트랜잭션에 <b>참여</b>한다
+     * (새로 열지 않는다). 그 덕에 반환된 {@code User}가 managed 상태로 유지되어
+     * {@code RefreshToken.issue}에 detached 엔티티가 넘어가지 않는다.
+     *
+     * <p>회원 생성 규칙은 여전히 user 도메인이 소유한다 — auth는 <b>트랜잭션 경계만</b> 정한다.
+     * 쿼리도 조회 1 + 삽입 1~2뿐이라 트랜잭션이 길어지지 않는다.
+     *
+     * @return <b>절대 {@code null}이 아니다.</b> {@code TransactionTemplate.execute}의 반환이
+     *         {@code @Nullable}이라 호출부 타입이 nullable로 보이지만, 이 메서드가 그 계약을 좁힌다
+     */
+    private KakaoLoginResult issueLoginSession(KakaoUserInfoResponse userInfo) {
         KakaoUserResolution resolution = userService.findOrCreateKakaoUser(
                 userInfo.providerId(), userInfo.resolveEmail(), userInfo.resolveNickname());
 
@@ -202,6 +234,9 @@ public class AuthService {
      * {@link #getRefreshTokenMaxAge()} 한 곳에서 나온다.
      *
      * <p>원문은 반환값으로만 흘러나가 컨트롤러의 {@code Set-Cookie}에서 끝난다 — 필드·로그에 남기지 않는다.
+     *
+     * <p>{@code save}는 {@link #issueLoginSession}이 연 <b>바깥 트랜잭션에 참여</b>한다.
+     * 여기서 실패하면 같은 트랜잭션의 회원 생성까지 함께 롤백된다.
      */
     private String issueRefreshToken(User user) {
         String rawRefreshToken = secureTokenGenerator.generate();

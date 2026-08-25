@@ -7,6 +7,7 @@ import com.toyproject.backend.domain.auth.exception.AuthErrorCode;
 import com.toyproject.backend.domain.auth.service.AuthService;
 import com.toyproject.backend.global.config.AppProperties;
 import com.toyproject.backend.global.exception.BusinessException;
+import com.toyproject.backend.global.exception.CommonErrorCode;
 import com.toyproject.backend.global.response.ApiResponse;
 import com.toyproject.backend.global.util.CookieUtil;
 import lombok.RequiredArgsConstructor;
@@ -143,6 +144,13 @@ public class AuthController {
         } catch (BusinessException e) {
             log.warn("카카오 로그인 실패 — code={}", e.getErrorCode().getCode());
             return redirect(frontendUri("error", e.getErrorCode().getCode()), stateCleanup);
+
+        } catch (Exception e) {
+            // 컨트롤러의 광범위 catch는 보통 냄새지만, 여기서는 "브라우저에 JSON을 절대 내지 않는다"가
+            // 계약이다. 이걸 놓치면 DB 장애(커넥션 타임아웃 등)가 GlobalExceptionHandler까지 올라가
+            // ApiResponse JSON 500이 주소창에 그대로 렌더링된다.
+            log.error("카카오 로그인 처리 중 예기치 못한 오류", e);
+            return redirect(frontendUri("error", CommonErrorCode.INTERNAL_SERVER_ERROR.getCode()), stateCleanup);
         }
     }
 
