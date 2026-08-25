@@ -1,16 +1,21 @@
 package com.toyproject.backend.global.util;
 
+import org.springframework.http.ResponseCookie;
+
+import java.time.Duration;
+
 /**
- * [8단계 · K] 인증 쿠키 팩토리 — 프로토타입 (구현 전)
+ * [8단계 · K] 인증 쿠키 팩토리
  *
  * <p><b>역할</b><br>
  * {@code refresh_token}·{@code oauth_state} 두 쿠키의 생성/삭제를 한곳에 모은다.
  * 속성 하나만 어긋나도 로그인 전체가 깨지므로 컨트롤러에 흩뿌리지 않는다.
  *
- * <p><b>개발 방향</b>
+ * <p><b>설계</b>
  * <ul>
  *   <li>{@code ResponseCookie}를 반환하는 정적 팩터리 유틸. 상태가 없으므로 Bean으로 만들지 않는다.</li>
- *   <li>공통 속성은 private 빌더 헬퍼로 묶는다.</li>
+ *   <li>공통 속성은 {@link #base}에 모으고, 각 팩터리는 이름·값·수명·{@code SameSite}만 정한다.</li>
+ *   <li>삭제도 같은 헬퍼를 통과시킨다 — {@code Path}를 빠뜨릴 수 있는 경로를 아예 없앤다.</li>
  * </ul>
  *
  * <p><b>쿠키 2종</b> — 둘 다 {@code HttpOnly} + {@code Secure} + {@code Path=/api/auth} +
@@ -22,9 +27,6 @@ package com.toyproject.backend.global.util;
  *   <tr><td>{@code Max-Age}</td><td>7일({@code jwt.refresh-expiration})</td><td><b>5분</b></td></tr>
  *   <tr><td>수명</td><td>로그아웃·탈퇴까지</td><td>콜백에서 1회 사용 후 즉시 삭제</td></tr>
  * </table>
- *
- * <p><b>예정 메서드</b>: {@code refreshTokenCookie(raw, maxAge)}, {@code deleteRefreshTokenCookie()},
- * {@code oauthStateCookie(state)}, {@code deleteOauthStateCookie()} + 쿠키 이름 상수
  *
  * <p><b>주의</b>
  * <ul>
@@ -40,5 +42,66 @@ package com.toyproject.backend.global.util;
  *   <li>{@code Secure}는 로컬 개발에도 문제없다(브라우저가 {@code http://localhost}를 secure context로 취급).</li>
  * </ul>
  */
-public class CookieUtil {
+public final class CookieUtil {
+
+    /** 재발급·로그아웃의 자격증명. 원문이 담긴다. */
+    public static final String REFRESH_TOKEN = "refresh_token";
+
+    /** 인가 왕복의 CSRF 방어값. 콜백에서 1회 대조 후 폐기된다. */
+    public static final String OAUTH_STATE = "oauth_state";
+
+    /**
+     * 두 쿠키 공통. 이 경로 밖의 API 요청에는 쿠키가 실리지 않는다.
+     *
+     * <p>{@code /api/users/me} 같은 요청에 refresh token이 따라다닐 이유가 없고,
+     * 실려 다닐수록 노출 지점만 늘어난다.
+     */
+    private static final String COOKIE_PATH = "/api/auth";
+
+    /** 인가 왕복에만 필요한 값이라 짧게 잡는다. 사용자가 카카오 화면에 머무는 시간을 감안한 값이다. */
+    private static final Duration OAUTH_STATE_MAX_AGE = Duration.ofMinutes(5);
+
+    private CookieUtil() {
+    }
+
+    /**
+     * @param rawRefreshToken 토큰 <b>원문</b>. 해시가 아니다 — DB에 저장하는 값과 다르다
+     * @param maxAge          {@code AuthService.getRefreshTokenMaxAge()}. {@code RefreshToken.expiresAt}과
+     *                        같은 설정값에서 나와야 쿠키는 살아 있는데 서버가 거절하는 상황이 안 생긴다
+     */
+    public static ResponseCookie refreshTokenCookie(String rawRefreshToken, Duration maxAge) {
+        return base(REFRESH_TOKEN, rawRefreshToken, maxAge, "Strict");
+    }
+
+    /** 로그아웃·탈퇴 시 브라우저에서 실제로 지워지도록 {@code Path}까지 맞춰 내린다. */
+    public static ResponseCookie deleteRefreshTokenCookie() {
+        return base(REFRESH_TOKEN, "", Duration.ZERO, "Strict");
+    }
+
+    public static ResponseCookie oauthStateCookie(String state) {
+        return base(OAUTH_STATE, state, OAUTH_STATE_MAX_AGE, "Lax");
+    }
+
+    /**
+     * 콜백에서 state를 대조한 <b>직후</b> 내린다. 1회용이라 남겨두면 뒤로가기로 콜백을 재사용할 수 있다.
+     *
+     * <p>대조에 실패한 경우에도 함께 내린다 — 실패한 state를 남겨둘 이유가 없다.
+     */
+    public static ResponseCookie deleteOauthStateCookie() {
+        return base(OAUTH_STATE, "", Duration.ZERO, "Lax");
+    }
+
+    /**
+     * 공통 속성을 적용한다. {@code domain}은 설정하지 않아 host-only 쿠키가 된다
+     * — 상위 도메인에 걸면 다른 서브도메인에도 실려 나간다.
+     */
+    private static ResponseCookie base(String name, String value, Duration maxAge, String sameSite) {
+        return ResponseCookie.from(name, value)
+                .httpOnly(true)
+                .secure(true)
+                .path(COOKIE_PATH)
+                .sameSite(sameSite)
+                .maxAge(maxAge)
+                .build();
+    }
 }

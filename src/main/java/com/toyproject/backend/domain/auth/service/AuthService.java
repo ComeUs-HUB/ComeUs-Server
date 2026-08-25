@@ -1,21 +1,29 @@
 package com.toyproject.backend.domain.auth.service;
 
 import com.toyproject.backend.domain.auth.client.KakaoOAuthClient;
+import com.toyproject.backend.domain.auth.client.dto.KakaoTokenResponse;
+import com.toyproject.backend.domain.auth.client.dto.KakaoUserInfoResponse;
 import com.toyproject.backend.domain.auth.config.JwtProperties;
+import com.toyproject.backend.domain.auth.dto.KakaoLoginResult;
 import com.toyproject.backend.domain.auth.dto.TokenResponse;
 import com.toyproject.backend.domain.auth.entity.RefreshToken;
 import com.toyproject.backend.domain.auth.exception.AuthErrorCode;
 import com.toyproject.backend.domain.auth.repository.RefreshTokenRepository;
 import com.toyproject.backend.domain.auth.token.JwtProvider;
 import com.toyproject.backend.domain.auth.token.SecureTokenGenerator;
+import com.toyproject.backend.domain.user.dto.KakaoUserResolution;
+import com.toyproject.backend.domain.user.entity.User;
+import com.toyproject.backend.domain.user.service.UserService;
 import com.toyproject.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 
 /**
  * [7단계 · I·K] 인증 서비스
@@ -24,10 +32,8 @@ import java.time.Duration;
  * 재발급·로그아웃·탈퇴 보조의 비즈니스 로직. HTTP(쿠키·리다이렉트)는 전혀 모르고,
  * 그 조립은 {@code AuthController}가 맡는다.
  *
- * <p>7단계 범위는 <b>컨트롤러 없이 검증되는 것</b>까지다. 카카오 로그인 본체
- * ({@code kakaoLogin} + {@code KakaoLoginResult})는 8단계에서 추가한다 —
- * 그때 {@link #getRefreshTokenMaxAge()}로 {@code expiresAt}을 계산해
- * {@code RefreshToken} row를 만든다.
+ * <p>로그인 본체({@link #kakaoLogin})는 8단계에서 붙였다. 나머지(재발급·로그아웃·탈퇴 보조)는
+ * 7단계에서 컨트롤러 없이 먼저 검증했다.
  *
  * <p><b>설계</b>
  * <ul>
@@ -55,6 +61,47 @@ public class AuthService {
     private final JwtProvider jwtProvider;
     private final JwtProperties jwtProperties;
     private final KakaoOAuthClient kakaoOAuthClient;
+    private final UserService userService;
+
+    /**
+     * 인가 코드를 받아 로그인을 성립시킨다. <b>콜백의 본체</b>다.
+     *
+     * <ol>
+     *   <li>{@code requestToken(code)} → {@code fetchUserInfo()} — 카카오 왕복 2회</li>
+     *   <li>{@code userService.findOrCreateKakaoUser(...)} — 조회·재활성화·신규 생성 판단은
+     *       <b>전부 user 도메인이 소유</b>한다. 여기서는 카카오가 준 값을 넘길 뿐이다</li>
+     *   <li>refresh 원문 생성 → 해시를 {@code RefreshToken} row로 저장 → <b>원문을 반환</b></li>
+     * </ol>
+     *
+     * <p><b>여기서 access token을 발급하지 않는다.</b> FE가 복귀 후 {@code POST /api/auth/refresh}로 얻는다.
+     * 그 결과 access token이 URL에 실리는 경로가 <b>설계상 존재하지 않고</b>,
+     * 로그인 직후와 새로고침 후의 세션 획득 경로가 같아진다.
+     *
+     * <p>⚠️ <b>{@code Propagation.NOT_SUPPORTED}인 이유</b> — 두 가지다.
+     * <ul>
+     *   <li>클래스의 {@code readOnly = true}를 그대로 물려받으면 Hibernate가 {@code FlushMode.MANUAL}로
+     *       동작해 <b>{@code RefreshToken} INSERT가 조용히 사라진다.</b> 예외도 나지 않아 로그인은
+     *       성공한 것처럼 보이는데 재발급만 A007로 실패한다</li>
+     *   <li>반대로 {@code @Transactional}로 열면 <b>카카오 왕복 2회 내내 DB 커넥션을 점유</b>한다.
+     *       카카오가 느려지면 커넥션 풀이 먼저 마른다</li>
+     * </ul>
+     * 그래서 트랜잭션을 아예 열지 않고, 쓰기는 각자 자기 경계를 갖게 한다 —
+     * {@code findOrCreateKakaoUser}는 스스로 {@code @Transactional}이고,
+     * {@code save}는 {@code SimpleJpaRepository}가 트랜잭션을 연다.
+     *
+     * @param code 카카오가 콜백 쿼리로 넘긴 인가 코드 (1회용)
+     * @throws BusinessException 카카오 호출 실패 시 A005/A006 ({@code KakaoOAuthClient}가 변환)
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public KakaoLoginResult kakaoLogin(String code) {
+        KakaoTokenResponse token = kakaoOAuthClient.requestToken(code);
+        KakaoUserInfoResponse userInfo = kakaoOAuthClient.fetchUserInfo(token.accessToken());
+
+        KakaoUserResolution resolution = userService.findOrCreateKakaoUser(
+                userInfo.providerId(), userInfo.resolveEmail(), userInfo.resolveNickname());
+
+        return new KakaoLoginResult(issueRefreshToken(resolution.user()), resolution.isNewUser());
+    }
 
     /**
      * refresh token으로 access token을 재발급한다.
@@ -146,6 +193,25 @@ public class AuthService {
      */
     public Duration getRefreshTokenMaxAge() {
         return Duration.ofMillis(jwtProperties.refreshExpiration());
+    }
+
+    /**
+     * refresh token을 발급해 <b>해시만</b> 저장하고 원문을 돌려준다.
+     *
+     * <p>{@code expiresAt}과 쿠키 {@code Max-Age}가 어긋나지 않도록 둘 다
+     * {@link #getRefreshTokenMaxAge()} 한 곳에서 나온다.
+     *
+     * <p>원문은 반환값으로만 흘러나가 컨트롤러의 {@code Set-Cookie}에서 끝난다 — 필드·로그에 남기지 않는다.
+     */
+    private String issueRefreshToken(User user) {
+        String rawRefreshToken = secureTokenGenerator.generate();
+
+        refreshTokenRepository.save(RefreshToken.issue(
+                user,
+                secureTokenGenerator.sha256Hex(rawRefreshToken),
+                LocalDateTime.now().plus(getRefreshTokenMaxAge())));
+
+        return rawRefreshToken;
     }
 
     /**

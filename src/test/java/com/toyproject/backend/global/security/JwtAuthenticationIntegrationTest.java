@@ -189,15 +189,16 @@ class JwtAuthenticationIntegrationTest {
         }
 
         @Test
-        @DisplayName("permitAll 경로는 토큰 없이도 거절되지 않는다 — 여기서 막으면 로그인 자체가 불가능해진다")
+        @DisplayName("permitAll 경로는 필터가 막지 않는다 — 거절이 있다면 필터가 아니라 핸들러의 판단이어야 한다")
         void permitAllEndpoints() throws Exception {
-            int refreshStatus = mockMvc.perform(post("/api/auth/refresh"))
-                    .andReturn().getResponse().getStatus();
-            int authorizeStatus = mockMvc.perform(get("/api/auth/kakao/authorize"))
-                    .andReturn().getResponse().getStatus();
+            // 8단계에서 /refresh에 핸들러가 생겨, 쿠키 없는 요청은 이제 A007(401)로 거절된다.
+            // 그래서 "401이 아님"으로는 더 볼 수 없다 — 401의 '사유'가 필터(A001)가 아닌지를 본다.
+            mockMvc.perform(post("/api/auth/refresh"))
+                    .andExpect(jsonPath("$.error.code").value("A007"));
 
-            assertThat(refreshStatus).isNotIn(401, 403);
-            assertThat(authorizeStatus).isNotIn(401, 403);
+            // 인가 시작은 카카오로 302된다. 여기서 401/403이 나오면 로그인 자체가 불가능해진다.
+            mockMvc.perform(get("/api/auth/kakao/authorize"))
+                    .andExpect(status().isFound());
         }
     }
 

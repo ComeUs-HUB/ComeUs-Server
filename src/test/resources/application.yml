@@ -36,3 +36,17 @@ app:
     base-url: http://localhost:3000
   cors:
     allowed-origins: http://localhost:3000
+
+# AuthController(8단계)가 인가 URL을 조립하며 kakao.client-id·redirect-uri·authorize-uri를 읽는다.
+# 운영값은 프로파일별 yml(gitignore)에 있어 테스트 컨텍스트에는 존재하지 않는다.
+# KakaoProperties에 @Validated가 없어 기동 자체는 되지만, 값이 null이면 URL 조립에서 NPE가 난다.
+# 이 파일이 main application.yml을 shadow하므로 고정 엔드포인트 4종도 여기 함께 둔다.
+kakao:
+  client-id: test-client-id
+  client-secret: test-client-secret
+  admin-key: test-admin-key
+  redirect-uri: http://localhost:8080/api/auth/kakao/callback
+  authorize-uri: https://kauth.kakao.com/oauth/authorize
+  token-uri: https://kauth.kakao.com/oauth/token
+  user-info-uri: https://kapi.kakao.com/v2/user/me
+  unlink-uri: https://kapi.kakao.com/v1/user/unlink
