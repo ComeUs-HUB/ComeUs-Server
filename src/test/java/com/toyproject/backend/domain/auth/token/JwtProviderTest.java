@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @DisplayName("JwtProvider")
 class JwtProviderTest {
 
-    /** HS256이라 32바이트 이상이어야 한다. */
+    /** 최소 32바이트. 길이가 서명 알고리즘을 정한다(32↑ HS256 / 48↑ HS384 / 64↑ HS512). */
     private static final String SECRET = "unit-test-jwt-secret-key-32bytes-or-longer!";
     private static final String OTHER_SECRET = "another-jwt-secret-key-32bytes-or-longer!!";
 

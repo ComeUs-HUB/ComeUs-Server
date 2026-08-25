@@ -22,7 +22,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p><b>주의</b>
  * <ul>
- *   <li>HS256을 쓰므로 {@code secret}은 <b>최소 32바이트</b>여야 한다. 짧으면 키 생성 시점에 예외가 난다.</li>
+ *   <li>{@code secret}은 <b>최소 32바이트</b>여야 한다. 짧으면 키 생성 시점에 예외가 난다.<br>
+ *       ⚠️ <b>서명 알고리즘은 키 길이가 정한다.</b> {@code Keys.hmacShaKeyFor}가 32바이트 이상이면 HS256,
+ *       48바이트 이상이면 HS384, 64바이트 이상이면 HS512를 고른다. 코드로 지정하는 값이 아니므로
+ *       <b>운영과 로컬의 시크릿 길이가 다르면 서명 알고리즘도 달라진다.</b></li>
  *   <li>{@code refreshExpiration}은 <b>JWT의 {@code exp}가 아니다.</b> refresh token은 JWT가 아니므로,
  *       이 값은 {@code RefreshToken.expiresAt} 계산과 쿠키 {@code Max-Age}에만 쓰인다.</li>
  * </ul>
@@ -34,7 +37,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 더 친절하게 만들지 결정이 필요하다(후자는 위 shadow 문제 때문에 테스트 yml 관리 비용이 늘어난다).
  * {@code docs/SEQUENCE/phase2-auth.md}에 명시된 바가 없다.
  *
- * @param secret            HS256 서명 키. 운영에서는 환경변수 {@code JWT_SECRET}로 주입한다
+ * @param secret            HMAC 서명 키(최소 32바이트, 길이가 HS256/384/512를 결정한다).
+ *                          운영에서는 환경변수 {@code JWT_SECRET}로 주입한다
  * @param accessExpiration  access token 유효 기간 (ms, 30분)
  * @param refreshExpiration refresh token 유효 기간 (ms, 7일). JWT {@code exp}가 아니다
  */

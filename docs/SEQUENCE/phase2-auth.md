@@ -83,7 +83,7 @@ Flyway 전환이 여기 해당한다. `ddl-auto: update` 위에서 Repository를
 |---|---|---|
 | 2 | 테스트는 H2(`MODE=MySQL`)라 MySQL DDL을 못 돌린다 | `src/test/resources/application.yml`에 `spring.flyway.enabled: false` 추가. 없으면 `contextLoads`가 깨진다 |
 | 3 | `@DataJpaTest`는 H2에서 **엔티티 매핑으로부터** 스키마를 만든다 | 유니크 제약을 `V1__init.sql`에만 쓰면 테스트에서 재현되지 않아 중복 가입 테스트가 통과해버린다. `@Table(uniqueConstraints = ...)`로 **엔티티에도** 선언 |
-| 5 | `JwtProperties`가 실제 빈이 되는 순간 `jwt.*`가 없어 컨텍스트 로딩이 깨진다 | 테스트 yml은 main `application.yml`을 대체(shadow)한다. `jwt.secret`(HS256이라 32바이트 이상) 더미 값 추가. 지금 통과하는 건 아직 아무도 `${JWT_SECRET}`을 바인딩하지 않기 때문 |
+| 5 | `JwtProperties`가 실제 빈이 되는 순간 `jwt.*`가 없어 컨텍스트 로딩이 깨진다 | 테스트 yml은 main `application.yml`을 대체(shadow)한다. `jwt.secret`(최소 32바이트) 더미 값 추가. 지금 통과하는 건 아직 아무도 `${JWT_SECRET}`을 바인딩하지 않기 때문 |
 | 4·8 | `kakao.*`·`app.*` 설정이 `application-local.yml`(gitignore)에 있다 | 새 환경에서 클론하면 이 파일이 없다. 필요한 키 목록은 아래 "설정 값" 절 참고 |
 
 ---
@@ -239,7 +239,8 @@ SHOW TABLES;                                                       -- users, ref
 
 `domain/auth/token/JwtProvider`, `domain/auth/token/SecureTokenGenerator`
 
-- jjwt 0.12.x. 키는 `Keys.hmacShaKeyFor(secret.getBytes(UTF_8))` — HS256이므로 `jwt.secret` 최소 32바이트
+- jjwt 0.12.x. 키는 `Keys.hmacShaKeyFor(secret.getBytes(UTF_8))` — `jwt.secret` **최소 32바이트**
+  - ⚠️ **서명 알고리즘은 키 길이가 정한다**: 32바이트↑ HS256 / 48↑ HS384 / 64↑ HS512. 코드로 지정하지 않는다
 - `createAccessToken(User)`: subject=userId, claim `role`, `jwt.access-expiration`(30분)
 - `parseClaims(token)`: `ExpiredJwtException`/`JwtException`을 그대로 던져 필터가 종류별로 구분하게 함
 - **`JwtProvider`는 access token만 담당** — refresh token 생성은 `SecureRandom` 32바이트 → base64url 43자, 별도 컴포넌트가 맡는다
@@ -301,22 +302,33 @@ SHOW TABLES;                                                       -- users, ref
 
 ### 쿠키 2종
 
-둘 다 `HttpOnly` + `Secure` + `Path=/api/auth` + `Domain` 미설정(host-only). **`SameSite`만 다르다.**
+둘 다 `HttpOnly` + `Domain` 미설정(host-only)이고 `Secure`는 환경별 설정(`app.cookie.secure`)을 따른다.
+**`SameSite`와 `Path`가 다르다.**
 
 | | `refresh_token` | `oauth_state` |
 |---|---|---|
 | 값 | 불투명 랜덤 원문(base64url 43자) | 랜덤 state(base64url) |
 | `SameSite` | `Strict` | **`Lax`** |
+| `Path` | `/api/auth` | **`/api/auth/kakao/callback`** |
 | `Max-Age` | `jwt.refresh-expiration`(7일) | **5분** (인가 왕복에만 필요) |
+
+> `oauth_state`의 5분은 **유지하기로 확정**했다. 첫 로그인처럼 카카오 화면에서 오래 머물면 만료돼
+> A009로 떨어지지만(실제 E2E에서 겪었다), 재시도하면 해결되는 실패다. 늘리면 그만큼 탈취된 state의
+> 유효 창이 길어진다 — CSRF 방어값의 수명은 짧을수록 좋다.
 | 수명 | 로그아웃·탈퇴까지 | 콜백에서 **1회 사용 후 즉시 삭제** |
 
 ⚠️ **`SameSite`를 둘 다 `Strict`로 맞추면 로그인이 전부 실패한다.** 콜백은 `kauth.kakao.com` → API 호스트로의 **cross-site top-level GET 네비게이션**인데, `Strict` 쿠키는 여기서 전송되지 않는다. `Lax`는 top-level GET 네비게이션에 한해 전송되므로 `oauth_state`는 반드시 `Lax`여야 한다.
 
 반대로 `refresh_token`은 FE(`app.`) → API(`api.`)의 **same-site XHR**에만 쓰이므로 `Strict`가 맞다. 콜백 응답에서 이 쿠키를 **심는 것**은 SameSite와 무관하게 항상 동작한다 — SameSite는 브라우저가 쿠키를 *보낼 때*만 관여한다.
 
-- `Path=/api/auth`로 좁혀 그 외 API 요청엔 실리지 않게 한다
-- `Secure`는 로컬 개발에도 문제없다 (브라우저가 `http://localhost`를 secure context로 취급)
-- ⚠️ **쿠키 삭제 시에도 `Path=/api/auth`를 반드시 함께 지정**한다. `Max-Age=0`만 내리면 Path가 `/`로 해석돼 매칭되지 않아 **쿠키가 지워지지 않는다**. `oauth_state` 삭제에도 동일 적용
+- `refresh_token`은 `Path=/api/auth`로 좁혀 그 외 API 요청엔 실리지 않게 한다
+- `oauth_state`는 **콜백 경로 하나까지** 좁힌다. `/api/auth`로 두면 만료 전(5분) 동안 `/refresh`·`/logout`에도
+  실려 나가는데, 인가 왕복이 끝난 뒤에는 아무 쓸모가 없는 값이다.
+  쿠키 경로 매칭은 정확히 일치하거나 접두사여야 하는데 콜백 요청 경로와 **정확히 같아서** 그대로 전송된다
+- ⚠️ `Secure`는 **환경별로 나눈다**(`app.cookie.secure`, 기본 `true`). Chrome·Firefox는 `http://localhost`를
+  신뢰 출처로 보고 허용하지만 **Safari는 평문 HTTP에서 `Secure` 쿠키를 거부**해 `oauth_state`가 저장되지 않고
+  콜백이 전부 A009로 실패한다. local `false` / prod `true`
+- ⚠️ **쿠키 삭제 시에도 발급할 때와 같은 `Path`를 반드시 지정**한다. `Max-Age=0`만 내리면 Path가 `/`로 해석돼 매칭되지 않아 **쿠키가 지워지지 않는다**. `oauth_state` 삭제에도 동일 적용
 
 ### 로그인 전체 흐름
 

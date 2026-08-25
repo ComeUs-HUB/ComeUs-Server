@@ -22,7 +22,8 @@ spring:
 # 이 파일은 main의 application.yml을 shadow하므로, 여기에 없는 키는 테스트 컨텍스트에 존재하지 않는다.
 # JwtProperties가 실제 빈이 된 5단계부터는 jwt.*가 없으면 contextLoads가 바인딩 실패로 깨진다
 # (main 쪽 값은 ${JWT_SECRET}이라 어차피 테스트에서 해석되지 않는다).
-# HS256이라 secret은 최소 32바이트여야 한다 — 아래 값은 48바이트다.
+# secret은 최소 32바이트여야 한다 — 아래 값은 48바이트다.
+# 서명 알고리즘은 키 길이가 정한다(32↑ HS256 / 48↑ HS384 / 64↑ HS512). 이 값은 HS384가 된다.
 jwt:
   secret: test-jwt-secret-for-unit-and-context-tests-only!
   access-expiration: 1800000    # 30분 (ms)

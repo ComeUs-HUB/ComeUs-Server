@@ -49,6 +49,10 @@ public class JwtProvider {
     private final long accessExpirationMillis;
 
     /**
+     * <p>서명 알고리즘은 <b>키 길이에서 파생된다</b> — {@code Keys.hmacShaKeyFor}가 32바이트 이상이면
+     * HS256, 48 이상이면 HS384, 64 이상이면 HS512를 고른다. 코드로 지정하지 않으므로 시크릿을 바꾸면
+     * 발급되는 토큰의 {@code alg} 헤더도 함께 바뀐다(검증은 같은 키를 쓰므로 문제가 없다).
+     *
      * @throws io.jsonwebtoken.security.WeakKeyException {@code jwt.secret}이 32바이트 미만인 경우.
      *         빈 생성 시점에 터지므로 설정 실수가 <b>앱 기동에서</b> 드러난다(fail-fast).
      *         이 동작의 확정 여부는 {@link JwtProperties} 문서의 "결정 필요" 참고
