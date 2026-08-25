@@ -61,7 +61,7 @@ Flyway 전환이 여기 해당한다. `ddl-auto: update` 위에서 Repository를
 | 5 · I | 토큰 부품 | 3 | 단위 테스트 — 생성·파싱 왕복, 만료/위조 예외 구분, 해시 64자 |
 | 6 · H·J | Security 배선 | 6 | 미인증 401(A001), 위조 A003 / 만료 A004 / 탈퇴 **A008(403)** 구분 |
 | 7 · I·K | 서비스 ✅ | 4 | `findOrCreateKakaoUser` 3분기, 재발급 유효성, `logout` 멱등 |
-| 8 · K | 로그인 API | 3 | **브라우저에서** 카카오 로그인 → 쿠키 심김 → `/refresh`가 accessToken 반환 |
+| 8 · K | 로그인 API ✅ | 3 | **브라우저에서** 카카오 로그인 → 쿠키 심김 → `/refresh`가 accessToken 반환 |
 | 9 · K | 회원 API | 3 | 그 accessToken으로 `/api/users/me` GET·PUT·DELETE, 탈퇴 후 재로그인 재활성화 |
 
 단계별 상세 설계는 G~K 항목을 참고한다. 파일 합계 31개(2단계는 Java 파일 없음).
@@ -423,8 +423,13 @@ FE는 **인가코드를 다루지 않는다.** authorize URL 조립도, 콜백 `
 - [ ] 로그아웃·탈퇴 후 브라우저에서 쿠키가 **실제로 사라지는지** (`Path` 누락 시 안 지워짐)
 
 **도메인 경계 체크포인트**
-- [ ] `domain/user`가 auth **컴포넌트**(`AuthService`·`RefreshTokenRepository`·`KakaoOAuthClient`)를 주입하지 않는지 (역방향 동작 의존 없음).
-      ErrorCode enum 참조는 공유 어휘라 예외다 — `UserService`가 회원 미존재 시 `AuthErrorCode.UNAUTHORIZED`를 쓴다
+- [ ] `domain/user`의 **서비스**가 auth 컴포넌트(`AuthService`·`RefreshTokenRepository`·`KakaoOAuthClient`)를 주입하지 않는지.
+      **컨트롤러는 예외다** — 탈퇴 순서를 `UserController`가 소유하므로 `AuthService`를 주입한다.
+      컨트롤러는 유스케이스를 조립하는 자리라 양쪽을 알아도 되지만, 서비스끼리 얽히면 되돌리기 어렵다.
+      (원래 문구는 "`domain/user` 어디에도 `domain.auth` import가 없는지"였는데, 같은 문서의 탈퇴 설계와
+      모순이라 계층을 명시하도록 고쳤다.)
+- [ ] ErrorCode enum 참조는 공유 어휘라 경계 위반이 아니다 — `UserService`가 회원 미존재에 A001,
+      탈퇴에 A008을 쓴다. 막으려는 것은 <b>동작</b> 의존이다
 - [ ] `domain/auth` 어디에도 `UserRepository` 주입이 없는지 (`UserService`만 경유)
 - [ ] 신규 카카오 로그인 시 User가 `AuthService`가 아니라 `UserService.findOrCreateKakaoUser`에서 생성되는지
 - [ ] 탈퇴 중 `revokeAllTokens`가 실패하면 회원이 ACTIVE로 남는지 (fail-closed)
