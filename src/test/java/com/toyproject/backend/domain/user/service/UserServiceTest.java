@@ -2,6 +2,8 @@ package com.toyproject.backend.domain.user.service;
 
 import com.toyproject.backend.domain.auth.exception.AuthErrorCode;
 import com.toyproject.backend.domain.user.dto.KakaoUserResolution;
+import com.toyproject.backend.domain.user.dto.UserResponse;
+import com.toyproject.backend.domain.user.dto.UserUpdateRequest;
 import com.toyproject.backend.domain.user.entity.Provider;
 import com.toyproject.backend.domain.user.entity.Role;
 import com.toyproject.backend.domain.user.entity.User;
@@ -16,6 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -137,6 +140,86 @@ class UserServiceTest {
             then(userRepository)
                     .should(never())
                     .existsByEmail(anyString());
+        }
+    }
+
+    @Nested
+    @DisplayName("updateMyInfo — null은 '변경하지 않음'이다")
+    class UpdateMyInfo {
+
+        @Test
+        @DisplayName("보낸 필드만 바뀌고 나머지는 그대로다")
+        void updatesOnlyProvidedFields() {
+            User user = User.ofKakao(PROVIDER_ID, EMAIL, NICKNAME);
+            user.updateProfile(null, "010-1111-2222", "서울시 강남구", LocalDate.of(1999, 1, 1));
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            UserResponse response = userService.updateMyInfo(USER_ID,
+                    new UserUpdateRequest("지훈", null, null, null));
+
+            assertThat(response.name()).isEqualTo("지훈");
+            assertThat(response.phone())
+                    .as("보내지 않은 필드가 null로 덮이면 부분 수정이 성립하지 않는다")
+                    .isEqualTo("010-1111-2222");
+            assertThat(response.address()).isEqualTo("서울시 강남구");
+            assertThat(response.birthDate()).isEqualTo(LocalDate.of(1999, 1, 1));
+        }
+
+        @Test
+        @DisplayName("빈 요청이면 아무것도 바뀌지 않는다")
+        void emptyRequestChangesNothing() {
+            User user = User.ofKakao(PROVIDER_ID, EMAIL, NICKNAME);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            UserResponse response = userService.updateMyInfo(USER_ID,
+                    new UserUpdateRequest(null, null, null, null));
+
+            assertThat(response.name()).isEqualTo(NICKNAME);
+        }
+
+        @Test
+        @DisplayName("더티 체킹으로 반영한다 — save를 부르지 않는다")
+        void reliesOnDirtyChecking() {
+            given(userRepository.findById(USER_ID))
+                    .willReturn(Optional.of(User.ofKakao(PROVIDER_ID, EMAIL, NICKNAME)));
+
+            userService.updateMyInfo(USER_ID, new UserUpdateRequest("지훈", null, null, null));
+
+            then(userRepository).should(never()).save(any());
+        }
+
+        @Test
+        @DisplayName("탈퇴 회원이면 A008 — getActiveUser의 규칙을 그대로 따른다")
+        void rejectsWithdrawnUser() {
+            User withdrawn = User.ofKakao(PROVIDER_ID, EMAIL, NICKNAME);
+            withdrawn.withdraw();
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(withdrawn));
+
+            assertThatThrownBy(() -> userService.updateMyInfo(USER_ID,
+                    new UserUpdateRequest("지훈", null, null, null)))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getErrorCode())
+                    .isEqualTo(AuthErrorCode.WITHDRAWN_USER);
+        }
+    }
+
+    @Nested
+    @DisplayName("getMyInfo")
+    class GetMyInfo {
+
+        @Test
+        @DisplayName("응답에 providerId를 담지 않는다 — 외부 서비스의 식별자다")
+        void doesNotExposeProviderId() {
+            given(userRepository.findById(USER_ID))
+                    .willReturn(Optional.of(User.ofKakao(PROVIDER_ID, EMAIL, NICKNAME)));
+
+            UserResponse response = userService.getMyInfo(USER_ID);
+
+            assertThat(response.email()).isEqualTo(EMAIL);
+            assertThat(response.name()).isEqualTo(NICKNAME);
+            assertThat(UserResponse.class.getRecordComponents())
+                    .extracting(java.lang.reflect.RecordComponent::getName)
+                    .doesNotContain("providerId", "status", "withdrawnAt");
         }
     }
 
