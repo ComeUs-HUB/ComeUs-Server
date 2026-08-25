@@ -103,7 +103,7 @@ class AuthControllerTest {
                     .as("쿠키의 state와 URL의 state가 달라지면 콜백에서 전부 A009가 된다")
                     .contains(STATE)
                     .contains("SameSite=Lax")
-                    .contains("Path=/api/auth")
+                    .contains("Path=/api/auth/kakao/callback")
                     .contains("HttpOnly");
         }
 
@@ -221,7 +221,7 @@ class AuthControllerTest {
             assertThat(setCookie(success, CookieUtil.OAUTH_STATE))
                     .as("남겨두면 뒤로가기로 콜백을 재사용할 수 있다")
                     .contains("Max-Age=0")
-                    .contains("Path=/api/auth");
+                    .contains("Path=/api/auth/kakao/callback");
             assertThat(setCookie(failure, CookieUtil.OAUTH_STATE))
                     .as("실패한 state를 남겨둘 이유가 없다")
                     .contains("Max-Age=0");

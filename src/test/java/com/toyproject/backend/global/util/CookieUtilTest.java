@@ -25,13 +25,14 @@ class CookieUtilTest {
 
     private static final String RAW_TOKEN = "0KDf9YfQmXo1kSxq7t2ZLPu8bWnErAvC3hJd5gTy6Mk";
     private static final Duration REFRESH_MAX_AGE = Duration.ofDays(7);
-    private static final String EXPECTED_PATH = "/api/auth";
+    private static final String REFRESH_TOKEN_PATH = "/api/auth";
+    private static final String OAUTH_STATE_PATH = "/api/auth/kakao/callback";
 
     /** 운영 기본값. {@code app.cookie}가 통째로 없을 때와 같은 상태다. */
     private final CookieUtil cookieUtil = new CookieUtil(new AppProperties(null, null, null));
 
     @Test
-    @DisplayName("네 쿠키 모두 HttpOnly·Path=/api/auth이고 Domain은 설정하지 않는다")
+    @DisplayName("네 쿠키 모두 HttpOnly이고 Domain은 설정하지 않는다")
     void appliesSharedAttributes() {
         ResponseCookie[] cookies = {
                 cookieUtil.refreshTokenCookie(RAW_TOKEN, REFRESH_MAX_AGE),
@@ -42,9 +43,6 @@ class CookieUtilTest {
 
         assertThat(cookies).allSatisfy(cookie -> {
             assertThat(cookie.isHttpOnly()).as("JS가 읽으면 XSS로 탈취된다").isTrue();
-            assertThat(cookie.getPath())
-                    .as("삭제 쿠키까지 Path가 같아야 브라우저가 매칭해 실제로 지운다")
-                    .isEqualTo(EXPECTED_PATH);
             assertThat(cookie.getDomain())
                     .as("Domain을 걸면 다른 서브도메인에도 쿠키가 실려 나간다")
                     .isNull();
@@ -63,16 +61,20 @@ class CookieUtilTest {
             assertThat(cookie.getName()).isEqualTo("refresh_token");
             assertThat(cookie.getValue()).isEqualTo(RAW_TOKEN);
             assertThat(cookie.getSameSite()).isEqualTo("Strict");
+            assertThat(cookie.getPath()).isEqualTo(REFRESH_TOKEN_PATH);
             assertThat(cookie.getMaxAge()).isEqualTo(REFRESH_MAX_AGE);
         }
 
         @Test
-        @DisplayName("삭제 쿠키는 Max-Age=0에 빈 값이다")
+        @DisplayName("삭제 쿠키는 Max-Age=0에 빈 값이고 Path가 발급 때와 같다")
         void deletionExpiresImmediately() {
             ResponseCookie cookie = cookieUtil.deleteRefreshTokenCookie();
 
             assertThat(cookie.getMaxAge()).isZero();
             assertThat(cookie.getValue()).isEmpty();
+            assertThat(cookie.getPath())
+                    .as("Path가 다르면 브라우저가 매칭하지 못해 쿠키가 지워지지 않는다")
+                    .isEqualTo(REFRESH_TOKEN_PATH);
         }
     }
 
@@ -96,12 +98,21 @@ class CookieUtilTest {
         }
 
         @Test
-        @DisplayName("삭제 쿠키도 Lax를 유지한 채 Max-Age=0이다")
+        @DisplayName("Path가 콜백 하나로 좁혀져 있다 — /refresh·/logout에 실려 나가면 안 된다")
+        void isScopedToCallbackOnly() {
+            assertThat(cookieUtil.oauthStateCookie("state-value").getPath())
+                    .as("인가 왕복이 끝나면 아무 쓸모가 없는 값이다")
+                    .isEqualTo(OAUTH_STATE_PATH);
+        }
+
+        @Test
+        @DisplayName("삭제 쿠키도 Lax와 같은 Path를 유지한 채 Max-Age=0이다")
         void deletionKeepsLax() {
             ResponseCookie cookie = cookieUtil.deleteOauthStateCookie();
 
             assertThat(cookie.getSameSite()).isEqualTo("Lax");
             assertThat(cookie.getMaxAge()).isZero();
+            assertThat(cookie.getPath()).isEqualTo(OAUTH_STATE_PATH);
         }
     }
 
@@ -139,9 +150,12 @@ class CookieUtilTest {
     }
 
     @Test
-    @DisplayName("두 쿠키의 SameSite는 서로 달라야 한다 — 같게 맞추면 로그인이 깨진다")
-    void sameSitePoliciesMustDiffer() {
-        assertThat(cookieUtil.refreshTokenCookie(RAW_TOKEN, REFRESH_MAX_AGE).getSameSite())
-                .isNotEqualTo(cookieUtil.oauthStateCookie("state-value").getSameSite());
+    @DisplayName("두 쿠키의 SameSite와 Path는 서로 달라야 한다 — 같게 맞추면 로그인이 깨지거나 범위가 넓어진다")
+    void policiesMustDiffer() {
+        ResponseCookie refresh = cookieUtil.refreshTokenCookie(RAW_TOKEN, REFRESH_MAX_AGE);
+        ResponseCookie state = cookieUtil.oauthStateCookie("state-value");
+
+        assertThat(refresh.getSameSite()).isNotEqualTo(state.getSameSite());
+        assertThat(refresh.getPath()).isNotEqualTo(state.getPath());
     }
 }
