@@ -23,6 +23,10 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-web")
 	implementation("org.springframework.boot:spring-boot-starter-security")
 
+	// DB 마이그레이션 (Flyway) — flyway-mysql은 Flyway 10+ 에서 MySQL 지원에 필수
+	implementation("org.flywaydb:flyway-core")
+	runtimeOnly("org.flywaydb:flyway-mysql")
+
 	// JWT (jjwt 0.12.x)
 	implementation("io.jsonwebtoken:jjwt-api:0.12.6")
 	runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")

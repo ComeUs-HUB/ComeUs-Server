@@ -46,7 +46,8 @@ public interface ErrorCode {
 | 파일 | 위치 | 이관 대상 (기존 코드값 그대로) |
 |---|---|---|
 | `CommonErrorCode` | `global.exception` | `C001` INVALID_INPUT_VALUE(400), `C002` RESOURCE_NOT_FOUND(404), `C003` INTERNAL_SERVER_ERROR(500) + 신규 `C004` METHOD_NOT_ALLOWED(405), `C005` RESOURCE_CONFLICT(409) |
-| `UserErrorCode` | `domain.user.exception` | `U001`~`U006` (DUPLICATE_EMAIL, INVALID_CREDENTIALS, UNAUTHORIZED, FORBIDDEN, INVALID_TOKEN, EXPIRED_TOKEN) |
+| `UserErrorCode` | `domain.user.exception` | `U001` DUPLICATE_EMAIL(409) |
+| `AuthErrorCode` | `domain.auth.exception` | `A001` UNAUTHORIZED(401), `A002` FORBIDDEN(403), `A003` INVALID_TOKEN(401), `A004` EXPIRED_TOKEN(401), `A005` KAKAO_AUTH_FAILED(400), `A006` KAKAO_API_ERROR(502), `A007` REFRESH_TOKEN_NOT_FOUND(401), `A008` WITHDRAWN_USER(403), `A009` INVALID_OAUTH_STATE(400) |
 | `ProductErrorCode` | `domain.product.exception` | `P001` PRODUCT_NOT_FOUND, `P002` OUT_OF_STOCK |
 | `CategoryErrorCode` | `domain.category.exception` | `CA001` CATEGORY_NOT_FOUND, `CA002` CATEGORY_HAS_CHILDREN |
 | `CartErrorCode` | `domain.cart.exception` | `CT001` CART_ITEM_NOT_FOUND, `CT002` CART_QUANTITY_EXCEEDED |
@@ -89,7 +90,7 @@ domain/{user,product,category,cart,order,payment,review}/exception/XxxErrorCode.
 
 ## 7. 미결 (지금 구현 안 함)
 
-- Auth 관련 `ErrorCode`(`U003`~`U006`) 사용은 Phase 2(User 도메인) 구현 시점에 `JwtAuthenticationEntryPoint`/`JwtAccessDeniedHandler`와 함께 연결.
+- Auth 관련 `ErrorCode`(`AuthErrorCode` A001~A009) 사용은 Phase 2(auth 도메인) 구현 시점에 `JwtAuthenticationEntryPoint`와 함께 연결. `AccessDeniedHandler`는 두지 않는다 ([[phase2-auth]] H 항목).
 - `traceId`, MSA 대응 필드는 스코프 아님.
 
 ## 8. 체크리스트
