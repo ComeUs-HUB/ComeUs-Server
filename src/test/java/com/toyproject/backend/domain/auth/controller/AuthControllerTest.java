@@ -10,6 +10,8 @@ import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -239,6 +241,39 @@ class AuthControllerTest {
 
             assertThat(location(result)).isEqualTo(FRONTEND_COMPLETE + "?error=access_denied");
             then(authService).should(never()).kakaoLogin(anyString());
+        }
+
+        @Test
+        @DisplayName("error 값의 &가 인코딩된다 — 인코딩하지 않으면 FE URL에 파라미터가 주입된다")
+        void encodesAmpersandInErrorValue() throws Exception {
+            MvcResult result = mockMvc.perform(get(CALLBACK_URI)
+                            .param("error", "x&isNewUser=true")
+                            .param("state", STATE)
+                            .cookie(new Cookie(CookieUtil.OAUTH_STATE, STATE)))
+                    .andExpect(status().isFound())
+                    .andReturn();
+
+            assertThat(location(result))
+                    .as("콜백은 permitAll이라 error 값을 누구나 지정할 수 있다. "
+                            + "인코딩하지 않으면 &가 구분자로 붙어 isNewUser=true가 주입된다")
+                    .isEqualTo(FRONTEND_COMPLETE + "?error=x%26isNewUser%3Dtrue");
+        }
+
+        @ParameterizedTest(name = "error={0}")
+        @ValueSource(strings = {"a b", "{x}", "100%", "a#b", "가"})
+        @DisplayName("URI에 못 쓰는 문자가 와도 302다 — URI.create가 터지면 JSON 500이 주소창에 뜬다")
+        void encodesIllegalUriCharacters(String malicious) throws Exception {
+            MvcResult result = mockMvc.perform(get(CALLBACK_URI)
+                            .param("error", malicious)
+                            .param("state", STATE)
+                            .cookie(new Cookie(CookieUtil.OAUTH_STATE, STATE)))
+                    .andExpect(status().isFound())
+                    .andReturn();
+
+            assertThat(location(result))
+                    .as("이 redirect는 try 블록 밖이라 예외가 GlobalExceptionHandler까지 올라간다")
+                    .startsWith(FRONTEND_COMPLETE + "?error=")
+                    .doesNotContain(" ", "{", "}");
         }
 
         @Test
