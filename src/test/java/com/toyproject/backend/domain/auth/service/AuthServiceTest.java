@@ -24,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -43,6 +44,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 
 /**
@@ -235,6 +237,54 @@ class AuthServiceTest {
                     .isEqualTo(AuthErrorCode.KAKAO_AUTH_FAILED);
 
             then(userService).shouldHaveNoInteractions();
+            then(refreshTokenRepository).shouldHaveNoInteractions();
+        }
+
+        @Test
+        @DisplayName("가입 경합이면 새 트랜잭션에서 1회 재시도해 로그인을 성립시킨다")
+        void retriesOnceOnSignupRace() {
+            givenKakaoRoundTrip();
+            given(userService.findOrCreateKakaoUser(KAKAO_ID, KAKAO_EMAIL, KAKAO_NICKNAME))
+                    .willThrow(new DataIntegrityViolationException("Duplicate entry for key 'uk_users_provider_provider_id'"))
+                    .willReturn(KakaoUserResolution.existing(user));
+
+            KakaoLoginResult result = authService.kakaoLogin(CODE);
+
+            then(userService).should(times(2)).findOrCreateKakaoUser(KAKAO_ID, KAKAO_EMAIL, KAKAO_NICKNAME);
+            assertThat(result.rawRefreshToken()).hasSize(43);
+            assertThat(result.isNewUser())
+                    .as("경쟁자가 먼저 만든 회원을 재사용하므로 신규 가입이 아니다")
+                    .isFalse();
+        }
+
+        @Test
+        @DisplayName("재시도해도 카카오는 다시 부르지 않는다 — 인가 코드는 1회용이다")
+        void doesNotReuseAuthorizationCodeOnRetry() {
+            givenKakaoRoundTrip();
+            given(userService.findOrCreateKakaoUser(KAKAO_ID, KAKAO_EMAIL, KAKAO_NICKNAME))
+                    .willThrow(new DataIntegrityViolationException("duplicate key"))
+                    .willReturn(KakaoUserResolution.existing(user));
+
+            authService.kakaoLogin(CODE);
+
+            then(kakaoOAuthClient).should()
+                    .requestToken(CODE);
+            then(kakaoOAuthClient).should()
+                    .fetchUserInfo(KAKAO_ACCESS_TOKEN);
+            then(kakaoOAuthClient).shouldHaveNoMoreInteractions();
+        }
+
+        @Test
+        @DisplayName("재시도도 실패하면 예외를 그대로 올린다 — 경합이 아니라 진짜 제약 문제다")
+        void propagatesWhenRetryAlsoFails() {
+            givenKakaoRoundTrip();
+            given(userService.findOrCreateKakaoUser(KAKAO_ID, KAKAO_EMAIL, KAKAO_NICKNAME))
+                    .willThrow(new DataIntegrityViolationException("duplicate key"));
+
+            assertThatThrownBy(() -> authService.kakaoLogin(CODE))
+                    .isInstanceOf(DataIntegrityViolationException.class);
+
+            then(userService).should(times(2)).findOrCreateKakaoUser(KAKAO_ID, KAKAO_EMAIL, KAKAO_NICKNAME);
             then(refreshTokenRepository).shouldHaveNoInteractions();
         }
     }

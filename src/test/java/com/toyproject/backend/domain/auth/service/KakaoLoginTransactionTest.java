@@ -6,6 +6,7 @@ import com.toyproject.backend.domain.auth.client.dto.KakaoUserInfoResponse;
 import com.toyproject.backend.domain.auth.entity.RefreshToken;
 import com.toyproject.backend.domain.auth.repository.RefreshTokenRepository;
 import com.toyproject.backend.domain.user.entity.Provider;
+import com.toyproject.backend.domain.user.entity.User;
 import com.toyproject.backend.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,11 +16,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
 
 /**
@@ -43,12 +51,22 @@ class KakaoLoginTransactionTest {
     private static final String CODE = "kakao-authorization-code";
     private static final String KAKAO_ACCESS_TOKEN = "kakao-access-token";
     private static final Long KAKAO_ID = 8_001L;
+    private static final String KAKAO_EMAIL = "rollback@kakao.com";
+    /** 같은 email을 선점하거나 같은 계정을 먼저 만드는 '경쟁자' */
+    private static final String RIVAL_PROVIDER_ID = "8002";
 
     @Autowired
     private AuthService authService;
 
-    @Autowired
+    /**
+     * 조회와 저장 <b>사이</b>에 경쟁자를 끼워 넣기 위한 훅으로만 쓴다. 저장과 제약 위반은 실제 DB가 한다.
+     * 경합은 밀리초 단위 창이라 스레드를 띄워서는 결정적으로 재현되지 않는다.
+     */
+    @MockitoSpyBean
     private UserRepository userRepository;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @MockitoBean
     private KakaoOAuthClient kakaoOAuthClient;
@@ -67,11 +85,13 @@ class KakaoLoginTransactionTest {
                                 "rollback@kakao.com", new KakaoUserInfoResponse.Profile("민준"))));
     }
 
-    /** 테스트 트랜잭션이 없으므로 커밋된 회원은 직접 지운다. */
+    /** 테스트 트랜잭션이 없으므로 커밋된 회원은 직접 지운다(경합 테스트가 만든 경쟁자 포함). */
     @AfterEach
     void tearDown() {
-        userRepository.findByProviderAndProviderId(Provider.KAKAO, String.valueOf(KAKAO_ID))
-                .ifPresent(userRepository::delete);
+        for (String providerId : new String[]{String.valueOf(KAKAO_ID), RIVAL_PROVIDER_ID}) {
+            userRepository.findByProviderAndProviderId(Provider.KAKAO, providerId)
+                    .ifPresent(userRepository::delete);
+        }
     }
 
     @Test
@@ -99,5 +119,71 @@ class KakaoLoginTransactionTest {
         assertThat(userRepository.findByProviderAndProviderId(Provider.KAKAO, String.valueOf(KAKAO_ID)))
                 .as("롤백 테스트가 성공 경로까지 막아버리지 않았는지 확인한다")
                 .isPresent();
+    }
+
+    /**
+     * 경쟁자를 <b>별도 트랜잭션에서 즉시 커밋</b>한다. 로그인 트랜잭션이 열려 있는 동안
+     * 남이 먼저 커밋하는 상황이 곧 이 경합이다.
+     */
+    private void commitRival(String providerId, String email) {
+        TransactionTemplate rivalTx = new TransactionTemplate(transactionManager);
+        rivalTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        rivalTx.executeWithoutResult(status ->
+                userRepository.save(User.ofKakao(providerId, email, "경쟁자")));
+    }
+
+    /**
+     * 조회와 저장 사이에 경쟁자를 커밋시킨다.
+     *
+     * <p>{@code existsByEmail}은 {@code findOrCreateKakaoUser}가 <b>신규 생성 분기에서만</b>,
+     * 그것도 조회 직후 저장 직전에 부르는 메서드라 끼어들 자리로 정확하다.
+     * 반환값은 그 시점 DB 상태 그대로다 — 1차는 아직 못 본 상태({@code false}),
+     * 2차는 경쟁자가 보이는 상태({@code true}).
+     */
+    private void givenRivalCommitsBetweenReadAndWrite(String rivalProviderId, String rivalEmail) {
+        AtomicInteger calls = new AtomicInteger();
+        willAnswer(invocation -> {
+            if (calls.getAndIncrement() > 0) {
+                return true;
+            }
+            commitRival(rivalProviderId, rivalEmail);
+            return false;
+        }).given(userRepository).existsByEmail(KAKAO_EMAIL);
+    }
+
+    @Test
+    @DisplayName("가입 경합 — 같은 계정을 먼저 만든 쪽이 커밋되면 재시도가 그 회원으로 붙는다")
+    void retriesOntoWinnerOnProviderConflict() {
+        given(refreshTokenRepository.save(any(RefreshToken.class))).willAnswer(inv -> inv.getArgument(0));
+        givenRivalCommitsBetweenReadAndWrite(String.valueOf(KAKAO_ID), "winner@kakao.com");
+
+        boolean isNewUser = authService.kakaoLogin(CODE).isNewUser();
+
+        assertThat(isNewUser)
+                .as("uk_users_provider_provider_id 위반 후 재시도가 기존 회원을 찾아낸다")
+                .isFalse();
+        assertThat(userRepository.findByProviderAndProviderId(Provider.KAKAO, String.valueOf(KAKAO_ID)))
+                .get()
+                .extracting(User::getEmail)
+                .as("중복 회원이 생기지 않고 먼저 커밋된 쪽이 그대로 쓰인다")
+                .isEqualTo("winner@kakao.com");
+    }
+
+    @Test
+    @DisplayName("email 경합 — 재시도에서 email만 비우고 가입을 성립시킨다")
+    void retriesWithoutEmailOnEmailConflict() {
+        given(refreshTokenRepository.save(any(RefreshToken.class))).willAnswer(inv -> inv.getArgument(0));
+        givenRivalCommitsBetweenReadAndWrite(RIVAL_PROVIDER_ID, KAKAO_EMAIL);
+
+        boolean isNewUser = authService.kakaoLogin(CODE).isNewUser();
+
+        assertThat(isNewUser)
+                .as("email 충돌은 가입을 막지 않는다 — 신규 가입은 그대로 성립한다")
+                .isTrue();
+        assertThat(userRepository.findByProviderAndProviderId(Provider.KAKAO, String.valueOf(KAKAO_ID)))
+                .get()
+                .extracting(User::getEmail)
+                .as("uk_users_email 위반 후 재시도에서 adoptableEmail이 email을 비운다")
+                .isNull();
     }
 }
