@@ -1,7 +1,11 @@
 # Phase 2 — 인증/인가 (user/auth 도메인, G~K)
 
-> 상태: 미구현. `domain/user`, `domain/auth`, `global/security` 패키지에 **본문이 빈 프로토타입 골격**만 존재한다.
-> 선반영됨: `UserErrorCode`(U001), `AuthErrorCode`(A001~A009), `application.yml`의 `jwt.*`,
+> 상태: **1~9단계 구현 완료.** 자동 테스트 13개 클래스 131개 케이스 통과.
+> 남은 것은 9단계의 **브라우저 E2E 확인**뿐이다 — 자동 테스트는 H2 + `flyway.enabled: false` +
+> `MockRestServiceServer`라 ① MySQL에 Flyway가 적용되는지 ② 브라우저가 쿠키를 실제로 저장·전송·삭제하는지
+> ③ 카카오 실서버 왕복, 이 셋을 덮지 못한다. 아래 각 항목의 체크포인트가 그 확인 목록이다.
+>
+> Phase 0~1에서 선반영된 것: `UserErrorCode`(U001), `AuthErrorCode`(A001~A009),
 > `JpaConfig`의 `@EnableJpaAuditing`, `BackendApplication`의 `@ConfigurationPropertiesScan`.
 
 이후 모든 도메인이 "로그인한 사용자"에 의존하므로 가장 먼저 진행한다.
@@ -51,20 +55,27 @@ Flyway 전환이 여기 해당한다. `ddl-auto: update` 위에서 Repository를
 
 완료 조건은 "컴파일된다"가 아니라 아래 검증이 통과하는 것이다.
 
-| 단계 | 항목 | 파일 | 완료 조건 |
-|---|---|---|---|
-| 0 | 글로벌 기반 ✅ | — | `*ErrorCode`, `ApiResponse`, `GlobalExceptionHandler`, `JpaConfig`, `@ConfigurationPropertiesScan` |
-| 1 · G | 엔티티 ✅ | 5 | 컴파일. 실행 검증은 2단계에서 함께 한다 |
-| 2 · G | **Flyway + 스키마** ✅ | 0 (SQL·yml) | 앱 기동 시 Flyway가 두 테이블 생성 + `validate` 통과 |
-| 3 · G | Repository | 2 | `@DataJpaTest` — 조회·벌크 삭제·`(provider, providerId)` 중복 차단 |
-| 4 · G | 카카오 연동 | 5 | `MockRestServiceServer`로 4xx→A005, 5xx→A006 변환 |
-| 5 · I | 토큰 부품 | 3 | 단위 테스트 — 생성·파싱 왕복, 만료/위조 예외 구분, 해시 64자 |
-| 6 · H·J | Security 배선 | 6 | 미인증 401(A001), 위조 A003 / 만료 A004 / 탈퇴 **A008(403)** 구분 |
-| 7 · I·K | 서비스 ✅ | 4 | `findOrCreateKakaoUser` 3분기, 재발급 유효성, `logout` 멱등 |
-| 8 · K | 로그인 API ✅ | 3 | **브라우저에서** 카카오 로그인 → 쿠키 심김 → `/refresh`가 accessToken 반환 |
-| 9 · K | 회원 API | 3 | 그 accessToken으로 `/api/users/me` GET·PUT·DELETE, 탈퇴 후 재로그인 재활성화 |
+✅ 완료 조건 충족 · 🟡 구현·자동 테스트는 끝났고 **브라우저 확인만 남음**
 
-단계별 상세 설계는 G~K 항목을 참고한다. 파일 합계 31개(2단계는 Java 파일 없음).
+| 단계 | 항목 | 파일 | 완료 조건 | 검증 근거 |
+|---|---|---|---|---|
+| 0 | 글로벌 기반 ✅ | — | `*ErrorCode`, `ApiResponse`, `GlobalExceptionHandler`, `JpaConfig`, `@ConfigurationPropertiesScan` | — |
+| 1 · G | 엔티티 ✅ | 5 | 컴파일. 실행 검증은 2단계에서 함께 한다 | 2단계에서 함께 |
+| 2 · G | **Flyway + 스키마** ✅ | 0 (SQL·yml) | 앱 기동 시 Flyway가 두 테이블 생성 + `validate` 통과 | MySQL 기동 |
+| 3 · G | Repository ✅ | 2 | `@DataJpaTest` — 조회·벌크 삭제·`(provider, providerId)` 중복 차단 | `UserRepositoryTest`, `RefreshTokenRepositoryTest` |
+| 4 · G | 카카오 연동 ✅ | 5 | `MockRestServiceServer`로 4xx→A005, 5xx→A006 변환 | `KakaoOAuthClientTest` |
+| 5 · I | 토큰 부품 ✅ | 3 | 단위 테스트 — 생성·파싱 왕복, 만료/위조 예외 구분, 해시 64자 | `JwtProviderTest`, `SecureTokenGeneratorTest` |
+| 6 · H·J | Security 배선 ✅ | 6 | 미인증 401(A001), 위조 A003 / 만료 A004 / 탈퇴 **A008(403)** 구분 | `JwtAuthenticationIntegrationTest` |
+| 7 · I·K | 서비스 ✅ | 4 | `findOrCreateKakaoUser` 3분기, 재발급 유효성, `logout` 멱등 | `UserServiceTest`, `AuthServiceTest` |
+| 8 · K | 로그인 API ✅ | 3 | **브라우저에서** 카카오 로그인 → 쿠키 심김 → `/refresh`가 accessToken 반환 | `AuthControllerTest`·`CookieUtilTest` + 브라우저 |
+| 9 · K | 회원 API 🟡 | 3 | 그 accessToken으로 `/api/users/me` GET·PUT·DELETE, 탈퇴 후 재로그인 재활성화 | `UserControllerTest` — **브라우저 확인 대기** |
+
+구현물은 총 31개 파일(2단계는 Java 파일 없음)이고, 테스트는 13개 클래스 131개 케이스다.
+단계별 상세 설계는 G~K 항목을 참고한다.
+
+⚠️ **9단계가 🟡인 이유**: `UserControllerTest`가 MockMvc로 GET·PUT·DELETE와 탈퇴 오케스트레이션을
+전부 덮지만, 완료 조건의 "**그** accessToken으로"는 8단계 로그인으로 실제 발급된 토큰을 뜻한다.
+쿠키를 브라우저가 저장·전송하고 탈퇴 시 실제로 삭제하는지는 MockMvc가 판정할 수 없다.
 
 ### 단계별 배치 근거
 

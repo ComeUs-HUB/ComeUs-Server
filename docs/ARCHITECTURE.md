@@ -331,14 +331,24 @@ com.toyproject.backend
 | `GlobalExceptionHandler` — 전역 예외 처리 | ✅ | `global/exception/GlobalExceptionHandler.java` |
 | `PageResponse<T>` — 페이지네이션 응답 | ✅ | `global/response/PageResponse.java` |
 
-### Phase 2 — 인증/인가 (user/auth 도메인) ⬜
+### Phase 2 — 인증/인가 (user/auth 도메인) ✅
 
-**1·2단계 완료.** `User`/`RefreshToken` 엔티티와 enum 3종이 구현됐고, Flyway가 `V1__init.sql`로
-`users`·`refresh_tokens` 스키마를 소유한다(`ddl-auto: validate`로 통일). 다음은 3단계 Repository.
-나머지 클래스는 `domain/user`·`domain/auth`·`global/security`에 **본문이 빈 프로토타입 골격**으로 있다.
-선반영: `UserErrorCode`(U001), `AuthErrorCode`(A001~A009), `BackendApplication`의 `@ConfigurationPropertiesScan`.
+**1~9단계 구현 완료.** 카카오 OAuth 로그인 왕복(302·쿠키)부터 JWT 인증 필터, 회원 API,
+탈퇴 오케스트레이션까지 동작한다. 자동 테스트 **13개 클래스 131개 케이스 통과**.
 
-구현 순서는 **1~9단계**로 확정돼 있다 — [[phase2-auth]] "구현 순서" 절 참고.
+| 패키지 | 구현물 |
+|--------|--------|
+| `domain/user` | `User`·`Role`·`UserStatus`·`Provider`, `UserRepository`, `UserService`, `UserController` |
+| `domain/auth` | `RefreshToken`, `KakaoOAuthClient`, `JwtProvider`·`SecureTokenGenerator`, `JwtProperties`·`KakaoProperties`·`RestClientConfig`, `AuthService`, `AuthController` |
+| `global/security` | `SecurityConfig`, `JwtAuthenticationFilter`, `JwtAuthenticationEntryPoint`, `CustomUserDetailsService`, `UserPrincipal` |
+| `global/util` | `CookieUtil` — `refresh_token`·`oauth_state` 두 쿠키의 속성을 여기서만 만든다 |
+
+스키마는 Flyway가 `V1__init.sql`로 소유한다(`ddl-auto: validate`로 local·prod 통일).
+
+남은 것은 **9단계의 브라우저 E2E 확인**뿐이다. 자동 테스트는 H2 + `flyway.enabled: false` +
+`MockRestServiceServer`라 MySQL Flyway 적용·브라우저의 실제 쿠키 저장/삭제·카카오 실서버 왕복을
+덮지 못한다 — 이 셋은 [[phase2-auth]] K 항목 체크포인트로 확인한다.
+
 각 클래스 Javadoc 첫 줄의 `[N단계 · G]` 표기가 소속 단계다.
 엔티티(1) → Flyway(2) → Repository(3) → 카카오 연동(4) → 토큰 부품(5) → Security 배선(6) → 서비스(7) → 로그인 API(8) → 회원 API(9).
 
