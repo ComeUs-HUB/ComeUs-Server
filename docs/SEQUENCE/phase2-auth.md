@@ -197,6 +197,33 @@ SHOW TABLES;                                                       -- users, ref
 - `UserService.withdraw(userId)` → `String providerId` (소프트 삭제만 수행)
 - `AuthService.revokeAllTokens(userId)` / `AuthService.unlinkKakao(providerId)` — 탈퇴 시 `UserController`가 호출
 
+#### 가입 경합 — 경계에서 1회 재시도한다
+
+`findOrCreateKakaoUser`의 조회와 저장은 원자적이지 않다. 같은 카카오 계정의 **최초** 동시 로그인이
+둘 다 "미가입"으로 읽으면 늦은 쪽이 유니크 제약에 걸린다. 유니크 제약이 있어 **중복 회원이 생기지는 않지만**,
+그대로 두면 이 양성 경합이 `?error=C003`("서버 내부 오류")으로 나가 서버 결함처럼 보인다.
+
+**`AuthService`가 `DataIntegrityViolationException`을 잡아 로그인 DB 구간을 딱 한 번 다시 실행한다.**
+2회차에는 경쟁자가 이미 커밋돼 있어 **기존 코드가 두 충돌을 그대로 해소**한다.
+
+| 충돌 | 2회차 동작 |
+|---|---|
+| `uk_users_provider_provider_id` | 조회가 경쟁자를 찾아 **기존 회원으로 재사용** (`isNewUser=false`) |
+| `uk_users_email` | `existsByEmail`이 이제 `true` → **email만 비우고 가입 진행** |
+
+- **`UserService`는 손대지 않는다.** 회원 생성 규칙은 user 도메인에 남고, 경합 복구는 유스케이스를 조립하는 쪽이 한다
+- **재시도는 정확히 1회다.** 2차 실패는 경합이 아니라 진짜 제약 문제이므로 삼키지 않고 올려보낸다
+- ⚠️ **전제: 카카오 왕복이 트랜잭션 밖에 있어야 한다.** 그래야 재시도가 **1회용 인가 코드를 재사용하지 않는다.**
+  왕복을 트랜잭션 안으로 옮기면 이 설계가 깨져 재시도가 A005로 실패한다 — 테스트가 이 전제를 고정하고 있다
+
+**대안을 배제한 근거** (PR 리뷰에서 제안받았으나 채택하지 않음)
+
+| 대안 | 배제 이유 |
+|---|---|
+| 제약명으로 충돌 종류를 구분 | 제약명·예외 메시지가 DB 벤더마다 다르다. **테스트는 H2, 운영은 MySQL**이라 그 분기가 정작 운영과 다른 모양으로만 검증된다 |
+| `REQUIRES_NEW`로 재조회/재시도 | 경계에서 재실행하면 애초에 새 트랜잭션이라 rollback-only 문제가 생기지 않는다 |
+| DB upsert | `isNewUser` 의미가 무너지고, "회원 생성 규칙은 user 도메인이 소유한다"는 결정도 깨진다 |
+
 ### 카카오 연동 (4단계)
 
 - `domain/auth/config/KakaoProperties`(`prefix="kakao"`): `clientId, clientSecret, adminKey, redirectUri, authorizeUri, tokenUri, userInfoUri, unlinkUri`
