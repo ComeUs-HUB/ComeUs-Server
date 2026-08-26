@@ -17,6 +17,7 @@ import com.toyproject.backend.domain.user.service.UserService;
 import com.toyproject.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -101,7 +102,52 @@ public class AuthService {
         KakaoTokenResponse token = kakaoOAuthClient.requestToken(code);
         KakaoUserInfoResponse userInfo = kakaoOAuthClient.fetchUserInfo(token.accessToken());
 
-        return transactionTemplate.execute(status -> issueLoginSession(userInfo));
+        return issueLoginSessionRetryingOnSignupRace(userInfo);
+    }
+
+    /**
+     * 로그인 DB 구간을 실행하고, <b>가입 경합이면 새 트랜잭션에서 딱 한 번 다시 시도한다.</b>
+     *
+     * <p><b>무엇을 막는가</b><br>
+     * {@code findOrCreateKakaoUser}의 조회와 저장은 원자적이지 않다. 같은 카카오 계정의 <b>최초</b>
+     * 동시 로그인이 둘 다 "미가입"으로 읽으면 늦은 쪽이 유니크 제약에 걸린다.
+     * 유니크 제약이 있어 <b>중복 회원이 생기지는 않지만</b>, 그대로 두면 이 양성 경합이
+     * {@code ?error=C003}("서버 내부 오류")으로 나가 서버 결함처럼 보인다.
+     *
+     * <p><b>왜 재시도만으로 충분한가</b><br>
+     * 2회차에는 경쟁자가 이미 커밋돼 있어 기존 코드가 두 충돌을 그대로 해소한다.
+     * <table border="1">
+     *   <tr><th>충돌</th><th>2회차 동작</th></tr>
+     *   <tr><td>{@code uk_users_provider_provider_id}</td>
+     *       <td>조회가 경쟁자를 찾아 <b>기존 회원으로 재사용</b>({@code isNewUser=false})</td></tr>
+     *   <tr><td>{@code uk_users_email}</td>
+     *       <td>{@code existsByEmail}이 이제 {@code true} → <b>email만 비우고 가입 진행</b></td></tr>
+     * </table>
+     * 그래서 <b>제약명으로 충돌 종류를 구분하지 않는다.</b> 제약명·예외 메시지는 DB 벤더마다 다른데
+     * 테스트는 H2, 운영은 MySQL이라 그 분기는 정작 운영과 다른 모양으로만 검증된다.
+     *
+     * <p><b>왜 여기인가</b> — {@code UserService}가 아니라 트랜잭션 경계에서 재시도한다.
+     * <ul>
+     *   <li>{@code execute}가 <b>새 트랜잭션</b>을 열므로, 제약 위반으로 rollback-only가 된
+     *       트랜잭션 안에서 복구를 시도하는 문제가 애초에 없다</li>
+     *   <li>⚠️ <b>카카오 왕복이 트랜잭션 밖이라 재실행되지 않는다</b> — 1회용 인가 코드를
+     *       재사용하지 않는다는 뜻이다. <b>이 전제가 이 메서드를 성립시킨다.</b>
+     *       왕복을 트랜잭션 안으로 옮기면 재시도가 코드를 재사용해 A005로 실패한다</li>
+     *   <li>회원 생성 규칙은 user 도메인에 그대로 남는다. 경합 복구는 유스케이스를 조립하는 쪽의 몫이다</li>
+     * </ul>
+     *
+     * <p><b>재시도는 정확히 1회다.</b> 2차 실패는 경합이 아니라 진짜 제약 문제이므로 삼키지 않고 올려보낸다.
+     *
+     * <p>로그에 {@code providerId}를 남기지 않는다 — 외부 서비스 식별자라 {@code UserResponse}에서도
+     * 의도적으로 뺀 값이고, 경합이 일어났다는 사실만으로 진단에 충분하다.
+     */
+    private KakaoLoginResult issueLoginSessionRetryingOnSignupRace(KakaoUserInfoResponse userInfo) {
+        try {
+            return transactionTemplate.execute(status -> issueLoginSession(userInfo));
+        } catch (DataIntegrityViolationException e) {
+            log.info("가입 경합 — 같은 회원을 만드는 로그인이 먼저 커밋됐다. 새 트랜잭션에서 1회 재시도한다");
+            return transactionTemplate.execute(status -> issueLoginSession(userInfo));
+        }
     }
 
     /**
