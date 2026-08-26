@@ -233,11 +233,33 @@ public class AuthController {
         return appProperties.frontend().baseUrl() + FRONTEND_COMPLETE_PATH;
     }
 
-    /** FE 복귀 URL에 파라미터 하나를 붙인다. 값이 에러 코드·{@code "true"}뿐이라 표준 인코딩으로 충분하다. */
+    /**
+     * FE 복귀 URL에 파라미터 하나를 붙인다.
+     *
+     * <p>⚠️ <b>값을 반드시 인코딩한다.</b> 이 자리에는 카카오가 실어 보낸 {@code ?error=} 값이 그대로 들어오는데,
+     * 콜백은 {@code permitAll}이라 <b>카카오만 호출한다는 보장이 없다</b> — 브라우저에서 누구나 임의 값을 넣을 수 있다.
+     * 인코딩하지 않으면 두 가지가 터진다.
+     * <ul>
+     *   <li>{@code ?error=x%26isNewUser%3Dtrue} → 디코딩된 {@code &}가 구분자로 붙어
+     *       <b>FE 복귀 URL에 {@code isNewUser=true}가 주입</b>된다</li>
+     *   <li>{@code ?error=a%20b} → 공백이 그대로 남아 {@link #redirect}의 {@code URI.create}가
+     *       {@code IllegalArgumentException}을 던진다. 이 호출은 {@code try} 밖이라
+     *       {@code GlobalExceptionHandler}까지 올라가 <b>이 클래스가 금지한 "주소창에 ApiResponse JSON"</b>이 된다</li>
+     * </ul>
+     *
+     * <p><b>{@code build()}는 인코딩하지 않는다.</b> {@code encode()}를 호출해야 한다 —
+     * 여기는 카카오 등록값과 문자열로 대조되는 자리가 아니므로 {@link #kakaoAuthorizeUri}의 주의사항에 해당하지 않는다.
+     *
+     * <p>다만 {@code encode()}만으로는 부족하다. 그쪽은 <b>URI 템플릿</b>을 인코딩하는 모드라
+     * {@code {}}를 변수 자리로 보고 남겨두는데, 중괄호는 URI에 올 수 없는 문자라
+     * {@code ?error={x}}가 여전히 {@code URI.create}에서 터진다.
+     * 값을 <b>URI 변수로 넘겨</b> 확장 시점에 엄격하게 인코딩되도록 한다.
+     */
     private String frontendUri(String name, String value) {
         return UriComponentsBuilder.fromUriString(frontendCompleteUri())
-                .queryParam(name, value)
-                .build()
+                .queryParam(name, "{value}")
+                .encode()
+                .buildAndExpand(value)
                 .toUriString();
     }
 
