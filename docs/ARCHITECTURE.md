@@ -345,9 +345,9 @@ com.toyproject.backend
 
 스키마는 Flyway가 `V1__init.sql`로 소유한다(`ddl-auto: validate`로 local·prod 통일).
 
-남은 것은 **9단계의 브라우저 E2E 확인**뿐이다. 자동 테스트는 H2 + `flyway.enabled: false` +
-`MockRestServiceServer`라 MySQL Flyway 적용·브라우저의 실제 쿠키 저장/삭제·카카오 실서버 왕복을
-덮지 못한다 — 이 셋은 [[phase2-auth]] K 항목 체크포인트로 확인한다.
+**브라우저 E2E도 통과했다(2026-08-26).** 자동 테스트가 덮지 못하는 셋 — MySQL Flyway 적용,
+브라우저의 실제 쿠키 저장·전송·삭제, 카카오 실서버 왕복 — 을 실제 카카오 계정으로 확인했다.
+근거는 [[phase2-auth]] 각 항목 체크포인트에 적혀 있다.
 
 각 클래스 Javadoc 첫 줄의 `[N단계 · G]` 표기가 소속 단계다.
 엔티티(1) → Flyway(2) → Repository(3) → 카카오 연동(4) → 토큰 부품(5) → Security 배선(6) → 서비스(7) → 로그인 API(8) → 회원 API(9).

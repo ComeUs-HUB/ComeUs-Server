@@ -1,9 +1,11 @@
 # Phase 2 — 인증/인가 (user/auth 도메인, G~K)
 
-> 상태: **1~9단계 구현 완료.** 자동 테스트 13개 클래스 131개 케이스 통과.
-> 남은 것은 9단계의 **브라우저 E2E 확인**뿐이다 — 자동 테스트는 H2 + `flyway.enabled: false` +
-> `MockRestServiceServer`라 ① MySQL에 Flyway가 적용되는지 ② 브라우저가 쿠키를 실제로 저장·전송·삭제하는지
-> ③ 카카오 실서버 왕복, 이 셋을 덮지 못한다. 아래 각 항목의 체크포인트가 그 확인 목록이다.
+> 상태: **1~9단계 완료.** 자동 테스트 13개 클래스 142개 케이스 통과 +
+> **브라우저 E2E 통과(2026-08-26)** — 실제 카카오 계정으로 로그인 → silent refresh → `/api/users/me`
+> GET·PUT·DELETE → 탈퇴 → 재로그인 재활성화까지 왕복했다.
+> 자동 테스트가 덮지 못하는 셋(① MySQL Flyway 적용 ② 브라우저의 실제 쿠키 저장·전송·삭제
+> ③ 카카오 실서버 왕복)이 이 E2E에서 확인됐다. 각 항목 체크포인트에 근거를 함께 적어 두었다.
+> 미확인으로 남은 1건은 K 항목의 '동의 취소'다(사유는 해당 줄 참고).
 >
 > Phase 0~1에서 선반영된 것: `UserErrorCode`(U001), `AuthErrorCode`(A001~A009),
 > `JpaConfig`의 `@EnableJpaAuditing`, `BackendApplication`의 `@ConfigurationPropertiesScan`.
@@ -55,7 +57,7 @@ Flyway 전환이 여기 해당한다. `ddl-auto: update` 위에서 Repository를
 
 완료 조건은 "컴파일된다"가 아니라 아래 검증이 통과하는 것이다.
 
-✅ 완료 조건 충족 · 🟡 구현·자동 테스트는 끝났고 **브라우저 확인만 남음**
+✅ 완료 조건 충족 (검증 근거는 각 항목 체크포인트 참고)
 
 | 단계 | 항목 | 파일 | 완료 조건 | 검증 근거 |
 |---|---|---|---|---|
@@ -68,14 +70,14 @@ Flyway 전환이 여기 해당한다. `ddl-auto: update` 위에서 Repository를
 | 6 · H·J | Security 배선 ✅ | 6 | 미인증 401(A001), 위조 A003 / 만료 A004 / 탈퇴 **A008(403)** 구분 | `JwtAuthenticationIntegrationTest` |
 | 7 · I·K | 서비스 ✅ | 4 | `findOrCreateKakaoUser` 3분기, 재발급 유효성, `logout` 멱등 | `UserServiceTest`, `AuthServiceTest` |
 | 8 · K | 로그인 API ✅ | 3 | **브라우저에서** 카카오 로그인 → 쿠키 심김 → `/refresh`가 accessToken 반환 | `AuthControllerTest`·`CookieUtilTest` + 브라우저 |
-| 9 · K | 회원 API 🟡 | 3 | 그 accessToken으로 `/api/users/me` GET·PUT·DELETE, 탈퇴 후 재로그인 재활성화 | `UserControllerTest` — **브라우저 확인 대기** |
+| 9 · K | 회원 API ✅ | 3 | 그 accessToken으로 `/api/users/me` GET·PUT·DELETE, 탈퇴 후 재로그인 재활성화 | `UserControllerTest` + 브라우저 E2E |
 
 구현물은 총 31개 파일(2단계는 Java 파일 없음)이고, 테스트는 13개 클래스 131개 케이스다.
 단계별 상세 설계는 G~K 항목을 참고한다.
 
-⚠️ **9단계가 🟡인 이유**: `UserControllerTest`가 MockMvc로 GET·PUT·DELETE와 탈퇴 오케스트레이션을
-전부 덮지만, 완료 조건의 "**그** accessToken으로"는 8단계 로그인으로 실제 발급된 토큰을 뜻한다.
-쿠키를 브라우저가 저장·전송하고 탈퇴 시 실제로 삭제하는지는 MockMvc가 판정할 수 없다.
+9단계 완료 조건의 "**그** accessToken으로"는 8단계 로그인으로 실제 발급된 토큰을 뜻한다.
+MockMvc는 이를 판정할 수 없어 브라우저 E2E로 확인했다 — 실제 카카오 로그인으로 심긴 `refresh_token` 쿠키가
+`/refresh`에 실려 accessToken을 받아왔고, 그 토큰으로 `/api/users/me`와 탈퇴까지 통과했다.
 
 ### 단계별 배치 근거
 
@@ -236,10 +238,10 @@ SHOW TABLES;                                                       -- users, ref
 - 엔드포인트: 인가 `GET https://kauth.kakao.com/oauth/authorize` · 토큰 `POST https://kauth.kakao.com/oauth/token` · 사용자정보 `GET https://kapi.kakao.com/v2/user/me` · 연결해제 `POST https://kapi.kakao.com/v1/user/unlink`(Admin Key)
 
 **체크포인트**
-- [ ] **(선행) 카카오 개발자 콘솔 Redirect URI를 BE 콜백 주소로 등록** — local(`http://localhost:8080/api/auth/kakao/callback`)·prod 둘 다. 누락 시 카카오가 `KOE006`으로 거부해 첫 시도부터 실패한다
-- [ ] (2단계) Flyway가 두 테이블을 정상 생성하고 `validate` 통과
-- [ ] (3단계) `(provider, providerId)` 중복 가입 방지 — 유니크 제약이 엔티티에도 선언돼 H2 테스트에서 재현되는지 함께 확인
-- [ ] (4단계) `KakaoOAuthClient`가 API 실패 시 `BusinessException`으로 변환 (`MockRestServiceServer`)
+- [x] **(선행) 카카오 개발자 콘솔 Redirect URI를 BE 콜백 주소로 등록** — local(`http://localhost:8080/api/auth/kakao/callback`)·prod 둘 다. 누락 시 카카오가 `KOE006`으로 거부해 첫 시도부터 실패한다 — *E2E 2026-08-26: local 등록 확인. prod는 배포 시*
+- [x] (2단계) Flyway가 두 테이블을 정상 생성하고 `validate` 통과 — *E2E 2026-08-26: MySQL 기동 시 `Schema \`toyproject\` is up to date`*
+- [x] (3단계) `(provider, providerId)` 중복 가입 방지 — 유니크 제약이 엔티티에도 선언돼 H2 테스트에서 재현되는지 함께 확인 — *자동 테스트: `UserRepositoryTest`*
+- [x] (4단계) `KakaoOAuthClient`가 API 실패 시 `BusinessException`으로 변환 (`MockRestServiceServer`) — *자동 테스트: `KakaoOAuthClientTest`*
 
 ---
 
@@ -268,8 +270,8 @@ SHOW TABLES;                                                       -- users, ref
 - ⚠️ 이때 **HTTP 상태를 하드코딩하지 말고 `errorCode.getHttpStatus()` 사용** — EntryPoint가 403(`WITHDRAWN_USER`)까지 함께 내리므로, `401`을 박아두면 A008이 401로 뭉개진다
 
 **체크포인트**
-- [ ] 비인증 접근 시 401(A001), CORS 통과/차단 동작 (preflight 포함, `credentials: 'include'`)
-- [ ] EntryPoint가 `errorCode.getHttpStatus()`로 401/403을 분기 (A008이 401로 뭉개지지 않는지)
+- [x] 비인증 접근 시 401(A001), CORS 통과/차단 동작 (preflight 포함, `credentials: 'include'`) — *E2E 2026-08-26: 401 A001 / preflight 허용 origin 200+credentials, 미허용 403*
+- [x] EntryPoint가 `errorCode.getHttpStatus()`로 401/403을 분기 (A008이 401로 뭉개지지 않는지) — *자동 테스트: `JwtAuthenticationIntegrationTest`*
 
 ---
 
@@ -288,12 +290,12 @@ SHOW TABLES;                                                       -- users, ref
 - 만료 row 정리 배치는 후속 과제 (`expiresAt` 검사로 거절되므로 기능상 무해)
 
 **체크포인트**
-- [ ] 재발급 시 access token만 갱신되고 refresh 쿠키는 유지 (응답에 `Set-Cookie` 없음)
-- [ ] 동일 refresh token으로 연속 재발급 시 매번 성공
-- [ ] `token_hash`에 원문이 아닌 SHA-256 해시가 저장됨
-- [ ] `expiresAt` 지난 토큰으로 재발급 시 A007 (row가 남아 있어도 거절)
-- [ ] 로그아웃 직후 같은 토큰으로 재발급 시 A007
-- [ ] 인증 통과 후 상태가 바뀐 경합에서 `UserService`가 **필터와 같은 규칙**으로 사유를 구분하는지 — row 없음 **A001(401)**, 탈퇴 **A008(403)**.
+- [x] 재발급 시 access token만 갱신되고 refresh 쿠키는 유지 (응답에 `Set-Cookie` 없음) — *자동 테스트+E2E 2026-08-26*
+- [x] 동일 refresh token으로 연속 재발급 시 매번 성공 — *자동 테스트: `AuthServiceTest`*
+- [x] `token_hash`에 원문이 아닌 SHA-256 해시가 저장됨 — *E2E 2026-08-26: MySQL에서 `CHAR_LENGTH=64` 확인*
+- [x] `expiresAt` 지난 토큰으로 재발급 시 A007 (row가 남아 있어도 거절) — *자동 테스트: `AuthServiceTest`*
+- [x] 로그아웃 직후 같은 토큰으로 재발급 시 A007 — *E2E 2026-08-26: 로그아웃·탈퇴 후 A007*
+- [x] 인증 통과 후 상태가 바뀐 경합에서 `UserService`가 **필터와 같은 규칙**으로 사유를 구분하는지 — row 없음 **A001(401)**, 탈퇴 **A008(403)**. — *자동 테스트: `UserServiceTest`*
       미존재를 404로 내리지 않는 이유는 이 API가 회원을 지목하지 않기 때문이다(경로에 `{userId}`가 없다) — "없는 리소스"가 아니라 "무효해진 세션"이라 FE의 401 인터셉터가 흡수해야 한다.
       A007처럼 뭉개지 않는 이유는 저쪽의 뭉개기가 토큰 존재 여부를 흘리지 않기 위한 정보 은닉이기 때문이다 — 여기는 자기 자신의 상태라 은닉할 대상이 없다
 
@@ -317,8 +319,8 @@ SHOW TABLES;                                                       -- users, ref
 ⚠️ 탈퇴 사유를 attribute로 넘기지 않으면 A008은 **절대 반환되지 않는 죽은 코드**가 된다(전부 A001으로 뭉개짐).
 
 **체크포인트**
-- [ ] 만료/위조 토큰이 A004/A003로 **구분**되어 응답
-- [ ] 탈퇴 회원의 유효한 access token → **A008(403)** (A001으로 뭉개지면 실패)
+- [x] 만료/위조 토큰이 A004/A003로 **구분**되어 응답 — *자동 테스트: `JwtAuthenticationIntegrationTest`*
+- [x] 탈퇴 회원의 유효한 access token → **A008(403)** (A001으로 뭉개지면 실패) — *자동 테스트: `JwtAuthenticationIntegrationTest`, `UserControllerTest`*
 
 ---
 
@@ -461,29 +463,33 @@ FE는 **인가코드를 다루지 않는다.** authorize URL 조립도, 콜백 `
 7. refresh 단일 Promise 묶기는 권장(필수 아님) — rotation이 없어 동시 호출도 모두 성공한다
 
 **체크포인트**
-- [ ] `/kakao/authorize` 접속 → 카카오 로그인 → `/oauth/complete` 복귀 → silent refresh → `GET /api/users/me`까지 **브라우저에서 전체 플로우 통과**
-- [ ] **`oauth_state` 쿠키가 콜백 요청에 실제로 실려 오는지** (`Lax`가 아니면 여기서 깨진다 — 가장 먼저 확인할 것)
-- [ ] state 불일치·누락 시 A009로 FE에 `?error=` 전달, 콜백 재사용(뒤로가기) 시에도 A009
+- [x] `/kakao/authorize` 접속 → 카카오 로그인 → `/oauth/complete` 복귀 → silent refresh → `GET /api/users/me`까지 **브라우저에서 전체 플로우 통과** — *E2E 2026-08-26*
+- [x] **`oauth_state` 쿠키가 콜백 요청에 실제로 실려 오는지** (`Lax`가 아니면 여기서 깨진다 — 가장 먼저 확인할 것) — *E2E 2026-08-26: 콜백 요청 헤더에서 확인*
+- [x] state 불일치·누락 시 A009로 FE에 `?error=` 전달, 콜백 재사용(뒤로가기) 시에도 A009 — *E2E 2026-08-26: 뒤로가기 재진입 시 `oauth_state 누락 — query=true, cookie=false` 로그 후 A009*
 - [ ] 카카오 동의 화면에서 취소 시 FE로 `?error=` 전달 (예외 페이지 노출 없음)
-- [ ] 콜백 응답이 **JSON이 아니라 302**인지, `ApiResponse` 포맷이 브라우저에 노출되지 않는지
-- [ ] **어떤 응답에도 access token이 URL/쿼리스트링에 실리지 않는지**
-- [ ] 동일 계정 재로그인 시 기존 User로 인증 (신규 생성 아님) / 탈퇴 후 재로그인 시 자동 재활성화(ACTIVE)
-- [ ] `refresh_token` 쿠키에 `HttpOnly`/`Secure`/`SameSite=Strict`/`Path=/api/auth` 전부 포함
-- [ ] 쿠키 없이 `/api/auth/refresh` → A007(401)
-- [ ] 로그아웃·탈퇴 후 브라우저에서 쿠키가 **실제로 사라지는지** (`Path` 누락 시 안 지워짐)
+      — *브라우저 미확인*: 이미 동의한 계정은 동의 화면이 뜨지 않아 재현하려면 매번 연결 해제가 필요하다.
+      `AuthControllerTest`가 같은 분기(`?error=`를 그대로 FE로 넘김)를 덮고 있다
+- [x] 콜백 응답이 **JSON이 아니라 302**인지, `ApiResponse` 포맷이 브라우저에 노출되지 않는지 — *E2E 2026-08-26+자동 테스트: `AuthControllerTest`가 실패 분기까지 302로 고정*
+- [x] **어떤 응답에도 access token이 URL/쿼리스트링에 실리지 않는지** — *E2E 2026-08-26: 복귀 URL에 토큰 없음*
+- [x] 동일 계정 재로그인 시 기존 User로 인증 (신규 생성 아님) / 탈퇴 후 재로그인 시 자동 재활성화(ACTIVE) — *E2E 2026-08-26: 탈퇴 후 재로그인에 `id=1` 유지·`ACTIVE` 복구·`created_at` 불변*
+- [x] `refresh_token` 쿠키에 `HttpOnly`/`Secure`/`SameSite=Strict`/`Path=/api/auth` 전부 포함 — *자동 테스트: `CookieUtilTest`* (local은 `Secure=false`가 정상)
+- [x] 쿠키 없이 `/api/auth/refresh` → A007(401) — *E2E 2026-08-26: 401 A007*
+- [x] 로그아웃·탈퇴 후 브라우저에서 쿠키가 **실제로 사라지는지** (`Path` 누락 시 안 지워짐)
+      — *E2E 2026-08-26*: 탈퇴 후 재발급이 A007. 단 `refresh_tokens` row도 0건이라 **쿠키 삭제 단독 증거는 아니다**.
+      쿠키 속성은 `CookieUtilTest`가 발급·삭제의 `Path` 일치를 고정한다
 
 **도메인 경계 체크포인트**
-- [ ] `domain/user`의 **서비스**가 auth 컴포넌트(`AuthService`·`RefreshTokenRepository`·`KakaoOAuthClient`)를 주입하지 않는지.
+- [x] `domain/user`의 **서비스**가 auth 컴포넌트(`AuthService`·`RefreshTokenRepository`·`KakaoOAuthClient`)를 주입하지 않는지. — *코드 검사: `UserService`는 `UserRepository`만 주입*
       **컨트롤러는 예외다** — 탈퇴 순서를 `UserController`가 소유하므로 `AuthService`를 주입한다.
       컨트롤러는 유스케이스를 조립하는 자리라 양쪽을 알아도 되지만, 서비스끼리 얽히면 되돌리기 어렵다.
       (원래 문구는 "`domain/user` 어디에도 `domain.auth` import가 없는지"였는데, 같은 문서의 탈퇴 설계와
       모순이라 계층을 명시하도록 고쳤다.)
-- [ ] ErrorCode enum 참조는 공유 어휘라 경계 위반이 아니다 — `UserService`가 회원 미존재에 A001,
+- [x] ErrorCode enum 참조는 공유 어휘라 경계 위반이 아니다 — `UserService`가 회원 미존재에 A001, — *설계 확인*
       탈퇴에 A008을 쓴다. 막으려는 것은 <b>동작</b> 의존이다
-- [ ] `domain/auth` 어디에도 `UserRepository` 주입이 없는지 (`UserService`만 경유)
-- [ ] 신규 카카오 로그인 시 User가 `AuthService`가 아니라 `UserService.findOrCreateKakaoUser`에서 생성되는지
-- [ ] 탈퇴 중 `revokeAllTokens`가 실패하면 회원이 ACTIVE로 남는지 (fail-closed)
-- [ ] 카카오 `unlink` 실패가 탈퇴를 막지 않는지 (로그만 남고 200)
+- [x] `domain/auth` 어디에도 `UserRepository` 주입이 없는지 (`UserService`만 경유) — *코드 검사: Javadoc 언급만 있고 주입 없음*
+- [x] 신규 카카오 로그인 시 User가 `AuthService`가 아니라 `UserService.findOrCreateKakaoUser`에서 생성되는지 — *코드 검사: `User.ofKakao` 호출부는 `UserService` 하나뿐*
+- [x] 탈퇴 중 `revokeAllTokens`가 실패하면 회원이 ACTIVE로 남는지 (fail-closed) — *자동 테스트: `AuthServiceTest`*
+- [x] 카카오 `unlink` 실패가 탈퇴를 막지 않는지 (로그만 남고 200) — *자동 테스트: `AuthServiceTest`, `UserControllerTest`*
 
 ---
 
