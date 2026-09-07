@@ -72,10 +72,11 @@ Redirect URI에 **`http://localhost:8080/api/auth/kakao/callback`** 을 등록�
 
 ```bash
 ./gradlew bootRun     # http://localhost:8080
-./gradlew test        # 13개 클래스 137개 케이스
+./gradlew test        # 전체 테스트
 ```
 
 테스트는 H2 인메모리로 돌기 때문에 MySQL이 없어도 통과한다.
+현재 테스트 규모는 [docs/roadmap.md](docs/roadmap.md)에 있다.
 
 ## 문서
 

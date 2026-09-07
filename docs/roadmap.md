@@ -48,7 +48,7 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 
 | 구현물 | 위치 |
 |---|---|
-| `ApiResponse<T>` — `{success, data, error}` | `global/response/ApiResponse.java` |
+| `ApiResponse<T>` | `global/response/ApiResponse.java` |
 | `ErrorResponse` (+ `FieldError`) | `global/response/ErrorResponse.java` |
 | `PageResponse<T>` | `global/response/PageResponse.java` |
 | `ErrorCode` (interface) + `CommonErrorCode` | `global/exception/` |
