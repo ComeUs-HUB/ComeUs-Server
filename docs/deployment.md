@@ -12,7 +12,9 @@ Dockerfile, docker-compose.yml, `.github/workflows` 모두 부재다.
 브라우저가 cross-site 요청에 쿠키를 **아예 첨부하지 않아 `/api/auth/refresh`·`/logout`이 전면
 동작 불능**이 된다. 보안이 약해지는 게 아니라 **인증 기능이 파손된다.**
 
-분리 배포가 불가피해지면 `SameSite=None; Secure` 전환과 **CSRF 토큰 도입을 함께** 진행해야 한다.
+분리 배포가 불가피해지면 **`refresh_token`의** `SameSite=None; Secure` 전환과
+**CSRF 토큰 도입을 함께** 진행해야 한다. (`oauth_state`는 kakao→BE 구간이라 FE 배포 위치와 무관하다 —
+계속 `Lax`로 둔다.)
 근거: [ADR 0006](decisions/0006-cookie-samesite-and-path.md).
 
 이것이 배포 방식이 인증 설계를 되짚는 유일한 지점이므로, 호스팅을 고르기 전에 확인한다.

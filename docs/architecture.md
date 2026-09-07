@@ -88,6 +88,9 @@ com.toyproject.backend
 - JWT Access Token(30분) + Refresh Token(7일)
 - **Access Token은 응답 바디 → FE 메모리**, **Refresh Token은 `HttpOnly` 쿠키**.
   어떤 토큰도 `localStorage`/`sessionStorage`에 저장하지 않고, access token을 URL에 싣지 않는다
+- **쿠키는 2종이고 `SameSite`가 서로 다르다** — 자격증명인 `refresh_token`은 **`Strict`**,
+  OAuth 왕복용 `oauth_state`는 **`Lax`**. `Path`·`Max-Age` 등 나머지 속성과 근거는
+  [domains/auth.md](domains/auth.md)의 쿠키 표에 있다
 - Refresh Token은 DB `refresh_tokens`에 SHA-256 해시로 저장 (추후 Redis 교체 가능)
   — [ADR 0005](decisions/0005-opaque-refresh-token-hashed-in-db.md)
 - 401·403은 `JwtAuthenticationEntryPoint` 하나가 전담. `AccessDeniedHandler`를 두지 않는다
@@ -98,8 +101,16 @@ com.toyproject.backend
 명시 목록. CORS가 필요한 것은 `/refresh`·`/logout`·`/users/me` **뿐**이다 —
 `/kakao/authorize`·`/kakao/callback`은 XHR이 아니라 브라우저 top-level 네비게이션이라 CORS가 적용되지 않는다.
 
-**CSRF 토큰을 두지 않는 근거**: `SameSite=Strict`가 cross-site 요청에 쿠키를 붙이지 않아 원천 차단된다.
-⚠️ 이 전제는 **FE/BE를 동일 상위 도메인에 배포**하는 것에 의존한다. 깨지면 CSRF 토큰 도입이 필수가 된다
+⚠️ **`oauth_state`를 `Strict`로 바꾸면 로그인이 전부 실패한다.** 카카오 콜백은 `kauth.kakao.com` →
+API 호스트로의 **cross-site top-level GET 네비게이션**이라 `Strict` 쿠키가 전송되지 않는다. 그러면
+`AuthController.matchesState`가 `false`를 반환해 A009로 리다이렉트되고 로그인이 중단된다.
+`Lax`는 top-level GET에 한해 전송되므로 `oauth_state`는 **반드시 `Lax`여야 한다.**
+
+**CSRF 토큰을 두지 않는 근거**: 자격증명 쿠키인 **`refresh_token`이 `SameSite=Strict`**라
+cross-site 요청에 붙지 않아 원천 차단된다. (`oauth_state`는 자격증명이 아니라 CSRF 방어값 자체이므로
+이 논증과 무관하다. 인증된 API는 쿠키가 아닌 `Bearer` 토큰을 쓴다.)
+⚠️ 이 근거와, **FE/BE를 동일 상위 도메인에 배포**한다는 전제는 **둘 다 `refresh_token`의 `Strict`에서만
+파생된다.** 전제가 깨져 `refresh_token`을 `SameSite=None`으로 바꾸면 CSRF 토큰 도입이 필수가 된다
 — [ADR 0006](decisions/0006-cookie-samesite-and-path.md), [deployment.md](deployment.md).
 
 ## RBAC 권한 매트릭스
