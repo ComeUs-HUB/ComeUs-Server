@@ -9,6 +9,13 @@
 
 ```java
 public record ApiResponse<T>(boolean success, T data, ErrorResponse error) {
+
+    public ApiResponse {                                    // 불변식을 생성자가 강제한다
+        if (success && error != null)  throw new IllegalArgumentException("...");
+        if (!success && error == null) throw new IllegalArgumentException("...");
+        if (!success && data != null)  throw new IllegalArgumentException("...");
+    }
+
     public static <T> ApiResponse<T> success(T data) { return new ApiResponse<>(true, data, null); }
     public static ApiResponse<Void> error(ErrorResponse error) { return new ApiResponse<>(false, null, error); }
 }
@@ -21,7 +28,31 @@ public record ApiResponse<T>(boolean success, T data, ErrorResponse error) {
 { "success": false, "data": null, "error": { "code": "A007", "message": "...", "errors": null } }
 ```
 
-- `data`와 `error`는 **항상 배타적**이다. 동시에 값이 있으면 안 된다.
+### 불변식 — 생성자가 강제한다
+
+`success`는 사실상 **파생값**이다: `success == (error == null)`. 아래는 규율이 아니라 기계가 막는다.
+
+| success | data | error | |
+|---|---|---|---|
+| `true` | 값 | `null` | 일반 성공 |
+| `true` | `null` | `null` | **유효** — 데이터 없는 성공(로그아웃·탈퇴) |
+| `false` | `null` | 값 | 일반 실패 |
+| 나머지 5조합 | | | `IllegalArgumentException` |
+
+- `data`와 `error`는 **배타적**이다. 동시에 값을 가질 수 없다.
+- ⚠️ **`(true, null, null)`을 막으면 안 된다.** "정확히 하나만 non-null"로 조이는 순간
+  `POST /api/auth/logout`과 `DELETE /api/users/me`가 500으로 깨진다.
+- `ApiResponse.error(null)`도 거부된다 — `error` 없는 실패 응답은 클라이언트가 `error.code`를
+  읽을 수 없어 성립하지 않는다.
+- 위반은 `IllegalArgumentException`이다. 도메인 실패가 아니라 **프로그래밍 오류**이므로
+  `BusinessException`으로 감싸지 않고 fallback(`C003`, 500)으로 떨어진다.
+- **왜 생성자에서 막는가**: record의 canonical constructor는 record보다 접근성을 낮출 수 없다.
+  `public record`면 생성자도 public이 강제되어 `private`으로 숨겨 정적 팩터리 사용을 강요할 수 없다.
+  compact constructor가 계약을 코드로 지키는 유일한 수단이다.
+- 위 8개 조합은 `ApiResponseTest`가 고정한다.
+
+### 그 밖의 규칙
+
 - **인자 없는 `success()` 정적 팩토리는 만들지 않는다.** record 컴포넌트 `success`(boolean)의 자동 생성
   접근자 `success()`와 시그니처가 충돌해 컴파일 에러가 난다(static/instance 무관). 데이터 없는 성공 응답은
   `ApiResponse.<Void>success(null)`로 반환한다.
@@ -83,7 +114,9 @@ Spring Data `Pageable`을 컨트롤러 파라미터로 바인딩한다(`page`, `
 
 ## 지킬 것
 
-- `data`/`error` 동시 존재 없음
+사람이 확인해야 하는 것만 남긴다. `data`/`error` 배타성과 `success` 일관성은
+`ApiResponse` 생성자가 막으므로 여기 두지 않는다.
+
 - 모든 컨트롤러가 `ResponseEntity<ApiResponse<T>>` 반환 (302 반환하는 OAuth 2개 제외)
 - 201 응답에 `Location` 헤더 포함
 - 에러 응답의 HTTP 상태 == `ErrorCode.getHttpStatus()` (하드코딩 금지)
