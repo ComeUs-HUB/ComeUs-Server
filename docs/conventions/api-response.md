@@ -57,7 +57,32 @@ public record ApiResponse<T>(boolean success, T data, ErrorResponse error) {
   접근자 `success()`와 시그니처가 충돌해 컴파일 에러가 난다(static/instance 무관). 데이터 없는 성공 응답은
   `ApiResponse.<Void>success(null)`로 반환한다.
 - 삭제(DELETE) 성공 응답은 **200 + `data: null`**. 204는 쓰지 않는다 — 바디가 없으면 공통 포맷이 깨진다.
-- 모든 컨트롤러는 `ResponseEntity<ApiResponse<T>>`를 반환한다.
+
+### 컨트롤러 반환 타입
+
+**`ResponseEntity`는 헤더나 상태 코드를 직접 정해야 할 때만 쓴다.** 그 외에는 `ApiResponse<T>`를
+그대로 반환한다 — Spring이 200으로 내보낸다.
+
+| 필요한 것 | 반환 타입 |
+|---|---|
+| 200 + 바디만 | `ApiResponse<T>` |
+| 헤더(`Set-Cookie` 등) 또는 200 이외의 상태 | `ResponseEntity<ApiResponse<T>>` |
+| 302 리다이렉트 (바디 없음) | `ResponseEntity<Void>` |
+
+판단 여지를 두지 않기 위한 기계적 규칙이다. 덕분에 **시그니처만 봐도 그 응답이 헤더를 건드리는지**
+알 수 있다 — `POST /api/auth/refresh`가 `ApiResponse<TokenResponse>`인 것은 rotation을 하지 않아
+**재발급 응답에 `Set-Cookie`가 없다**는 뜻이다
+([ADR 0004](../decisions/0004-no-refresh-token-rotation.md)). 전부 `ResponseEntity`로 감싸면
+이 신호가 사라진다.
+
+**예외 처리와는 무관하다.** 예외가 나면 컨트롤러는 반환값을 만들지 못하고 종료하며, 응답은
+`GlobalExceptionHandler`가 만든다. 두 반환 타입이 한 응답에서 만나는 일이 없으므로,
+plain 반환이어도 실패 시 상태 코드는 정상적으로 내려간다
+(`refresh`의 A007 → 401을 `AuthControllerTest`가 고정하고 있다).
+
+`@ExceptionHandler`가 `ResponseEntity`를 쓰는 것도 같은 규칙이다 — `errorCode.getHttpStatus()`가
+401·403·500으로 **런타임에 달라지기** 때문이다. plain 반환은 항상 200이 되고, `@ResponseStatus`는
+컴파일 타임 고정값이라 쓸 수 없다.
 
 **예외**: `GET /api/auth/kakao/authorize`와 `/callback`은 이 포맷을 따르지 않는다. 항상 302이며,
 실패도 예외를 던지지 않고 `{FE}/oauth/complete?error={code}`로 리다이렉트한다.
@@ -117,7 +142,7 @@ Spring Data `Pageable`을 컨트롤러 파라미터로 바인딩한다(`page`, `
 사람이 확인해야 하는 것만 남긴다. `data`/`error` 배타성과 `success` 일관성은
 `ApiResponse` 생성자가 막으므로 여기 두지 않는다.
 
-- 모든 컨트롤러가 `ResponseEntity<ApiResponse<T>>` 반환 (302 반환하는 OAuth 2개 제외)
+- 컨트롤러 반환 타입이 위 표와 맞는지 — 헤더·상태 제어가 없는데 `ResponseEntity`로 감싸지 않았는지
 - 201 응답에 `Location` 헤더 포함
 - 에러 응답의 HTTP 상태 == `ErrorCode.getHttpStatus()` (하드코딩 금지)
 - `rejectedValue` 200자 제한 적용
