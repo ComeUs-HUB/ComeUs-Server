@@ -71,9 +71,17 @@ com.toyproject.backend
 
 ## 의존 규칙
 
-- **`domain → global` 단방향.** `global`이 `domain.*`를 import하면 안 된다
-  - 예외: `global/security`는 Spring Security 어댑터라 도메인을 참조한다(프레임워크 결합 지점).
-    그 외 `global` 패키지에는 적용되지 않는다
+- **`domain → global` 단방향.** `global`의 **재사용 부품** — `global/response`·`global/exception`·
+  `global/util` — 은 `domain`을 import하지 않는다. 어느 도메인에서도 쓰일 수 있어야 하기 때문이다
+  - **예외는 Spring Security 배선뿐이다**: `global/security` 전체와 `global/config/SecurityConfig`.
+    프레임워크가 도메인 타입(`User`, `JwtProvider`, `AuthErrorCode`)을 직접 요구하는 결합 지점이라
+    피할 수 없다. `SecurityConfig`는 `JwtProvider`를 주입받아 `JwtAuthenticationFilter`를 조립한다
+  - 이 규칙은 한 줄로 판정된다:
+    ```bash
+    grep -rn "^import com.toyproject.backend.domain" src/main/java/com/toyproject/backend/global/ \
+      | grep -v "global/security/\|global/config/SecurityConfig.java"
+    #   → 비어야 한다
+    ```
 - **도메인 간 참조는 단방향으로 유지한다.** 현재 유일한 도메인 간 의존은 `auth → user`이며,
   auth는 `UserRepository`가 아니라 `UserService`의 공개 메서드만 경유한다
   ([domains/auth.md](domains/auth.md))

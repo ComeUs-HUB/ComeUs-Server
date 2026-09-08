@@ -146,4 +146,10 @@ Spring Data `Pageable`을 컨트롤러 파라미터로 바인딩한다(`page`, `
 - 201 응답에 `Location` 헤더 포함
 - 에러 응답의 HTTP 상태 == `ErrorCode.getHttpStatus()` (하드코딩 금지)
 - `rejectedValue` 200자 제한 적용
-- `global`이 `domain.*`를 import하지 않음
+- `global/response`·`global/exception`·`global/util`이 `domain.*`를 import하지 않음
+  (Spring Security 배선인 `global/security`·`global/config/SecurityConfig`만 예외 —
+  [architecture.md](../architecture.md)의 의존 규칙). 확인:
+  ```bash
+  grep -rn "^import com.toyproject.backend.domain" src/main/java/com/toyproject/backend/global/ \
+    | grep -v "global/security/\|global/config/SecurityConfig.java"
+  ```

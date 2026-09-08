@@ -18,7 +18,11 @@ public interface ErrorCode {          // global/exception/ErrorCode.java
 ```
 
 `BusinessException`은 필드 타입을 이 **인터페이스**로 들고 있어, 새 도메인이 생겨도 global을 고치지 않는다.
-의존 방향은 `domain → global` 단방향이다.
+의존 방향은 `domain → global` 단방향이다 — `global/exception`은 어떤 도메인의 `*ErrorCode`도 알지 못한다.
+
+> **예외**: `global/security`와 `global/config/SecurityConfig`는 `AuthErrorCode`를 직접 참조한다.
+> 필터 단계라 `GlobalExceptionHandler`를 타지 않아 Spring Security 배선이 직접 코드를 골라야 하기 때문이다.
+> 자세한 범위는 [architecture.md](../architecture.md)의 의존 규칙을 참고한다.
 
 명명 규칙: **`{도메인 접두사}{3자리 일련번호}`**. 새 실패 케이스는 해당 도메인 enum의 다음 번호로 잇는다.
 
