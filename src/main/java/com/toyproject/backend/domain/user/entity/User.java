@@ -158,6 +158,23 @@ public class User {
         this.withdrawnAt = null;
     }
 
+    /**
+     * [Phase 3 · 1단계] ADMIN 승격.
+     *
+     * <p><b>이 메서드를 호출하는 API는 없다.</b> ADMIN 발급은 운영자가 DB에서 직접 한다
+     * ({@code UPDATE users SET role = 'ADMIN' WHERE id = ?}). 그런데도 메서드를 두는 이유는
+     * 이 엔티티가 <b>Setter를 만들지 않는다</b>는 규칙 때문이다 — {@code role}을 바꾸는 경로가
+     * 코드에 필요해지는 순간(테스트가 ADMIN 회원을 만들 때) 그 경로도 이름이 붙은 도메인 메서드여야 한다.
+     * 승격 API가 생기면 그 API가 이 메서드를 호출한다.
+     *
+     * <p><b>승격은 재로그인 없이 즉시 반영된다.</b> {@code role}은 access token의 claim이 아니라
+     * {@code CustomUserDetailsService}가 매 요청 DB에서 다시 읽는 값이다. 이미 발급된 토큰을
+     * 그대로 쓰면서 권한만 올라간다 — claim을 신뢰하는 구조였다면 토큰 만료(30분)를 기다려야 했다.
+     */
+    public void promoteToAdmin() {
+        this.role = Role.ADMIN;
+    }
+
     public boolean isWithdrawn() {
         return this.status == UserStatus.WITHDRAWN;
     }
