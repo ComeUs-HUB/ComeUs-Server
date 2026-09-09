@@ -33,11 +33,16 @@ import java.nio.charset.StandardCharsets;
  *   <li>{@code Content-Type: application/json} + {@code charset=UTF-8}을 명시한다(한글 메시지가 깨진다).</li>
  * </ul>
  *
- * <p><b>{@code AccessDeniedHandler}를 두지 않는 근거</b><br>
+ * <p><b>{@link JwtAccessDeniedHandler}와의 경계</b><br>
  * {@link JwtAuthenticationFilter}가 예외 시 {@code SecurityContext}를 비운 채 체인을 통과시키므로,
- * Spring Security는 이를 <b>미인증(anonymous)</b>으로 보고 항상 {@code AuthenticationEntryPoint}를 호출한다.
- * {@code AccessDeniedHandler}는 <i>인증은 됐는데 권한이 부족한</i> 경우에만 불리므로 현재 설계에는
- * 도달 경로가 없다. ADMIN 권한 체크가 들어오는 phase6에서 재검토한다.
+ * Spring Security는 이를 <b>미인증(anonymous)</b>으로 보고 <b>항상</b> 이 EntryPoint를 호출한다 —
+ * 익명 주체에게는 {@code AccessDeniedException}이 나도 {@code AccessDeniedHandler}가 아니라
+ * 여기로 온다. 즉 <b>위 표의 4종은 전부 이 클래스가 내보낸다.</b>
+ *
+ * <p>Phase 2까지는 그 이유로 {@code AccessDeniedHandler} 자체를 두지 않았다(도달 경로가 없었다).
+ * Phase 3에서 {@code hasRole("ADMIN")}이 붙으면서 <i>인증은 됐는데 권한이 부족한</i> 경로가 처음 생겨
+ * {@link JwtAccessDeniedHandler}가 추가됐고, <b>그쪽은 A002만</b> 담당한다.
+ * 두 클래스의 응답 조립 방식을 일부러 똑같이 맞춰 두었으니 한쪽을 고치면 다른 쪽도 함께 본다.
  *
  * <p><b>주의</b><br>
  * ⚠️ HTTP 상태를 <b>하드코딩하지 말고 {@code errorCode.getHttpStatus()}를 쓴다.</b>

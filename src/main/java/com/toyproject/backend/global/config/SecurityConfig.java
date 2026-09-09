@@ -2,6 +2,7 @@ package com.toyproject.backend.global.config;
 
 import com.toyproject.backend.domain.auth.token.JwtProvider;
 import com.toyproject.backend.global.security.CustomUserDetailsService;
+import com.toyproject.backend.global.security.JwtAccessDeniedHandler;
 import com.toyproject.backend.global.security.JwtAuthenticationEntryPoint;
 import com.toyproject.backend.global.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
@@ -73,6 +74,7 @@ public class SecurityConfig {
     private final JwtProvider jwtProvider;
     private final CustomUserDetailsService userDetailsService;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+    private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
     private final AppProperties appProperties;
 
     @Bean
@@ -84,8 +86,12 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // AccessDeniedHandler는 등록하지 않는다 — 도달 경로가 없다(EntryPoint Javadoc 참고).
-                .exceptionHandling(handling -> handling.authenticationEntryPoint(jwtAuthenticationEntryPoint))
+                // 401은 EntryPoint, 403(권한 부족)은 AccessDeniedHandler가 나눠 맡는다.
+                // 익명 요청은 AccessDeniedException이어도 EntryPoint로 가므로 기존 동작은 그대로다
+                // (JwtAccessDeniedHandler Javadoc 참고).
+                .exceptionHandling(handling -> handling
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(jwtAccessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, PERMIT_ALL_GET).permitAll()
                         .requestMatchers(HttpMethod.POST, PERMIT_ALL_POST).permitAll()
