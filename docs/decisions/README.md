@@ -27,3 +27,5 @@
 | [0008](0008-flyway-owns-schema.md) | 스키마 소유자는 Flyway (`ddl-auto: validate`) | 채택 |
 | [0009](0009-signup-race-retry-at-login-boundary.md) | 가입 경합을 로그인 경계에서 1회 재시도로 흡수 | 채택 |
 | [0010](0010-access-denied-handler-for-authorization.md) | 인가 실패(403)는 `JwtAccessDeniedHandler`가 맡는다 | 채택 |
+| [0011](0011-jpa-specification-for-product-filter.md) | 상품 목록의 동적 필터는 JPA Specification으로 시작 | 채택 |
+| [0012](0012-image-urls-in-separate-table.md) | 상품·리뷰 이미지는 별도 테이블에 URL만 저장 | 채택 |

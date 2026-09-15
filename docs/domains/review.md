@@ -30,4 +30,7 @@ id, user, product, order, rating(1~5), content, imageUrls, createdAt
 
 - 중복 방지 단위 — **주문 단위인지 주문 내 개별 상품 단위인지.** 한 주문에 여러 상품이 있을 수 있다
 - 평균 평점 집계 방식 — 매 조회 시 실시간 집계 vs 상품 엔티티에 캐시된 값 유지 (성능 관점)
-- 이미지 저장 방식은 [catalog.md](catalog.md)의 상품 이미지와 **일관되게 정한다**
+
+이미지 저장 방식은 **정해졌다** — `review_images` 별도 테이블에 URL만 담고, 스토리지는 로컬로
+시작해 추후 AWS S3로 옮긴다. 상품 이미지와 같은 방식이다
+([ADR 0012](../decisions/0012-image-urls-in-separate-table.md)).

@@ -211,7 +211,6 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 - [ ] **LOCAL 로그인** — `V3__add_password.sql`(V2는 카테고리가 가져갔다) + `PasswordEncoder` + `Provider.LOCAL` +
       `AuthErrorCode`에 `INVALID_CREDENTIALS` 재추가.
       [ADR 0001](decisions/0001-kakao-only-oauth.md)
-- [ ] **상품·리뷰 이미지 저장 방식** — 로컬 vs S3 등 외부 스토리지
 - [ ] **외부 PG 연동** — 포트원 등. 현재 Mock 전제
 - [ ] **Redis 도입** — Refresh Token 저장, 인기 상품 캐싱
 - [ ] **쿠폰 / 포인트 도메인** 추가 여부
@@ -219,3 +218,7 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 
 확정된 것:
 - [x] 소셜 로그인은 **카카오 전용** — 구글 등 추가는 `Provider` enum 상수 추가로 확장
+- [x] **상품 목록 동적 필터는 JPA Specification** — 복잡해지면 QueryDSL로 리팩터링.
+      [ADR 0011](decisions/0011-jpa-specification-for-product-filter.md)
+- [x] **상품·리뷰 이미지는 별도 테이블에 URL만** — 스토리지는 로컬 → 추후 AWS S3.
+      [ADR 0012](decisions/0012-image-urls-in-separate-table.md)

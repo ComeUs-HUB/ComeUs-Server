@@ -52,8 +52,11 @@ id, name, parentCategory(self-join, nullable), displayOrder, createdAt
 
 ### 엔티티
 
-id, name, description, price, stockQuantity, category, imageUrls,
+id, name, description, price, stockQuantity, category,
 status(ON_SALE/SOLD_OUT/HIDDEN), createdAt, updatedAt
+
+이미지는 이 테이블에 두지 않는다 — `product_images`가 `product_id`로 참조하며 URL만 담는다
+([ADR 0012](../decisions/0012-image-urls-in-separate-table.md)).
 
 ### API
 
@@ -74,10 +77,16 @@ status(ON_SALE/SOLD_OUT/HIDDEN), createdAt, updatedAt
   ([conventions/api-response.md](../conventions/api-response.md)).
   **이 도메인이 `PageResponse`의 첫 실사용처가 된다**
 
+### 확정된 것
+
+- **동적 필터는 JPA Specification으로 시작한다.** 조건이 복잡해지면 QueryDSL로 리팩터링하며,
+  전환 신호를 ADR에 적어 뒀다 — [ADR 0011](../decisions/0011-jpa-specification-for-product-filter.md).
+  Specification 조립은 한곳에 모은다(서비스로 흩뿌리지 않는다) — 그것이 전환 비용을 정한다
+- **이미지는 `product_images` 별도 테이블에 URL만 저장한다.** 스토리지는 로컬로 시작해
+  추후 AWS S3로 옮기며, URL만 저장하므로 전환에 스키마 변경이 없다 —
+  [ADR 0012](../decisions/0012-image-urls-in-separate-table.md).
+  리뷰 이미지도 **같은 방식**이다([review.md](review.md))
+
 ### 착수 전 정할 것
 
-- 필터(카테고리·가격 범위·키워드) 조합을 어떤 방식으로 구현할지 — QueryDSL, JPA Specification 등.
-  조건이 늘어날 것을 전제로 고른다
 - 품절 자동 전환을 엔티티 책임으로 둘지 서비스 책임으로 둘지
-- 이미지 저장 방식(로컬 vs 외부 스토리지) — 우선 URL 목록만 저장하는 구조로 시작할지.
-  [review.md](review.md)의 리뷰 이미지와 **같은 방식으로 정한다**
