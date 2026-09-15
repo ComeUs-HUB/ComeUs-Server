@@ -133,9 +133,10 @@ Spring Data `Pageable`을 컨트롤러 파라미터로 바인딩한다(`page`, `
 이 외 예외(`HttpMediaTypeNotSupportedException`, `MissingServletRequestParameterException` 등)는
 **실제로 필요해질 때 이 표에 추가한다.** 미리 늘리지 않는다.
 
-⚠️ **401/403은 이 핸들러를 타지 않는다.** 필터 단계에서 발생하므로 `JwtAuthenticationEntryPoint`가
+⚠️ **401/403은 이 핸들러를 타지 않는다.** 필터 단계에서 발생하므로 인증 실패는
+`JwtAuthenticationEntryPoint`가, 인가 실패(403)는 `JwtAccessDeniedHandler`가
 `ObjectMapper`로 같은 포맷의 JSON을 직접 쓴다 —
-[ADR 0007](../decisions/0007-single-entrypoint-for-401-403.md).
+[ADR 0010](../decisions/0010-access-denied-handler-for-authorization.md).
 
 ## 지킬 것
 

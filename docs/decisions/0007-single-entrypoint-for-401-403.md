@@ -1,6 +1,6 @@
 # ADR 0007 — 401·403을 `JwtAuthenticationEntryPoint` 하나가 전담
 
-- 상태: 채택
+- 상태: 대체됨 → [ADR 0010](0010-access-denied-handler-for-authorization.md)
 - 일자: 2026-08-20 (A008 분리로 확장: 2026-08-24)
 - 관련: [domains/auth.md](../domains/auth.md), [conventions/api-response.md](../conventions/api-response.md)
 

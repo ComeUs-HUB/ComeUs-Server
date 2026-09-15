@@ -50,10 +50,17 @@ com.toyproject.backend
 │   │   ├── repository          #   RefreshTokenRepository
 │   │   ├── dto                 #   TokenResponse, KakaoLoginResult
 │   │   └── exception           #   AuthErrorCode
+│   ├── category                # 카테고리 (2depth 트리)
+│   │   ├── controller          #   CategoryController
+│   │   ├── service             #   CategoryService
+│   │   ├── repository          #   CategoryRepository
+│   │   ├── entity              #   Category (self-join)
+│   │   ├── dto                 #   CategoryCreateRequest, CategoryUpdateRequest,
+│   │   │                       #   CategoryResponse, CategoryTreeResponse
+│   │   └── exception           #   CategoryErrorCode
 │   ├── product     ─┐
-│   ├── category     │
-│   ├── cart         ├─ exception/*ErrorCode 만 존재. 나머지는 착수 시점에 만든다
-│   ├── order        │
+│   ├── cart         │
+│   ├── order        ├─ exception/*ErrorCode 만 존재. 나머지는 착수 시점에 만든다
 │   ├── payment      │
 │   └── review      ─┘
 └── global
@@ -62,7 +69,7 @@ com.toyproject.backend
     │                #   BusinessException, GlobalExceptionHandler
     ├── response     # ApiResponse, ErrorResponse, PageResponse
     ├── security     # JwtAuthenticationFilter, JwtAuthenticationEntryPoint,
-    │                #   CustomUserDetailsService, UserPrincipal
+    │                #   JwtAccessDeniedHandler, CustomUserDetailsService, UserPrincipal
     └── util         # CookieUtil
 ```
 
@@ -101,8 +108,11 @@ com.toyproject.backend
   [domains/auth.md](domains/auth.md)의 쿠키 표에 있다
 - Refresh Token은 DB `refresh_tokens`에 SHA-256 해시로 저장 (추후 Redis 교체 가능)
   — [ADR 0005](decisions/0005-opaque-refresh-token-hashed-in-db.md)
-- 401·403은 `JwtAuthenticationEntryPoint` 하나가 전담. `AccessDeniedHandler`를 두지 않는다
-  — [ADR 0007](decisions/0007-single-entrypoint-for-401-403.md)
+- **인증 실패(401)는 `JwtAuthenticationEntryPoint`, 인가 실패(403)는 `JwtAccessDeniedHandler`**가 맡는다
+  — [ADR 0010](decisions/0010-access-denied-handler-for-authorization.md) (Phase 3에서
+  [ADR 0007](decisions/0007-single-entrypoint-for-401-403.md)을 대체).
+  ⚠️ **익명 요청은 권한 부족이어도 EntryPoint로 간다** — 필터가 실패 시 `SecurityContext`를 비우기 때문이다.
+  토큰 없이 ADMIN 경로를 호출하면 403이 아니라 **401(A001)**이다
 - Refresh Token Rotation 미적용 — [ADR 0004](decisions/0004-no-refresh-token-rotation.md)
 
 **CORS**: `allowCredentials(true)` 필수(쿠키 왕복). `allowedOrigins`는 `app.cors.allowed-origins`
@@ -137,7 +147,9 @@ cross-site 요청에 붙지 않아 원천 차단된다. (`oauth_state`는 자격
 | 리뷰 작성/수정 | ❌ | ✅ (본인) | ✅ |
 | 리뷰 삭제 | ❌ | ✅ (본인) | ✅ |
 
-현재 필터체인은 auth·user 엔드포인트만 명시하고 나머지는 `anyRequest().authenticated()`다.
+**카테고리 두 행은 필터체인에 실제로 배선돼 있다** — `GET /api/categories`는 permitAll,
+나머지 셋은 `hasRole("ADMIN")`이다. 그 외는 auth·user 엔드포인트만 명시돼 있고 나머지는
+`anyRequest().authenticated()`라, 상품·리뷰의 공개 조회는 아직 열려 있지 않다.
 위 매트릭스와 실제 필터체인을 엔드포인트 단위로 대조하는 작업은 전 도메인 구현 후에 한다
 ([roadmap.md](roadmap.md)).
 

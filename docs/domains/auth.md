@@ -9,7 +9,7 @@
 |---|---|
 | `domain/user` | `User`·`Role`·`UserStatus`·`Provider`, `UserRepository`, `UserService`, `UserController`, `UserErrorCode` |
 | `domain/auth` | `RefreshToken`, `KakaoOAuthClient`, `JwtProvider`·`SecureTokenGenerator`, `JwtProperties`·`KakaoProperties`·`RestClientConfig`, `AuthService`, `AuthController`, `AuthErrorCode` |
-| `global/security` | Spring Security 어댑터만 — `JwtAuthenticationFilter`, `JwtAuthenticationEntryPoint`, `CustomUserDetailsService`, `UserPrincipal` |
+| `global/security` | Spring Security 어댑터만 — `JwtAuthenticationFilter`, `JwtAuthenticationEntryPoint`, `JwtAccessDeniedHandler`, `CustomUserDetailsService`, `UserPrincipal` |
 
 깨뜨리면 안 되는 규칙:
 
@@ -167,8 +167,10 @@
   파싱 → 조회 → `SecurityContextHolder` 설정
   - **예외 시 short-circuit 하지 않는다.** request attribute에 사유만 남기고 체인을 계속 진행한다
 
-401/403 응답은 `JwtAuthenticationEntryPoint` 하나가 전담한다 —
-[ADR 0007](../decisions/0007-single-entrypoint-for-401-403.md).
+401 응답은 `JwtAuthenticationEntryPoint`가, 인가 실패 403은 `JwtAccessDeniedHandler`가 쓴다 —
+[ADR 0010](../decisions/0010-access-denied-handler-for-authorization.md).
+⚠️ **익명 요청은 권한 부족이어도 EntryPoint로 간다**(필터가 `SecurityContext`를 비우기 때문).
+그래서 auth·user 엔드포인트의 A001·A003·A004·A008 동작은 Phase 3 이후에도 그대로다.
 
 인증 통과 후 상태가 바뀐 경합에서는 `UserService`가 **필터와 같은 규칙**으로 사유를 구분한다 —
 row 없음 A001(401), 탈퇴 A008(403). 미존재를 404로 내리지 않는 이유는 이 API가 회원을 지목하지 않기
