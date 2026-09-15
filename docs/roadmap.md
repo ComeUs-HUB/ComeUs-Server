@@ -4,7 +4,7 @@
 계약은 [architecture.md](architecture.md)·[domains/](domains/)·[conventions/](conventions/)가,
 결정 근거는 [decisions/](decisions/)가 소유한다.
 
-> 기준: 2026-09-07 · 브랜치 `feature/phase2-auth`
+> 기준: 2026-09-15 · 브랜치 `feature/phase3-category`
 
 ## 요약
 
@@ -13,15 +13,16 @@
 | 0 | 환경 설정 — 프로젝트 골격, 의존성, 설정 파일 | ✅ |
 | 1 | 글로벌 기반 — 공통 응답, 예외 처리, 페이지네이션 | ✅ |
 | 2 | 인증/인가 — user/auth 도메인, Security, JWT | ✅ (브라우저 E2E 통과) |
-| 3 | 카테고리 / 상품 | ⬜ |
+| 3 | 카테고리 / 상품 | 🔶 카테고리 ✅ (MySQL 실기동 통과) · 상품 ⬜ |
 | 4 | 구매 플로우 — Cart · Order · Payment | ⬜ |
 | 5 | 리뷰 | ⬜ |
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
-**다음 작업은 Phase 3 (Category)** — [domains/catalog.md](domains/catalog.md)의 "착수 전 정할 것"부터.
+**다음 작업은 Phase 3의 Product** — [domains/catalog.md](domains/catalog.md)의 "착수 전 정할 것"부터.
 
-**현재 규모**: main 48개 파일 · 테스트 13개 클래스 137개 케이스.
+**현재 규모**: main 57개 파일 · 테스트 18개 클래스 202개 케이스.
+케이스 수는 `./gradlew test` 리포트 기준이라 **파라미터라이즈는 실행 횟수로 센다**.
 
 ## Phase 0 — 환경 설정 ✅
 
@@ -34,8 +35,9 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 - Flyway(`flyway-core` + `flyway-mysql`)는 Phase 2에서 함께 도입됨
   ([ADR 0008](decisions/0008-flyway-owns-schema.md))
 
-도메인 패키지는 **미리 만들지 않는다.** `product`·`category`·`cart`·`order`·`payment`·`review`에는
-현재 `exception/*ErrorCode`만 있고, 나머지 하위 폴더는 각 Phase 착수 시점에 만든다.
+도메인 패키지는 **미리 만들지 않는다.** `product`·`cart`·`order`·`payment`·`review`에는
+현재 `exception/*ErrorCode`만 있고, 나머지 하위 폴더는 각 Phase 착수 시점에 만든다
+(`category`는 Phase 3에서 채워졌다).
 이는 미완이 아니라 [architecture.md](architecture.md)에 적힌 방침이다.
 
 남은 것:
@@ -55,6 +57,8 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 | 도메인별 `*ErrorCode` 8종 | `domain/*/exception/` |
 | `BusinessException` | `global/exception/BusinessException.java` |
 | `GlobalExceptionHandler` — 7종 처리 | `global/exception/GlobalExceptionHandler.java` |
+
+검증: `ApiResponseTest` 12케이스 — `ApiResponse` 생성자의 유효·무효 조합.
 
 남은 것:
 - [ ] `PageResponse`를 실제로 쓰는 목록 조회 API — Phase 3 Product에서 처음 적용된다
@@ -97,12 +101,12 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 - [ ] **카카오 동의 화면에서 취소 시 FE로 `?error=` 전달** — 미확인.
       이미 동의한 계정은 동의 화면이 뜨지 않아, 재현하려면 매번 연결 해제가 필요하다
 
-### 자동 테스트 — 13개 클래스 137개 케이스
+### 자동 테스트 — 13개 클래스 142개 케이스
 
 | 클래스 | 케이스 |
 |---|---|
 | `AuthServiceTest` | 25 |
-| `AuthControllerTest` | 16 |
+| `AuthControllerTest` | 21 |
 | `UserControllerTest` | 13 |
 | `UserServiceTest` | 13 |
 | `JwtAuthenticationIntegrationTest` | 12 |
@@ -115,9 +119,59 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 | `KakaoLoginTransactionTest` | 4 |
 | `BackendApplicationTests` | 1 (컨텍스트 로딩) |
 
-## Phase 3 — 카테고리 / 상품 ⬜
+> `AuthControllerTest`는 이전에 16으로 적혀 있었다. `@Test` 메서드만 센 값이고, `@ParameterizedTest` 하나가 5회 실행된다 — Gradle 리포트와 맞추어 21로 고쳤다.
 
-계약: [domains/catalog.md](domains/catalog.md). 착수 전에 그 문서의 "착수 전 정할 것"을 먼저 확정한다.
+## Phase 3 — 카테고리 🔶 (Category ✅ · Product ⬜)
+
+계약: [domains/catalog.md](domains/catalog.md).
+**카테고리는 끝났고 상품은 착수 전이다.** Product는 그 문서의 "착수 전 정할 것"부터 확정한다.
+
+구현 순서는 4단계로 나눴고, Phase 2와 같이 각 클래스 Javadoc 첫 줄에 `[Phase 3 · N단계]`가 표기돼 있다.
+
+| 단계 | 내용 | 검증 |
+|---|---|---|
+| 1 | ADMIN 승격 경로(`User.promoteToAdmin`) + 인가 실패 403(`JwtAccessDeniedHandler`) | 4단계에서 함께 |
+| 2 | 엔티티 + 스키마 (`V2__create_categories.sql`) | `CategoryTest`, `CategoryRepositoryTest` |
+| 3 | 서비스 — 트리 조립·생성·수정·삭제 규칙 | `CategoryServiceTest` |
+| 4 | 컨트롤러 + `SecurityConfig` 배선(permitAll·`hasRole`) | `CategoryControllerTest` + MySQL 실기동 |
+
+이 Phase에서 **처음 생긴 것이 셋**이다. 비회원에게 열린 조회 API, ADMIN 인가 판정
+([ADR 0010](decisions/0010-access-denied-handler-for-authorization.md)), 그리고 경로 변수
+(`/api/categories/{id}` — `MethodArgumentTypeMismatchException` 핸들러가 이때 필요해졌다).
+
+### MySQL 실기동 (2026-09-15)
+
+테스트는 H2 `create-drop`이라 `V2__create_categories.sql`을 **실행하지 않는다.** 스키마가 엔티티와
+어긋나도 `./gradlew test`는 통과하므로, 아래는 실기동으로만 확인되는 것들이다.
+
+- [x] `V2` 최초 적용 — `v1 → v2`, `flyway_schema_history`에 `success=1`
+- [x] Hibernate `validate` 통과 — 엔티티 매핑과 `categories` 스키마 일치
+- [x] InnoDB가 `parent_id` 인덱스를 자동 생성(`KEY fk_categories_parent`) —
+      V2가 별도 `INDEX`를 두지 않은 전제가 맞았다
+- [x] 비회원 `GET /api/categories` 200 + 빈 배열
+- [x] **USER 403(A002) → DB에서 `role`만 ADMIN으로 변경 → 같은 토큰으로 201.**
+      권한이 토큰 claim이 아니라 매 요청 DB에서 읽힘이 실제로 확인됐다
+- [x] 201 응답의 `Location`이 절대 URL이 아닌 상대 경로(`/api/categories/1`)
+- [x] 3depth CA003(400) · 하위 있는 삭제 CA002(409) · 없는 id CA001(404) · `/abc` C001(**400**, 500 아님)
+- [x] `displayOrder` 정렬이 **실제 SQL**에서 동작 — 서비스 테스트는 mock이 정렬된 결과를 돌려주므로
+      `findAllByOrderByDisplayOrderAscIdAsc`는 여기서 처음 검증됐다
+- [ ] **브라우저 왕복은 미확인.** FE 페이지가 없어 카카오 콜백 리다이렉트를 완주할 수 없다 —
+      access token을 `.env`의 `JWT_SECRET`으로 직접 서명해 대체했다.
+      카카오 왕복 자체는 Phase 2 E2E에서 검증됐다
+
+### 자동 테스트 — 4개 클래스 48개 케이스
+
+| 클래스 | 케이스 |
+|---|---|
+| `CategoryControllerTest` | 22 |
+| `CategoryServiceTest` | 15 |
+| `CategoryTest` | 6 |
+| `CategoryRepositoryTest` | 5 |
+
+남은 것:
+- [ ] **Product** — [domains/catalog.md](domains/catalog.md)의 "착수 전 정할 것" 3가지를 먼저 정한다
+- [ ] **상품이 붙은 카테고리의 삭제 차단** — `products.category_id`가 생기는 시점에 함께 막는다.
+      지금 걸 수 있는 것은 하위 카테고리 존재(CA002)뿐이다 (`CategoryService` Javadoc의 ⚠️)
 
 ## Phase 4 — 구매 플로우 ⬜
 
@@ -131,10 +185,11 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 ## Phase 6 — 마무리 ⬜
 
 - [ ] [architecture.md](architecture.md)의 RBAC 매트릭스와 실제 필터체인을 엔드포인트 단위로 대조
-- [ ] 공개 조회 API(`/api/products`, `/api/categories`, 리뷰 목록)를 permitAll로 여는 작업 —
-      현재 `anyRequest().authenticated()`가 막고 있다
-- [ ] ADMIN 권한 체크 도입 시 `AccessDeniedHandler` 재검토
-      ([ADR 0007](decisions/0007-single-entrypoint-for-401-403.md))
+- [ ] 공개 조회 API를 permitAll로 여는 작업 — `/api/categories`는 Phase 3 4단계에서 처리했다.
+      남은 것은 `/api/products`와 리뷰 목록이며, 그 전까지는 `anyRequest().authenticated()`가 막는다
+- [x] ADMIN 권한 체크 도입 시 `AccessDeniedHandler` 재검토 — Phase 3에서 완료.
+      [ADR 0010](decisions/0010-access-denied-handler-for-authorization.md)이
+      [ADR 0007](decisions/0007-single-entrypoint-for-401-403.md)을 대체한다
 
 테스트는 별도 Phase로 미루지 않는다 — **각 도메인 구현과 함께 작성한다.** Phase 2가 그렇게 진행됐다.
 
@@ -146,13 +201,14 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 
 결정되면 [decisions/](decisions/)에 ADR로 남기고 여기서 지운다.
 
-- [ ] **ADMIN 계정 발급 방식** — Phase 6에서 결정
+- [ ] **ADMIN 계정 발급 방식** — Phase 6에서 결정. 현재는 운영자가 DB에서 직접 바꾼다
+      (`UPDATE users SET role = 'ADMIN' WHERE id = ?`). 승격 API는 없고, 도메인 메서드만 열려 있다
 - [ ] **PKCE 도입** — 보류 사유가 하나만 남았다.
       [ADR 0003](decisions/0003-no-pkce-yet.md)
 - [ ] **Refresh Token Rotation + 재사용 탐지** — 함께 도입해야 한다.
       [ADR 0004](decisions/0004-no-refresh-token-rotation.md)
 - [ ] **만료 `refresh_tokens` row 정리 배치** — `expiresAt` 검사로 거절되므로 기능상 무해
-- [ ] **LOCAL 로그인** — `V2__add_password.sql` + `PasswordEncoder` + `Provider.LOCAL` +
+- [ ] **LOCAL 로그인** — `V3__add_password.sql`(V2는 카테고리가 가져갔다) + `PasswordEncoder` + `Provider.LOCAL` +
       `AuthErrorCode`에 `INVALID_CREDENTIALS` 재추가.
       [ADR 0001](decisions/0001-kakao-only-oauth.md)
 - [ ] **상품·리뷰 이미지 저장 방식** — 로컬 vs S3 등 외부 스토리지
