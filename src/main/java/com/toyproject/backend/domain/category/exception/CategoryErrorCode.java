@@ -10,7 +10,8 @@ import org.springframework.http.HttpStatus;
 public enum CategoryErrorCode implements ErrorCode {
 
     CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "CA001", "카테고리를 찾을 수 없습니다."),
-    CATEGORY_HAS_CHILDREN(HttpStatus.CONFLICT, "CA002", "하위 카테고리가 존재하여 삭제할 수 없습니다.");
+    CATEGORY_HAS_CHILDREN(HttpStatus.CONFLICT, "CA002", "하위 카테고리가 존재하여 삭제할 수 없습니다."),
+    CATEGORY_DEPTH_EXCEEDED(HttpStatus.BAD_REQUEST, "CA003", "카테고리는 대분류·소분류 2단계까지만 만들 수 있습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

@@ -67,6 +67,7 @@ public interface ErrorCode {          // global/exception/ErrorCode.java
 | U001 | `DUPLICATE_EMAIL` | 409 | `domain.user.exception.UserErrorCode` |
 | CA001 | `CATEGORY_NOT_FOUND` | 404 | `domain.category.exception.CategoryErrorCode` |
 | CA002 | `CATEGORY_HAS_CHILDREN` | 409 | 〃 |
+| CA003 | `CATEGORY_DEPTH_EXCEEDED` | 400 | 〃 |
 | P001 | `PRODUCT_NOT_FOUND` | 404 | `domain.product.exception.ProductErrorCode` |
 | P002 | `OUT_OF_STOCK` | 409 | 〃 |
 | CT001 | `CART_ITEM_NOT_FOUND` | 404 | `domain.cart.exception.CartErrorCode` |

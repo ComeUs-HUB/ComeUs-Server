@@ -1,7 +1,9 @@
 package com.toyproject.backend.global.config;
 
 import com.toyproject.backend.domain.auth.token.JwtProvider;
+import com.toyproject.backend.domain.user.entity.Role;
 import com.toyproject.backend.global.security.CustomUserDetailsService;
+import com.toyproject.backend.global.security.JwtAccessDeniedHandler;
 import com.toyproject.backend.global.security.JwtAuthenticationEntryPoint;
 import com.toyproject.backend.global.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
@@ -34,9 +36,22 @@ import java.util.List;
  *   <tr><td>{@code GET /api/auth/kakao/callback}</td><td>permitAll</td><td>카카오가 리다이렉트하는 착지점</td></tr>
  *   <tr><td>{@code POST /api/auth/refresh}</td><td>permitAll</td><td>쿠키 자체가 자격증명</td></tr>
  *   <tr><td>{@code POST /api/auth/logout}</td><td>permitAll</td><td>access token 만료 상태에서도 로그아웃 가능해야 함</td></tr>
+ *   <tr><td>{@code GET /api/categories}</td><td>permitAll</td><td>비회원에게 열린 <b>첫</b> 조회 API</td></tr>
+ *   <tr><td>{@code /api/categories} POST·PUT·DELETE</td><td>{@code hasRole("ADMIN")}</td>
+ *       <td>ADMIN 권한을 요구하는 <b>첫</b> 엔드포인트</td></tr>
  *   <tr><td>{@code /api/users/me} (GET/PUT/DELETE)</td><td>authenticated</td><td>{@code anyRequest()}에 포함된다</td></tr>
- *   <tr><td>그 외</td><td>{@code anyRequest().authenticated()}</td><td>공개 조회 API는 phase6에서 최종 점검</td></tr>
+ *   <tr><td>그 외</td><td>{@code anyRequest().authenticated()}</td><td>남은 공개 조회 API는 phase6에서 최종 점검</td></tr>
  * </table>
+ *
+ * <p><b>Phase 3에서 정책이 두 갈래 늘어났다</b>
+ * <ul>
+ *   <li><b>permitAll 조회</b>가 처음 생겼다. Phase 2까지 {@code permitAll}은 로그인 왕복 경로뿐이었고
+ *       나머지는 전부 {@code anyRequest().authenticated()}에 걸려 있었다.
+ *       카테고리 트리는 비회원 상품 탐색의 입구라 열어야 한다([domains/catalog.md]).</li>
+ *   <li><b>인가 판정</b>이 처음 생겼다. {@code hasRole("ADMIN")}이 붙는 순간
+ *       "인증은 됐으나 권한이 부족한" 요청이 실제로 발생하고, 그 응답은
+ *       {@link JwtAccessDeniedHandler}가 A002(403)로 내보낸다 — 그 클래스가 예고한 도달 경로가 여기다.</li>
+ * </ul>
  *
  * <p><b>CORS</b>
  * <ul>
@@ -60,9 +75,20 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private static final String CATEGORIES_PATH = "/api/categories";
+
+    /**
+     * 카테고리 단건 경로. {@code {id}} 자리를 한 세그먼트만 받는 {@code *}로 쓴다 —
+     * {@code /**}는 하위 경로까지 삼켜 나중에 추가되는 엔드포인트의 정책을 미리 정해버린다.
+     */
+    private static final String CATEGORIES_ITEM_PATH = CATEGORIES_PATH + "/*";
+
     private static final String[] PERMIT_ALL_GET = {
             "/api/auth/kakao/authorize",
-            "/api/auth/kakao/callback"
+            "/api/auth/kakao/callback",
+            // 트리 조회 하나만 연다. 하위 경로를 열지 않으므로 여기에 /** 를 붙이지 않는다 —
+            // 카테고리에는 단건 조회 API가 없고, 붙이면 나중에 생기는 경로까지 조용히 열린다.
+            CATEGORIES_PATH
     };
 
     private static final String[] PERMIT_ALL_POST = {
@@ -73,6 +99,7 @@ public class SecurityConfig {
     private final JwtProvider jwtProvider;
     private final CustomUserDetailsService userDetailsService;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+    private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
     private final AppProperties appProperties;
 
     @Bean
@@ -84,11 +111,20 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // AccessDeniedHandler는 등록하지 않는다 — 도달 경로가 없다(EntryPoint Javadoc 참고).
-                .exceptionHandling(handling -> handling.authenticationEntryPoint(jwtAuthenticationEntryPoint))
+                // 401은 EntryPoint, 403(권한 부족)은 AccessDeniedHandler가 나눠 맡는다.
+                // 익명 요청은 AccessDeniedException이어도 EntryPoint로 가므로 기존 동작은 그대로다
+                // (JwtAccessDeniedHandler Javadoc 참고).
+                .exceptionHandling(handling -> handling
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(jwtAccessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, PERMIT_ALL_GET).permitAll()
                         .requestMatchers(HttpMethod.POST, PERMIT_ALL_POST).permitAll()
+                        // 카테고리 쓰기는 ADMIN만. hasRole 은 ROLE_ 접두사를 스스로 붙이므로
+                        // 여기에 Role.ADMIN.name() 을 그대로 넘긴다 — 접두사는 UserPrincipal 이 담당한다.
+                        .requestMatchers(HttpMethod.POST, CATEGORIES_PATH).hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.PUT, CATEGORIES_ITEM_PATH).hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.DELETE, CATEGORIES_ITEM_PATH).hasRole(Role.ADMIN.name())
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
