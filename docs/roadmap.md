@@ -19,7 +19,8 @@
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
-**다음 작업은 Phase 3의 Product** — [domains/catalog.md](domains/catalog.md)의 "착수 전 정할 것"부터.
+**다음 작업은 Phase 3의 Product** — 결정은 모두 확정됐고,
+[domains/catalog.md](domains/catalog.md)의 계약대로 **5단계부터** 착수한다.
 
 **현재 규모**: main 57개 파일 · 테스트 18개 클래스 202개 케이스.
 케이스 수는 `./gradlew test` 리포트 기준이라 **파라미터라이즈는 실행 횟수로 센다**.
@@ -124,7 +125,10 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 ## Phase 3 — 카테고리 🔶 (Category ✅ · Product ⬜)
 
 계약: [domains/catalog.md](domains/catalog.md).
-**카테고리는 끝났고 상품은 착수 전이다.** Product는 그 문서의 "착수 전 정할 것"부터 확정한다.
+**카테고리는 끝났고 상품은 착수 전이다.** 상품 착수에 필요한 결정은 모두 확정됐다 —
+[ADR 0011](decisions/0011-jpa-specification-for-product-filter.md)·[0012](decisions/0012-image-urls-in-separate-table.md)·[0013](decisions/0013-hide-soft-deleted-products-everywhere.md)·[0014](decisions/0014-category-reads-product-repository.md).
+
+### Category — 1~4단계 ✅
 
 구현 순서는 4단계로 나눴고, Phase 2와 같이 각 클래스 Javadoc 첫 줄에 `[Phase 3 · N단계]`가 표기돼 있다.
 
@@ -168,10 +172,51 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 | `CategoryTest` | 6 |
 | `CategoryRepositoryTest` | 5 |
 
+### Product — 5~8단계 ⬜
+
+**아래는 착수 전 계획이다.** 카테고리가 1~4단계를 썼으므로 상품은 5단계부터 잇고,
+Javadoc 표기도 `[Phase 3 · 5단계]`처럼 이어 붙인다.
+브랜치는 `feature/phase3-product`(master `2db1205`에서 분기).
+
+| 단계 | 내용 | 검증 | |
+|---|---|---|---|
+| 5 | 엔티티(`Product`·`ProductImage`·`ProductStatus`) + `V3__create_products.sql` | `ProductTest` | ⬜ |
+| 6 | Repository + `ProductSpecifications` — 조립을 한곳에 모은다 | `ProductRepositoryTest` | ⬜ |
+| 7 | 서비스 + DTO 4종, `CategoryService`에 자식 id 조회 추가 | `ProductServiceTest` | ⬜ |
+| 8 | 컨트롤러 + `SecurityConfig` 배선 + 카테고리 삭제 차단(CA004) | `ProductControllerTest` + MySQL 실기동 | ⬜ |
+
+검증 열의 테스트 클래스는 **예정**이다. 케이스 수는 완료 시점에 리포트를 보고 채운다.
+
+이 Phase에서 **처음 생기는 것이 넷**이다 — 페이징·정렬·동적 필터(`PageResponse`의 첫 실사용,
+Specification 도입), soft delete, 도메인 간 **양방향** 참조
+([ADR 0014](decisions/0014-category-reads-product-repository.md)),
+그리고 `Category`가 의도적으로 피했던 `@OneToMany` 컬렉션(이미지).
+
+#### MySQL 실기동 — 확인할 것 (예정)
+
+테스트는 H2 `create-drop`이라 `V3__create_products.sql`을 **실행하지 않는다.**
+스키마가 엔티티와 어긋나도 `./gradlew test`는 통과하므로, 아래는 `local` 프로파일 실기동으로만
+확인된다. **무엇을 확인하면 끝인지를 착수 전에 고정해 둔다.**
+
+- [ ] `V3` 최초 적용 — `v2 → v3`, `flyway_schema_history`에 `success=1`
+- [ ] Hibernate `validate` 통과 — `DECIMAL(10,2)`와 `VARCHAR` enum 매핑이 여기서 처음 대조된다
+- [ ] 비회원 `GET /api/products` 200 + 빈 `PageResponse`(`totalElements: 0`, `hasNext: false`)
+- [ ] ADMIN 토큰으로 등록 → 201 + `Location`이 절대 URL이 아닌 상대 경로
+- [ ] **대분류 `categoryId` 필터에 소분류 상품이 딸려 나온다** —
+      서비스 테스트는 mock이라 여기서 처음 검증된다
+- [ ] **soft delete 왕복** — DELETE → 목록에서 사라짐 → 상세 404(P001) →
+      DB에 행은 남아 있음(`status='HIDDEN'`) → PUT으로 `ON_SALE` 복귀 → 목록에 다시 나타남
+- [ ] 상품이 붙은 카테고리 DELETE → CA004(409), 상품을 옮긴 뒤 삭제 → 200
+- [ ] `?sort=foo` → C001(**400**, 500 아님) · `?size=9999` → 100으로 잘림
+- [ ] `@BatchSize`가 실제로 동작 — `show-sql`로 목록 조회 쿼리 수 확인
+- [ ] USER 토큰으로 쓰기 요청 → 403(A002), 같은 토큰으로 조회는 200
+
 남은 것:
-- [ ] **Product** — [domains/catalog.md](domains/catalog.md)의 "착수 전 정할 것" 3가지를 먼저 정한다
-- [ ] **상품이 붙은 카테고리의 삭제 차단** — `products.category_id`가 생기는 시점에 함께 막는다.
-      지금 걸 수 있는 것은 하위 카테고리 존재(CA002)뿐이다 (`CategoryService` Javadoc의 ⚠️)
+- [ ] **상품이 붙은 카테고리의 삭제 차단** — 8단계에서 `CA004`로 막는다.
+      그때까지 걸 수 있는 것은 하위 카테고리 존재(CA002)뿐이다 (`CategoryService` Javadoc의 ⚠️)
+- [ ] **이미지 파일 업로드 API** — 이번 범위 밖이다. `product_images` 테이블과 URL 등록까지만 만들고,
+      멀티파트 업로드·로컬 스토리지·URL 발급은 별도로 다룬다
+      ([ADR 0012](decisions/0012-image-urls-in-separate-table.md))
 
 ## Phase 4 — 구매 플로우 ⬜
 
@@ -208,7 +253,7 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 - [ ] **Refresh Token Rotation + 재사용 탐지** — 함께 도입해야 한다.
       [ADR 0004](decisions/0004-no-refresh-token-rotation.md)
 - [ ] **만료 `refresh_tokens` row 정리 배치** — `expiresAt` 검사로 거절되므로 기능상 무해
-- [ ] **LOCAL 로그인** — `V3__add_password.sql`(V2는 카테고리가 가져갔다) + `PasswordEncoder` + `Provider.LOCAL` +
+- [ ] **LOCAL 로그인** — `V4__add_password.sql`(V2는 카테고리가, V3는 상품이 가져갔다) + `PasswordEncoder` + `Provider.LOCAL` +
       `AuthErrorCode`에 `INVALID_CREDENTIALS` 재추가.
       [ADR 0001](decisions/0001-kakao-only-oauth.md)
 - [ ] **외부 PG 연동** — 포트원 등. 현재 Mock 전제
