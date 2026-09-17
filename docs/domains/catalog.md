@@ -60,19 +60,41 @@ status(ON_SALE/SOLD_OUT/HIDDEN), createdAt, updatedAt
 
 ### API
 
-| Method | URI | 설명 | 권한 |
-|---|---|---|---|
-| GET | `/api/products` | 목록 조회 (페이징·필터·정렬) | 비회원 |
-| GET | `/api/products/{id}` | 상세 조회 | 비회원 |
-| POST | `/api/products` | 등록 | ADMIN |
-| PUT | `/api/products/{id}` | 수정 | ADMIN |
-| DELETE | `/api/products/{id}` | 삭제 | ADMIN |
+| Method | URI | 설명 | 권한 | 성공 응답 |
+|---|---|---|---|---|
+| GET | `/api/products` | 목록 조회 (페이징·필터·정렬) | **비회원** | 200 + `PageResponse` |
+| GET | `/api/products/{id}` | 상세 조회 | **비회원** | 200 |
+| POST | `/api/products` | 등록 | ADMIN | **201** + `Location` |
+| PUT | `/api/products/{id}` | 수정 | ADMIN | 200 |
+| DELETE | `/api/products/{id}` | 삭제 (soft delete) | ADMIN | 200 + `data: null` |
+
+- 목록 필터는 `categoryId` · 가격 범위 · 키워드를 **조합**할 수 있다
+- `Location`은 카테고리와 같이 **상대 경로**(`/api/products/1`)다
+- DELETE가 204가 아닌 이유도 카테고리와 같다 — 바디가 없으면 공통 포맷이 깨진다
 
 ### 규칙
 
-- 재고 0 → status 자동 `SOLD_OUT`. 재고가 다시 차면 `ON_SALE`로 복귀
-- 삭제는 **soft delete**(status = `HIDDEN`) — 주문 이력에 연결된 상품이 사라지면 안 된다
-- 재고 부족은 `P002 OUT_OF_STOCK`
+- **품절 자동 전환은 엔티티 책임이다.** 재고를 바꾸는 도메인 메서드가 `status`까지 확정한다 —
+  서비스가 재고만 바꾸고 `status`를 잊는 조합이 생기지 않는다. 재고를 만지는 경로가
+  Phase 4(주문·취소·결제 실패)에서 늘어나므로, 판정이 호출자마다 반복되면 한 곳은 반드시 빠진다.
+  `Category.child()`가 2depth를 생성 지점 하나로 강제하는 것과 같은 방식이다
+- 재고 0 → status 자동 `SOLD_OUT`. 재고 부족은 `P002 OUT_OF_STOCK`
+- ⚠️ **재고가 다시 차도 `SOLD_OUT`이었을 때만 `ON_SALE`로 복귀한다.** `HIDDEN`은 재고와 다른 축이라
+  복귀 대상이 아니다 — 조건 없이 되돌리면 삭제된 상품이 재고 복구만으로 목록에 다시 뜬다
+  ([ADR 0013](../decisions/0013-hide-soft-deleted-products-everywhere.md))
+- 삭제는 **soft delete**(status = `HIDDEN`) — 주문 이력에 연결된 상품이 사라지면 안 된다.
+  카테고리의 하드 삭제와 갈리는 지점이다
+- **`HIDDEN`은 공개 조회 API 전부에서 숨긴다.** 목록에서 제외하고 상세는 `P001`(404)다.
+  권한으로 분기하지 않아 ADMIN도 같은 결과를 받는다.
+  다만 수정·삭제가 쓰는 조회에는 필터를 걸지 않는다 — 그것이 되살리는 유일한 통로다
+  ([ADR 0013](../decisions/0013-hide-soft-deleted-products-everywhere.md))
+- **`categoryId` 필터는 대분류를 지정하면 그 아래 소분류 상품까지 포함한다.**
+  `IN (자기 자신 + 자식들)`로 조립하며, 2depth 고정이라 재귀가 없다.
+  자식 id는 `CategoryService`를 경유해 얻는다 — `CategoryRepository`는 category 패키지 밖에서
+  주입하지 않는다
+- 상품이 붙은 카테고리는 삭제할 수 없다 → `CA004 CATEGORY_HAS_PRODUCTS`.
+  이 검사는 `CategoryService`가 `ProductRepository`를 직접 읽어 수행한다
+  ([ADR 0014](../decisions/0014-category-reads-product-repository.md))
 - 목록 조회는 `PageResponse.of()`를 그대로 재사용한다
   ([conventions/api-response.md](../conventions/api-response.md)).
   **이 도메인이 `PageResponse`의 첫 실사용처가 된다**
@@ -86,7 +108,12 @@ status(ON_SALE/SOLD_OUT/HIDDEN), createdAt, updatedAt
   추후 AWS S3로 옮기며, URL만 저장하므로 전환에 스키마 변경이 없다 —
   [ADR 0012](../decisions/0012-image-urls-in-separate-table.md).
   리뷰 이미지도 **같은 방식**이다([review.md](review.md))
-
-### 착수 전 정할 것
-
-- 품절 자동 전환을 엔티티 책임으로 둘지 서비스 책임으로 둘지
+- **페이징 기본값은 `size=20`, 정렬은 `createdAt` 내림차순.** 최대 `size`는 **100**이며 초과하면
+  잘라낸다. `api-response.md`가 "기본값과 최대 `size` 제한은 도메인별로 정한다"고 위임한 값이다
+- **정렬 필드는 `createdAt` · `price` · `name` 셋으로 제한한다.** 위반은 `C001`(400)이다.
+  ⚠️ 화이트리스트가 없으면 `?sort=foo`가 `PropertyReferenceException`을 일으키고,
+  이 예외는 `GlobalExceptionHandler`가 처리하는 7종에 없어 **`C003`(500)으로 나간다** —
+  클라이언트 입력 오류가 서버 오류로 보고된다
+- **응답 DTO는 목록용과 상세용을 나눈다.** 목록은 대표 이미지(`displayOrder` 최소) 한 장만 담고,
+  상세가 이미지 전체와 `description`을 담는다. `CategoryResponse`/`CategoryTreeResponse`를
+  나눈 것과 같은 이유다
