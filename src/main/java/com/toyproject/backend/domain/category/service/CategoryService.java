@@ -128,6 +128,36 @@ public class CategoryService {
     }
 
     /**
+     * 자기 자신과 하위 카테고리의 id를 모은다. <b>상품 목록의 카테고리 필터가 쓴다.</b>
+     *
+     * <p><b>이 메서드가 product 도메인의 진입점이다.</b> {@code ProductService}는
+     * {@code CategoryRepository}를 직접 주입하지 않고 여기를 경유한다 — 그래야 "대분류를 고르면
+     * 하위까지 포함한다"는 규칙과 2depth 전제가 category 도메인 안에 남는다.
+     *
+     * <p>대분류를 넘기면 {@code [자기 자신 + 소분류들]}, 소분류를 넘기면 {@code [자기 자신]}이다.
+     * <b>2depth 고정이라 재귀가 없다</b> — 손자가 존재할 수 없기 때문이다.
+     *
+     * <p><b>존재 확인을 따로 하지 않는 이유</b><br>
+     * 존재하는 카테고리는 질의의 {@code c.id = :categoryId}에 반드시 걸려 결과가 최소 1개다.
+     * 그래서 <b>빈 결과가 곧 "없는 카테고리"</b>이고, 조회 한 번으로 CA001 판정까지 끝난다.
+     * {@link #getCategory(Long)}를 먼저 부르면 엔티티를 통째로 읽는 쿼리가 하나 더 붙는데,
+     * 여기서 필요한 것은 id뿐이다.
+     *
+     * @param categoryId 클라이언트가 지정한 카테고리 id
+     * @throws BusinessException 그런 카테고리가 없으면 CA001(404).
+     *                           빈 목록으로 뭉개지 않는다 — 없는 것을 지목한 요청과
+     *                           상품이 하나도 없는 카테고리는 다르다
+     */
+    public List<Long> collectSelfAndChildIds(Long categoryId) {
+        List<Long> ids = categoryRepository.findSelfAndChildIds(categoryId);
+
+        if (ids.isEmpty()) {
+            throw new BusinessException(CategoryErrorCode.CATEGORY_NOT_FOUND);
+        }
+        return ids;
+    }
+
+    /**
      * 소분류를 부모 id로 묶는다.
      *
      * <p>{@code LinkedHashMap}과 {@code ArrayList}로 <b>조회 순서를 보존</b>한다. 입력이 이미
