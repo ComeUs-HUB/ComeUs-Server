@@ -9,6 +9,7 @@
 | 특정 도메인의 API·엔티티·규칙 확인 및 변경 | [domains/](domains/) |
 | 응답 포맷 확인, 새 컨트롤러 작성 | [conventions/api-response.md](conventions/api-response.md) |
 | 새 에러 코드 추가 | [conventions/error-codes.md](conventions/error-codes.md) |
+| 주석 작성, "이건 어디에 써야 하나" | [conventions/javadoc.md](conventions/javadoc.md) |
 | 브랜치 생성, 커밋 작성, PR 올리기 | [conventions/git.md](conventions/git.md) |
 | "왜 이렇게 돼 있지?" 싶을 때 | [decisions/](decisions/) |
 | 배포·CI/CD·운영 | [deployment.md](deployment.md) |
