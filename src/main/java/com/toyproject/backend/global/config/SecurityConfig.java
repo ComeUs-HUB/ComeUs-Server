@@ -39,6 +39,8 @@ import java.util.List;
  *   <tr><td>{@code GET /api/categories}</td><td>permitAll</td><td>비회원에게 열린 <b>첫</b> 조회 API</td></tr>
  *   <tr><td>{@code /api/categories} POST·PUT·DELETE</td><td>{@code hasRole("ADMIN")}</td>
  *       <td>ADMIN 권한을 요구하는 <b>첫</b> 엔드포인트</td></tr>
+ *   <tr><td>{@code GET /api/products}·{@code /api/products/{id}}</td><td>permitAll</td>
+ *       <td>비회원 상품 탐색 — 목록과 단건 둘 다 연다</td></tr>
  *   <tr><td>{@code /api/users/me} (GET/PUT/DELETE)</td><td>authenticated</td><td>{@code anyRequest()}에 포함된다</td></tr>
  *   <tr><td>그 외</td><td>{@code anyRequest().authenticated()}</td><td>남은 공개 조회 API는 phase6에서 최종 점검</td></tr>
  * </table>
@@ -47,7 +49,7 @@ import java.util.List;
  * <ul>
  *   <li><b>permitAll 조회</b>가 처음 생겼다. Phase 2까지 {@code permitAll}은 로그인 왕복 경로뿐이었고
  *       나머지는 전부 {@code anyRequest().authenticated()}에 걸려 있었다.
- *       카테고리 트리는 비회원 상품 탐색의 입구라 열어야 한다([domains/catalog.md]).</li>
+ *       카테고리 트리와 상품 조회는 비회원 탐색 경로라 열어야 한다([domains/catalog.md]).</li>
  *   <li><b>인가 판정</b>이 처음 생겼다. {@code hasRole("ADMIN")}이 붙는 순간
  *       "인증은 됐으나 권한이 부족한" 요청이 실제로 발생하고, 그 응답은
  *       {@link JwtAccessDeniedHandler}가 A002(403)로 내보낸다 — 그 클래스가 예고한 도달 경로가 여기다.</li>
@@ -83,12 +85,20 @@ public class SecurityConfig {
      */
     private static final String CATEGORIES_ITEM_PATH = CATEGORIES_PATH + "/*";
 
+    private static final String PRODUCTS_PATH = "/api/products";
+
+    /** 상품 단건 경로. {@code /*}를 쓰는 이유는 {@link #CATEGORIES_ITEM_PATH}와 같다. */
+    private static final String PRODUCTS_ITEM_PATH = PRODUCTS_PATH + "/*";
+
     private static final String[] PERMIT_ALL_GET = {
             "/api/auth/kakao/authorize",
             "/api/auth/kakao/callback",
             // 트리 조회 하나만 연다. 하위 경로를 열지 않으므로 여기에 /** 를 붙이지 않는다 —
             // 카테고리에는 단건 조회 API가 없고, 붙이면 나중에 생기는 경로까지 조용히 열린다.
-            CATEGORIES_PATH
+            CATEGORIES_PATH,
+            // 상품은 단건 조회가 있어 두 줄이다. 목록과 /{id}만 열리고 그 아래는 열리지 않는다.
+            PRODUCTS_PATH,
+            PRODUCTS_ITEM_PATH
     };
 
     private static final String[] PERMIT_ALL_POST = {
