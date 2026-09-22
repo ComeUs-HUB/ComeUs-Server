@@ -4,7 +4,7 @@
 계약은 [architecture.md](architecture.md)·[domains/](domains/)·[conventions/](conventions/)가,
 결정 근거는 [decisions/](decisions/)가 소유한다.
 
-> 기준: 2026-09-15 · 브랜치 `feature/phase3-category`
+> 기준: 2026-09-22 · 브랜치 `feature/phase3-product`
 
 ## 요약
 
@@ -13,16 +13,16 @@
 | 0 | 환경 설정 — 프로젝트 골격, 의존성, 설정 파일 | ✅ |
 | 1 | 글로벌 기반 — 공통 응답, 예외 처리, 페이지네이션 | ✅ |
 | 2 | 인증/인가 — user/auth 도메인, Security, JWT | ✅ (브라우저 E2E 통과) |
-| 3 | 카테고리 / 상품 | 🔶 카테고리 ✅ (MySQL 실기동 통과) · 상품 ⬜ |
+| 3 | 카테고리 / 상품 | 🔶 카테고리 ✅ (MySQL 실기동 통과) · 상품 🔶 (5~7단계 ✅ · 8단계 진행 중) |
 | 4 | 구매 플로우 — Cart · Order · Payment | ⬜ |
 | 5 | 리뷰 | ⬜ |
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
-**다음 작업은 Phase 3의 Product** — 결정은 모두 확정됐고,
-[domains/catalog.md](domains/catalog.md)의 계약대로 **5단계부터** 착수한다.
+**다음 작업은 Phase 3 Product의 8단계** — 컨트롤러 조회 둘은 붙었고,
+쓰기 셋과 `SecurityConfig` 배선, CA004, MySQL 실기동이 남았다.
 
-**현재 규모**: main 57개 파일 · 테스트 18개 클래스 202개 케이스.
+**현재 규모**: main 68개 파일 · 테스트 21개 클래스 273개 케이스.
 케이스 수는 `./gradlew test` 리포트 기준이라 **파라미터라이즈는 실행 횟수로 센다**.
 
 ## Phase 0 — 환경 설정 ✅
@@ -36,9 +36,9 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 - Flyway(`flyway-core` + `flyway-mysql`)는 Phase 2에서 함께 도입됨
   ([ADR 0008](decisions/0008-flyway-owns-schema.md))
 
-도메인 패키지는 **미리 만들지 않는다.** `product`·`cart`·`order`·`payment`·`review`에는
+도메인 패키지는 **미리 만들지 않는다.** `cart`·`order`·`payment`·`review`에는
 현재 `exception/*ErrorCode`만 있고, 나머지 하위 폴더는 각 Phase 착수 시점에 만든다
-(`category`는 Phase 3에서 채워졌다).
+(`category`와 `product`는 Phase 3에서 채워졌다).
 이는 미완이 아니라 [architecture.md](architecture.md)에 적힌 방침이다.
 
 남은 것:
@@ -62,7 +62,8 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 검증: `ApiResponseTest` 12케이스 — `ApiResponse` 생성자의 유효·무효 조합.
 
 남은 것:
-- [ ] `PageResponse`를 실제로 쓰는 목록 조회 API — Phase 3 Product에서 처음 적용된다
+- [x] `PageResponse`를 실제로 쓰는 목록 조회 API — Phase 3 Product에서 적용됐다
+      (`ProductService.getList`, `GET /api/products`, 비회원 공개)
 - [ ] `BusinessException`을 상속하는 도메인별 구체 예외 클래스 — 필요해지는 시점에
 
 ## Phase 2 — 인증/인가 ✅
@@ -122,10 +123,10 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 
 > `AuthControllerTest`는 이전에 16으로 적혀 있었다. `@Test` 메서드만 센 값이고, `@ParameterizedTest` 하나가 5회 실행된다 — Gradle 리포트와 맞추어 21로 고쳤다.
 
-## Phase 3 — 카테고리 🔶 (Category ✅ · Product ⬜)
+## Phase 3 — 카테고리 / 상품 🔶 (Category ✅ · Product 🔶)
 
 계약: [domains/catalog.md](domains/catalog.md).
-**카테고리는 끝났고 상품은 착수 전이다.** 상품 착수에 필요한 결정은 모두 확정됐다 —
+**카테고리는 끝났고 상품은 8단계만 남았다.** 상품에 필요한 결정은 모두 확정됐다 —
 [ADR 0011](decisions/0011-jpa-specification-for-product-filter.md)·[0012](decisions/0012-image-urls-in-separate-table.md)·[0013](decisions/0013-hide-soft-deleted-products-everywhere.md)·[0014](decisions/0014-category-reads-product-repository.md).
 
 ### Category — 1~4단계 ✅
@@ -163,40 +164,62 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
       access token을 `.env`의 `JWT_SECRET`으로 직접 서명해 대체했다.
       카카오 왕복 자체는 Phase 2 E2E에서 검증됐다
 
-### 자동 테스트 — 4개 클래스 48개 케이스
+### 자동 테스트 — 4개 클래스 57개 케이스
 
 | 클래스 | 케이스 |
 |---|---|
 | `CategoryControllerTest` | 22 |
-| `CategoryServiceTest` | 15 |
+| `CategoryServiceTest` | 19 |
+| `CategoryRepositoryTest` | 10 |
 | `CategoryTest` | 6 |
-| `CategoryRepositoryTest` | 5 |
 
-### Product — 5~8단계 ⬜
+> `CategoryServiceTest`(15→19)와 `CategoryRepositoryTest`(5→10)는 상품 7단계에서 늘었다 —
+> `collectSelfAndChildIds`와 그것이 쓰는 `findSelfAndChildIds`가 카테고리 쪽에 추가됐다.
 
-**아래는 착수 전 계획이다.** 카테고리가 1~4단계를 썼으므로 상품은 5단계부터 잇고,
+### Product — 5~8단계 🔶 (5~7 ✅ · 8 진행 중)
+
+카테고리가 1~4단계를 썼으므로 상품은 5단계부터 잇고,
 Javadoc 표기도 `[Phase 3 · 5단계]`처럼 이어 붙인다.
 브랜치는 `feature/phase3-product`(master `2db1205`에서 분기).
 
 | 단계 | 내용 | 검증 | |
 |---|---|---|---|
-| 5 | 엔티티(`Product`·`ProductImage`·`ProductStatus`) + `V3__create_products.sql` | `ProductTest` | ⬜ |
-| 6 | Repository + `ProductSpecifications` — 조립을 한곳에 모은다 | `ProductRepositoryTest` | ⬜ |
-| 7 | 서비스 + DTO 4종, `CategoryService`에 자식 id 조회 추가 | `ProductServiceTest` | ⬜ |
-| 8 | 컨트롤러 + `SecurityConfig` 배선 + 카테고리 삭제 차단(CA004) | `ProductControllerTest` + MySQL 실기동 | ⬜ |
+| 5 | 엔티티(`Product`·`ProductImage`·`ProductStatus`) + `V3__create_products.sql` | `ProductTest` | ✅ |
+| 6 | Repository + `ProductSpecifications` — 조립을 한곳에 모은다 | `ProductRepositoryTest` | ✅ |
+| 7 | 조회 서비스 + DTO 4종, `CategoryService`에 자식 id 조회 추가 | `ProductServiceTest` | ✅ |
+| 8 | 컨트롤러 + `SecurityConfig` 배선 + 카테고리 삭제 차단(CA004) | `ProductControllerTest` + MySQL 실기동 | 🔶 |
 
-검증 열의 테스트 클래스는 **예정**이다. 케이스 수는 완료 시점에 리포트를 보고 채운다.
+#### 8단계 — 진행 중
+
+- [x] 컨트롤러 조회 둘(`getList`·`getDetail`)과 `sanitize` —
+      정렬 화이트리스트 위반은 C001(400), `size`는 100에서 잘린다
+- [ ] **쓰기 셋** — `ProductService`의 등록·수정·삭제(soft delete)와 POST/PUT/DELETE.
+      `HIDDEN`까지 읽는 조회를 쓰므로 목록·상세와 헬퍼를 공유하지 않는다([ADR 0013](decisions/0013-hide-soft-deleted-products-everywhere.md))
+- [x] `SecurityConfig` 조회 permitAll — `GET /api/products`와 `/api/products/*` 둘 다 연다
+- [ ] `SecurityConfig` 쓰기 `hasRole('ADMIN')` — 엔드포인트가 생기는 커밋에서 함께 붙인다.
+      그전까지 `POST /api/products`는 `anyRequest().authenticated()`에 걸려 401이다
+- [ ] 카테고리 삭제 차단 CA004
+- [ ] `ProductControllerTest`
+- [ ] MySQL 실기동 (아래 체크리스트)
+
+#### 자동 테스트 — 3개 클래스 62개 케이스 (5~7단계)
+
+| 클래스 | 케이스 |
+|---|---|
+| `ProductRepositoryTest` | 29 |
+| `ProductTest` | 19 |
+| `ProductServiceTest` | 14 |
 
 이 Phase에서 **처음 생기는 것이 넷**이다 — 페이징·정렬·동적 필터(`PageResponse`의 첫 실사용,
 Specification 도입), soft delete, 도메인 간 **양방향** 참조
 ([ADR 0014](decisions/0014-category-reads-product-repository.md)),
 그리고 `Category`가 의도적으로 피했던 `@OneToMany` 컬렉션(이미지).
 
-#### MySQL 실기동 — 확인할 것 (예정)
+#### MySQL 실기동 — 확인할 것 (8단계 완료 후)
 
 테스트는 H2 `create-drop`이라 `V3__create_products.sql`을 **실행하지 않는다.**
 스키마가 엔티티와 어긋나도 `./gradlew test`는 통과하므로, 아래는 `local` 프로파일 실기동으로만
-확인된다. **무엇을 확인하면 끝인지를 착수 전에 고정해 둔다.**
+확인된다. **무엇을 확인하면 끝인지는 착수 전에 고정해 뒀다.**
 
 - [ ] `V3` 최초 적용 — `v2 → v3`, `flyway_schema_history`에 `success=1`
 - [ ] Hibernate `validate` 통과 — `DECIMAL(10,2)`와 `VARCHAR` enum 매핑이 여기서 처음 대조된다
@@ -230,8 +253,9 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
 ## Phase 6 — 마무리 ⬜
 
 - [ ] [architecture.md](architecture.md)의 RBAC 매트릭스와 실제 필터체인을 엔드포인트 단위로 대조
-- [ ] 공개 조회 API를 permitAll로 여는 작업 — `/api/categories`는 Phase 3 4단계에서 처리했다.
-      남은 것은 `/api/products`와 리뷰 목록이며, 그 전까지는 `anyRequest().authenticated()`가 막는다
+- [ ] 공개 조회 API를 permitAll로 여는 작업 — `/api/categories`는 Phase 3 4단계에서,
+      `/api/products`(목록·단건)는 8단계에서 처리했다. 남은 것은 리뷰 목록이며,
+      그 전까지는 `anyRequest().authenticated()`가 막는다
 - [x] ADMIN 권한 체크 도입 시 `AccessDeniedHandler` 재검토 — Phase 3에서 완료.
       [ADR 0010](decisions/0010-access-denied-handler-for-authorization.md)이
       [ADR 0007](decisions/0007-single-entrypoint-for-401-403.md)을 대체한다
@@ -267,3 +291,5 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
       [ADR 0011](decisions/0011-jpa-specification-for-product-filter.md)
 - [x] **상품·리뷰 이미지는 별도 테이블에 URL만** — 스토리지는 로컬 → 추후 AWS S3.
       [ADR 0012](decisions/0012-image-urls-in-separate-table.md)
+- [x] **공개 상품 응답에 재고 수량을 담지 않는다** — 품절은 `status`가 표현한다.
+      [ADR 0015](decisions/0015-no-stock-quantity-in-public-response.md)
