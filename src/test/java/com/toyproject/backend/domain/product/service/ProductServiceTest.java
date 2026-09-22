@@ -226,8 +226,24 @@ class ProductServiceTest {
             assertThat(response.id()).isEqualTo(1L);
             assertThat(response.name()).isEqualTo("기본 반팔티");
             assertThat(response.description()).isEqualTo("기본 반팔티 설명");
-            assertThat(response.stockQuantity()).isEqualTo(10);
+            assertThat(response.status()).isEqualTo(ProductStatus.ON_SALE);
             assertThat(response.categoryId()).isEqualTo(9L);
+        }
+
+        @Test
+        @DisplayName("품절은 재고 수량이 아니라 status로만 드러난다")
+        void soldOutShowsOnlyInStatus() {
+            Product soldOut = Product.create(category(9L, "티셔츠"), "품절 반팔티", "설명",
+                    new BigDecimal("19900"), 0);
+            ReflectionTestUtils.setField(soldOut, "id", 2L);
+            given(productRepository.findByIdAndStatusNot(2L, ProductStatus.HIDDEN))
+                    .willReturn(Optional.of(soldOut));
+
+            ProductDetailResponse response = productService.getDetail(2L);
+
+            assertThat(response.status())
+                    .as("공개 응답에 재고 수량이 없으므로 구매 가능 여부는 이 필드가 유일한 근거다")
+                    .isEqualTo(ProductStatus.SOLD_OUT);
         }
 
         @Test
