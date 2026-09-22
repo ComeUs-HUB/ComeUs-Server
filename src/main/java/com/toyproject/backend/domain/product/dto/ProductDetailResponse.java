@@ -18,6 +18,7 @@ import java.util.List;
  * 그리려면 부모 이름까지 필요해 프록시를 두 번 깨야 한다. 카테고리 트리는 공개 API가
  * 쿼리 1회로 돌려준다.
  *
+ * @param status    품절 여부를 이 필드가 표현한다. <b>재고 수량은 담지 않는다</b>(ADR 0015)
  * @param imageUrls {@code displayOrder} 오름차순. 없으면 빈 배열이다 —
  *                  클라이언트가 null 검사 없이 순회할 수 있어야 한다
  */
@@ -27,7 +28,6 @@ public record ProductDetailResponse(
         String name,
         String description,
         BigDecimal price,
-        int stockQuantity,
         ProductStatus status,
         Long categoryId,
         List<String> imageUrls
@@ -39,7 +39,6 @@ public record ProductDetailResponse(
                 product.getName(),
                 product.getDescription(),
                 product.getPrice(),
-                product.getStockQuantity(),
                 product.getStatus(),
                 product.getCategory().getId(),
                 imageUrlsOf(product));

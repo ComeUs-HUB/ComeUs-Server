@@ -14,7 +14,7 @@ import java.util.Comparator;
  * {@code description}과 이미지 전체를 담으면 바디가 그만큼 커진다.
  *
  * <p>{@code stockQuantity}와 {@code categoryName}을 담지 않는다. 전자는 {@code status}가
- * 이미 말하고, 후자는 읽는 순간 LAZY 프록시가 깨져 카테고리마다 SELECT가 붙는다.
+ * 이미 말하고(ADR 0015), 후자는 읽는 순간 LAZY 프록시가 깨져 카테고리마다 SELECT가 붙는다.
  * 필드 추가는 하위호환이지만 제거는 계약 파기라, 필요해질 때 늘린다.
  *
  * @param categoryId   {@code getCategory().getId()}는 프록시를 초기화하지 않아 공짜다
