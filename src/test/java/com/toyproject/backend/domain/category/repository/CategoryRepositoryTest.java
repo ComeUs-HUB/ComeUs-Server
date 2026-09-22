@@ -94,4 +94,60 @@ class CategoryRepositoryTest {
 
         assertThat(saved.getCreatedAt()).isNotNull();
     }
+
+    // ── [Phase 3 · 7단계] findSelfAndChildIds ──────────────────────────────
+    // @Query의 JPQL은 문자열이라 컴파일에서 검증되지 않는다. 실제 SQL이 도는 곳은 여기뿐이다.
+
+    @Test
+    @DisplayName("findSelfAndChildIds — 대분류를 주면 자기 자신과 소분류 id가 함께 나온다")
+    void findSelfAndChildIds_root() {
+        Category top = categoryRepository.save(Category.root("상의", 1));
+        Category tshirt = categoryRepository.save(Category.child(top, "티셔츠", 1));
+        Category shirt = categoryRepository.save(Category.child(top, "셔츠", 2));
+
+        List<Long> ids = categoryRepository.findSelfAndChildIds(top.getId());
+
+        assertThat(ids)
+                .as("상품 필터의 IN 절에 그대로 들어갈 값이다")
+                .containsExactlyInAnyOrder(top.getId(), tshirt.getId(), shirt.getId());
+    }
+
+    @Test
+    @DisplayName("findSelfAndChildIds — 소분류를 주면 자기 자신 하나다 (2depth라 손자가 없다)")
+    void findSelfAndChildIds_child() {
+        Category top = categoryRepository.save(Category.root("상의", 1));
+        Category tshirt = categoryRepository.save(Category.child(top, "티셔츠", 1));
+
+        assertThat(categoryRepository.findSelfAndChildIds(tshirt.getId()))
+                .containsExactly(tshirt.getId());
+    }
+
+    @Test
+    @DisplayName("findSelfAndChildIds — 자식 없는 대분류도 자기 자신은 나온다")
+    void findSelfAndChildIds_rootWithoutChildren() {
+        Category bag = categoryRepository.save(Category.root("가방", 1));
+
+        assertThat(categoryRepository.findSelfAndChildIds(bag.getId()))
+                .containsExactly(bag.getId());
+    }
+
+    @Test
+    @DisplayName("findSelfAndChildIds — 없는 id는 빈 목록이다 (서비스가 CA001로 바꾼다)")
+    void findSelfAndChildIds_missing() {
+        assertThat(categoryRepository.findSelfAndChildIds(99_999L))
+                .as("존재하면 자기 자신이 반드시 걸리므로, 비었다는 것은 없다는 뜻이다")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("findSelfAndChildIds — 다른 대분류의 소분류는 섞이지 않는다")
+    void findSelfAndChildIds_doesNotLeakSiblings() {
+        Category top = categoryRepository.save(Category.root("상의", 1));
+        Category tshirt = categoryRepository.save(Category.child(top, "티셔츠", 1));
+        Category bottom = categoryRepository.save(Category.root("하의", 2));
+        categoryRepository.save(Category.child(bottom, "슬랙스", 1));
+
+        assertThat(categoryRepository.findSelfAndChildIds(top.getId()))
+                .containsExactlyInAnyOrder(top.getId(), tshirt.getId());
+    }
 }
