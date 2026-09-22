@@ -58,8 +58,15 @@ com.toyproject.backend
 │   │   ├── dto                 #   CategoryCreateRequest, CategoryUpdateRequest,
 │   │   │                       #   CategoryResponse, CategoryTreeResponse
 │   │   └── exception           #   CategoryErrorCode
-│   ├── product     ─┐
-│   ├── cart         │
+│   ├── product                 # 상품 (페이징·필터·soft delete)
+│   │   ├── controller          #   ProductController
+│   │   ├── service             #   ProductService
+│   │   ├── repository          #   ProductRepository, ProductSpecifications
+│   │   ├── entity              #   Product, ProductImage, ProductStatus
+│   │   ├── dto                 #   ProductListResponse, ProductDetailResponse,
+│   │   │                       #   ProductSearchRequest, ProductSearchCondition
+│   │   └── exception           #   ProductErrorCode
+│   ├── cart        ─┐
 │   ├── order        ├─ exception/*ErrorCode 만 존재. 나머지는 착수 시점에 만든다
 │   ├── payment      │
 │   └── review      ─┘
@@ -89,9 +96,16 @@ com.toyproject.backend
       | grep -v "global/security/\|global/config/SecurityConfig.java"
     #   → 비어야 한다
     ```
-- **도메인 간 참조는 단방향으로 유지한다.** 현재 유일한 도메인 간 의존은 `auth → user`이며,
-  auth는 `UserRepository`가 아니라 `UserService`의 공개 메서드만 경유한다
-  ([domains/auth.md](domains/auth.md))
+- **도메인 간 참조는 방향을 고정하고, 리포지토리가 아니라 서비스를 경유한다.** 현재 셋이다
+  - `auth → user` — `UserRepository`가 아니라 `UserService`의 공개 메서드만 쓴다
+    ([domains/auth.md](domains/auth.md))
+  - `user → auth` — 탈퇴가 토큰 정리까지 끝내야 해서 `UserController`가 `AuthService`의
+    `revokeAllTokens`·`unlinkKakao`를 함께 부른다. `UserService`는 `AuthErrorCode`만 쓴다
+    ([domains/auth.md](domains/auth.md))
+  - `product → category` — `Product`가 `Category`를 참조하고, 목록 필터의 하위 id를
+    `CategoryService`에서 받는다. `CategoryRepository`는 category 패키지 밖에서 주입하지 않는다
+  - 역방향(`category → product`)은 **카테고리 삭제 차단 하나에만** 예외로 열기로 했다
+    ([ADR 0014](decisions/0014-category-reads-product-repository.md))
 - `BusinessException`이 `ErrorCode`를 **인터페이스 타입**으로 들고 있어, 새 도메인이 에러 코드를
   추가해도 `global`을 고치지 않는다 ([conventions/error-codes.md](conventions/error-codes.md))
 
@@ -147,9 +161,10 @@ cross-site 요청에 붙지 않아 원천 차단된다. (`oauth_state`는 자격
 | 리뷰 작성/수정 | ❌ | ✅ (본인) | ✅ |
 | 리뷰 삭제 | ❌ | ✅ (본인) | ✅ |
 
-**카테고리 두 행은 필터체인에 실제로 배선돼 있다** — `GET /api/categories`는 permitAll,
-나머지 셋은 `hasRole("ADMIN")`이다. 그 외는 auth·user 엔드포인트만 명시돼 있고 나머지는
-`anyRequest().authenticated()`라, 상품·리뷰의 공개 조회는 아직 열려 있지 않다.
+**카테고리·상품의 조회 행은 필터체인에 실제로 배선돼 있다** — `GET /api/categories`와
+`GET /api/products`·`/api/products/{id}`가 permitAll이고, 카테고리 쓰기 셋은 `hasRole("ADMIN")`이다.
+상품 쓰기와 리뷰는 명시된 매처가 없어 `anyRequest().authenticated()`에 걸린다 —
+리뷰의 공개 조회는 아직 열려 있지 않고, 상품 쓰기의 `hasRole("ADMIN")`은 그 엔드포인트와 함께 붙는다.
 위 매트릭스와 실제 필터체인을 엔드포인트 단위로 대조하는 작업은 전 도메인 구현 후에 한다
 ([roadmap.md](roadmap.md)).
 

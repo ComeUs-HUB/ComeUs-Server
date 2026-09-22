@@ -13,7 +13,8 @@
 
 깨뜨리면 안 되는 규칙:
 
-- **의존 방향은 `auth → user` 단방향.** user는 auth를 참조하지 않는다
+- **서비스 계층의 의존 방향은 `auth → user` 단방향.** `UserService`는 `AuthService`를 부르지 않는다 —
+  탈퇴만 예외이며 그 호출은 `UserController`가 소유한다(아래)
 - **auth는 `UserRepository`를 직접 주입하지 않는다** — `UserService`의 공개 메서드만 경유한다.
   회원 생성 규칙이 한 곳(user)에 남게 하기 위함이다
 - `Provider` enum은 `User.provider`의 타입이므로 **user에 남긴다**

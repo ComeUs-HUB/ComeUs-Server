@@ -1,7 +1,7 @@
 # category / product — 카테고리 · 상품
 
 > 이 문서는 **계약**이고, 무엇이 끝났는지는 [roadmap.md](../roadmap.md)가 소유한다.
-> **Category는 구현돼 있고 Product는 아직 `ProductErrorCode`만 선반영돼 있다.**
+> **Category는 전부, Product는 조회 경로(목록·상세)까지 코드에 있다.**
 
 ADMIN 접근 제어는 Category 구현과 함께 들어왔다 — `hasRole("ADMIN")`이 `SecurityConfig`에 붙어 있고,
 인가 실패는 A002(403)로 나간다
@@ -82,6 +82,9 @@ status(ON_SALE/SOLD_OUT/HIDDEN), createdAt, updatedAt
 - ⚠️ **재고가 다시 차도 `SOLD_OUT`이었을 때만 `ON_SALE`로 복귀한다.** `HIDDEN`은 재고와 다른 축이라
   복귀 대상이 아니다 — 조건 없이 되돌리면 삭제된 상품이 재고 복구만으로 목록에 다시 뜬다
   ([ADR 0013](../decisions/0013-hide-soft-deleted-products-everywhere.md))
+- **공개 응답은 재고 수량을 담지 않는다.** 목록·상세 모두 `stockQuantity`가 없고,
+  구매 가능 여부는 `status`가 표현한다(`SOLD_OUT`). 조회가 비회원에게 열려 있어
+  재고를 내보내면 폴링만으로 판매량이 추정된다 ([ADR 0015](../decisions/0015-no-stock-quantity-in-public-response.md))
 - 삭제는 **soft delete**(status = `HIDDEN`) — 주문 이력에 연결된 상품이 사라지면 안 된다.
   카테고리의 하드 삭제와 갈리는 지점이다
 - **`HIDDEN`은 공개 조회 API 전부에서 숨긴다.** 목록에서 제외하고 상세는 `P001`(404)다.
@@ -114,6 +117,9 @@ status(ON_SALE/SOLD_OUT/HIDDEN), createdAt, updatedAt
   ⚠️ 화이트리스트가 없으면 `?sort=foo`가 `PropertyReferenceException`을 일으키고,
   이 예외는 `GlobalExceptionHandler`가 처리하는 7종에 없어 **`C003`(500)으로 나간다** —
   클라이언트 입력 오류가 서버 오류로 보고된다
+- **재고 수량은 공개 응답에서 뺀다.** 품절은 `status` 하나로 표현하며, 관리자용 재고 노출이
+  필요해지면 쓰기 응답 DTO를 분리하는 쪽으로 확장한다 —
+  [ADR 0015](../decisions/0015-no-stock-quantity-in-public-response.md)
 - **응답 DTO는 목록용과 상세용을 나눈다.** 목록은 대표 이미지(`displayOrder` 최소) 한 장만 담고,
   상세가 이미지 전체와 `description`을 담는다. `CategoryResponse`/`CategoryTreeResponse`를
   나눈 것과 같은 이유다
