@@ -31,15 +31,16 @@ import java.util.Map;
  *       서비스가 같은 검사를 한 번 더 하면 규칙이 두 곳으로 갈라진다.</li>
  *   <li>상태 변경은 엔티티의 도메인 메서드({@code updateInfo})에 위임하고 더티 체킹으로 반영한다.
  *       서비스에서 필드를 직접 세팅하거나 {@code save}를 다시 부르지 않는다 — {@code UserService}와 같다.</li>
- *   <li>엔티티를 그대로 반환하지 않고 DTO로 바꿔 내보낸다.</li>
+ *   <li>엔티티를 그대로 반환하지 않고 DTO로 바꿔 내보낸다. 예외는 {@link #getCategory(Long)}이며,
+ *       상품이 FK 연관을 맺으려면 영속 상태의 인스턴스 자체가 필요해서다.</li>
  * </ul>
  *
  * <p><b>삭제는 하드 삭제다.</b> 상품({@code HIDDEN} soft delete)과 다르다 — 카테고리는 주문 이력에
  * 매달리지 않아 지워도 과거 기록이 깨지지 않는다.
  *
- * <p>⚠️ <b>"상품이 붙은 카테고리 삭제"는 아직 막지 않는다.</b> {@code Product}가 없어 FK 자체가 없다.
- * Phase 3-2에서 {@code products.category_id}가 생기면 그때 함께 막아야 한다 —
- * 지금 걸 수 있는 것은 하위 카테고리 존재(CA002)뿐이다.
+ * <p>⚠️ <b>"상품이 붙은 카테고리 삭제"를 아직 CA004로 막지 않는다.</b> FK(RESTRICT)가 삭제 자체는
+ * 거부하지만 응답이 C005(409)로 나간다. 8단계에서 {@code ProductRepository}를 직접 읽어
+ * CA004로 바꾼다(ADR 0014) — 지금 여기서 거는 것은 하위 카테고리 존재(CA002)뿐이다.
  */
 @Slf4j
 @Service
@@ -158,6 +159,20 @@ public class CategoryService {
     }
 
     /**
+     * id로 카테고리를 읽는다. 없으면 CA001.
+     *
+     * <p><b>{@code ProductService}가 상품 등록·수정에서 {@code Category}를 얻는 진입점이다</b> —
+     * {@code CategoryRepository}는 category 패키지 밖에서 주입하지 않는다.
+     *
+     * <p>{@code UserService.getActiveUser}와 달리 <b>404가 맞다.</b> 클라이언트가 경로 변수나
+     * 요청 바디로 카테고리를 <b>직접 지목</b>하므로 "네가 지목한 것이 없다"가 정확한 설명이다.
+     */
+    public Category getCategory(Long id) {
+        return categoryRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(CategoryErrorCode.CATEGORY_NOT_FOUND));
+    }
+
+    /**
      * 소분류를 부모 id로 묶는다.
      *
      * <p>{@code LinkedHashMap}과 {@code ArrayList}로 <b>조회 순서를 보존</b>한다. 입력이 이미
@@ -175,17 +190,5 @@ public class CategoryService {
                     .add(CategoryTreeResponse.of(category));
         }
         return grouped;
-    }
-
-    /**
-     * id로 카테고리를 읽는다. 없으면 CA001.
-     *
-     * <p>{@code UserService.getActiveUser}와 달리 <b>404가 맞다.</b> 클라이언트가 경로 변수로
-     * 카테고리를 <b>직접 지목</b>하므로 "네가 지목한 것이 없다"가 정확한 설명이다.
-     * 회원 API는 지목 수단이 없어 401로 내렸지만 여기는 사정이 다르다.
-     */
-    private Category getCategory(Long id) {
-        return categoryRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(CategoryErrorCode.CATEGORY_NOT_FOUND));
     }
 }
