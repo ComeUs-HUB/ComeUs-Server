@@ -1,10 +1,12 @@
 package com.toyproject.backend.domain.product.service;
 
 import com.toyproject.backend.domain.category.service.CategoryService;
+import com.toyproject.backend.domain.product.dto.ProductCreateRequest;
 import com.toyproject.backend.domain.product.dto.ProductDetailResponse;
 import com.toyproject.backend.domain.product.dto.ProductListResponse;
 import com.toyproject.backend.domain.product.dto.ProductSearchCondition;
 import com.toyproject.backend.domain.product.dto.ProductSearchRequest;
+import com.toyproject.backend.domain.product.dto.ProductUpdateRequest;
 import com.toyproject.backend.domain.product.entity.Product;
 import com.toyproject.backend.domain.product.entity.ProductStatus;
 import com.toyproject.backend.domain.product.exception.ProductErrorCode;
@@ -22,14 +24,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
- * [Phase 3 · 7단계] 상품 서비스. 지금은 조회 둘뿐이고 등록·수정·삭제는 8단계에서 붙는다.
+ * [Phase 3 · 7단계] 상품 서비스. 조회 둘과 쓰기 셋을 갖는다.
  *
  * <p>카테고리는 {@code CategoryService}를 경유한다 — {@code CategoryRepository}에
  * "category 패키지 안에서만 주입한다"는 규칙이 걸려 있다. 반대 방향
  * ({@code CategoryService → ProductRepository})은 순환을 끊기 위한 예외이며 대칭이 아니다(ADR 0014).
  *
- * <p>{@code HIDDEN}은 읽기 경로에서만 걸린다. 8단계의 수정·삭제는 {@code findById}로
- * 숨김까지 읽어야 하므로 이 두 조회와 같은 헬퍼로 합치지 않는다(ADR 0013).
+ * <p>{@code HIDDEN}은 읽기 경로에서만 걸린다. 수정·삭제는 {@link #getProduct(Long)}으로
+ * 숨김까지 읽는다 — 그것이 되살리는 유일한 통로라 조회 경로와 합치지 않는다(ADR 0013).
  */
 @Slf4j
 @Service
@@ -69,6 +71,68 @@ public class ProductService {
                 .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
 
         return ProductDetailResponse.from(product);
+    }
+
+    /**
+     * 상품 등록. 재고 0이면 {@code SOLD_OUT}으로 시작한다.
+     *
+     * @throws BusinessException {@code categoryId}가 가리키는 카테고리가 없으면 CA001(404)
+     */
+    @Transactional
+    public ProductDetailResponse create(ProductCreateRequest request) {
+        Product product = Product.create(
+                categoryService.getCategory(request.categoryId()),
+                request.name(),
+                request.description(),
+                request.price(),
+                request.stockQuantity());
+        product.replaceImages(request.imageUrls());
+
+        log.info("상품 등록 — categoryId={}, name={}", request.categoryId(), request.name());
+
+        return ProductDetailResponse.from(productRepository.save(product));
+    }
+
+    /**
+     * 상품 수정. 전체 교체이며 {@code HIDDEN}을 푼다(ADR 0013).
+     *
+     * @throws BusinessException 대상이 없으면 P001(404), 카테고리가 없으면 CA001(404)
+     */
+    @Transactional
+    public ProductDetailResponse update(Long id, ProductUpdateRequest request) {
+        Product product = getProduct(id);
+
+        product.updateInfo(
+                categoryService.getCategory(request.categoryId()),
+                request.name(),
+                request.description(),
+                request.price(),
+                request.stockQuantity());
+        product.replaceImages(request.imageUrls());
+
+        return ProductDetailResponse.from(product);
+    }
+
+    /**
+     * 상품 삭제. 행을 지우지 않고 {@code HIDDEN}으로 바꾼다 — 주문 이력이 매달린다.
+     *
+     * @throws BusinessException 대상이 없으면 P001(404)
+     */
+    @Transactional
+    public void delete(Long id) {
+        getProduct(id).hide();
+
+        log.info("상품 삭제(soft) — id={}", id);
+    }
+
+    /**
+     * 수정·삭제 전용 조회. {@code findByIdAndStatusNot}과 달리 {@code HIDDEN}까지 읽는다.
+     *
+     * @throws BusinessException 없으면 P001(404)
+     */
+    private Product getProduct(Long id) {
+        return productRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
     }
 
     /**
