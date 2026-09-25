@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.toyproject.backend.domain.auth.token.JwtProvider;
 import com.toyproject.backend.domain.category.entity.Category;
 import com.toyproject.backend.domain.category.repository.CategoryRepository;
+import com.toyproject.backend.domain.product.dto.ProductCreateRequest;
+import com.toyproject.backend.domain.product.dto.ProductUpdateRequest;
 import com.toyproject.backend.domain.product.entity.Product;
 import com.toyproject.backend.domain.product.repository.ProductRepository;
 import com.toyproject.backend.domain.user.entity.User;
@@ -19,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +31,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -41,8 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>카테고리 트리만 {@code @BeforeEach}가 만들고 상품은 각 테스트가 심는다 —
  * "상품이 하나도 없는" 경우도 케이스이기 때문이다.
  *
- * <p>목록 조회·페이징·정렬·상세 조회 넷을 채웠다. 쓰기 차단(POST 401)은 8단계 쓰기분이
- * 붙으면 403(A002)으로 바뀔 값이라 지금은 계획 주석으로만 남겨 뒀다.
+ * <p>쓰기 블록은 인가 배선과 HTTP 계약만 본다 — 도메인 규칙은 {@code ProductServiceTest}가 맡는다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -462,8 +467,115 @@ class ProductControllerTest {
         }
     }
 
-    // ── 쓰기는 아직 열려 있지 않다 ─────────────────────────────────────────
-    //
-    // POST /api/products 는 401이다 — 엔드포인트가 없고 anyRequest().authenticated()에 걸린다
-    //   ← 8단계 쓰기분이 붙으면 이 케이스는 403(A002)으로 바뀐다
+    /**
+     * 쓰기 셋 — <b>ADMIN 인가 배선과 HTTP 계약만</b> 본다.
+     *
+     * <p>등록·수정·삭제의 도메인 규칙은 {@code ProductServiceTest}가 이미 고정했다. 여기서는
+     * mock으로는 드러나지 않는 것만 남겼다 — {@code hasRole} 판정, {@code Location} 헤더,
+     * {@code @Valid} 결선, 그리고 DELETE가 204가 아니라는 것.
+     */
+    @Nested
+    @DisplayName("쓰기 — ADMIN만")
+    class Write {
+
+        // User 생성 후 admin 으로 승격 (user.promoteToAdmin())
+        private String bearerOf(String providerId, boolean admin) {
+            User user = userRepository.save(User.ofKakao(providerId, providerId + "@kakao.com", "테스터"));
+            if (admin) {
+                user.promoteToAdmin();
+            }
+            return "Bearer " + jwtProvider.createAccessToken(user);
+        }
+
+        private String createBody() throws Exception {
+            return objectMapper.writeValueAsString(new ProductCreateRequest(
+                    tshirt.getId(), "기본 반팔티", "설명", new BigDecimal("19900"), 10,
+                    List.of("https://cdn.example.com/a.jpg")));
+        }
+
+        @Test
+        @DisplayName("비회원은 401(A001)이다 — 익명은 권한 부족이어도 EntryPoint로 간다")
+        void anonymousIsUnauthorized() throws Exception {
+            mockMvc.perform(post(BASE_URI)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(createBody()))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.error.code").value("A001"));
+        }
+
+        @Test
+        @DisplayName("USER 토큰은 403(A002)이다 — hasRole 판정은 실제 필터체인에서만 드러난다")
+        void userIsForbidden() throws Exception {
+            mockMvc.perform(post(BASE_URI)
+                            .header(HttpHeaders.AUTHORIZATION, bearerOf("kakao-user", false))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(createBody()))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.error.code").value("A002"));
+        }
+
+        @Test
+        @DisplayName("PUT·DELETE도 USER에게 막힌다 — 단건 경로 매처가 따로 걸려 있다")
+        void userIsForbiddenOnItemPath() throws Exception {
+            String userBearer = bearerOf("kakao-user", false);
+            long id = saveProduct(tshirt, "기본 반팔티", "19900", 10).getId();
+
+            // POST는 컬렉션 경로, PUT·DELETE는 PRODUCTS_ITEM_PATH라 매처가 갈린다.
+            mockMvc.perform(put(BASE_URI + "/{id}", id)
+                            .header(HttpHeaders.AUTHORIZATION, userBearer)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(createBody()))
+                    .andExpect(status().isForbidden());
+
+            mockMvc.perform(delete(BASE_URI + "/{id}", id)
+                            .header(HttpHeaders.AUTHORIZATION, userBearer))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("ADMIN 등록은 201 + Location이며 절대 URL이 아니라 상대 경로다")
+        void adminCreatesWithRelativeLocation() throws Exception {
+            MvcResult result = mockMvc.perform(post(BASE_URI)
+                            .header(HttpHeaders.AUTHORIZATION, bearerOf("kakao-admin", true))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(createBody()))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.data.name").value("기본 반팔티"))
+                    .andExpect(jsonPath("$.data.status").value("ON_SALE"))
+                    .andReturn();
+
+            String location = result.getResponse().getHeader(HttpHeaders.LOCATION);
+            long id = objectMapper.readTree(result.getResponse().getContentAsString())
+                    .path("data").path("id").asLong();
+
+            assertThat(location).isEqualTo(BASE_URI + "/" + id);
+            assertThat(location).doesNotStartWith("http");
+        }
+
+        @Test
+        @DisplayName("요청 바디가 규칙을 어기면 C001(400)이다 — @Valid가 걸려 있는지 본다")
+        void invalidBodyIsC001() throws Exception {
+            String blankName = objectMapper.writeValueAsString(new ProductCreateRequest(
+                    tshirt.getId(), " ", "설명", new BigDecimal("19900"), 10, List.of()));
+
+            mockMvc.perform(post(BASE_URI)
+                            .header(HttpHeaders.AUTHORIZATION, bearerOf("kakao-admin", true))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(blankName))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("C001"));
+        }
+
+        @Test
+        @DisplayName("ADMIN 삭제는 200 + data:null이다 — 204면 공통 포맷이 깨진다")
+        void adminDeleteReturnsOkWithNullData() throws Exception {
+            long id = saveProduct(tshirt, "기본 반팔티", "19900", 10).getId();
+
+            mockMvc.perform(delete(BASE_URI + "/{id}", id)
+                            .header(HttpHeaders.AUTHORIZATION, bearerOf("kakao-admin", true)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.success").value(true))
+                    .andExpect(jsonPath("$.data").doesNotExist());
+        }
+    }
 }
