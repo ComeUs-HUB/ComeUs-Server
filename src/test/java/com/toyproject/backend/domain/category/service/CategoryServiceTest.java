@@ -250,10 +250,40 @@ class CategoryServiceTest {
             Category top = root(TOP_ID, "상의", 1);
             given(categoryRepository.findById(TOP_ID)).willReturn(Optional.of(top));
             given(categoryRepository.existsByParentId(TOP_ID)).willReturn(false);
+            given(productRepository.existsByCategoryId(TOP_ID)).willReturn(false);
 
             categoryService.delete(TOP_ID);
 
             then(categoryRepository).should().delete(top);
+        }
+
+        @Test
+        @DisplayName("상품이 붙어 있으면 CA004 — 삭제가 실제로 일어나지 않는다")
+        void rejectsWhenHasProducts() {
+            given(categoryRepository.findById(TOP_ID)).willReturn(Optional.of(root(TOP_ID, "상의", 1)));
+            given(categoryRepository.existsByParentId(TOP_ID)).willReturn(false);
+            given(productRepository.existsByCategoryId(TOP_ID)).willReturn(true);
+
+            assertThatThrownBy(() -> categoryService.delete(TOP_ID))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getErrorCode())
+                    .as("FK가 막아 C005로 뭉개지기 전에 도메인이 먼저 판정한다")
+                    .isEqualTo(CategoryErrorCode.CATEGORY_HAS_PRODUCTS);
+
+            then(categoryRepository).should(never()).delete(any());
+        }
+
+        @Test
+        @DisplayName("상품 검사는 자기 자신만 본다 — 하위는 CA002가 이미 막았다")
+        void checksOwnCategoryOnly() {
+            given(categoryRepository.findById(TOP_ID)).willReturn(Optional.of(root(TOP_ID, "상의", 1)));
+            given(categoryRepository.existsByParentId(TOP_ID)).willReturn(false);
+            given(productRepository.existsByCategoryId(TOP_ID)).willReturn(false);
+
+            categoryService.delete(TOP_ID);
+
+            // 자식 id까지 훑을 이유가 없다 — 여기 도달한 카테고리는 잎이다.
+            then(productRepository).should().existsByCategoryId(TOP_ID);
         }
 
         @Test
@@ -268,6 +298,7 @@ class CategoryServiceTest {
                     .isEqualTo(CategoryErrorCode.CATEGORY_HAS_CHILDREN);
 
             then(categoryRepository).should(never()).delete(any());
+            then(productRepository).should(never()).existsByCategoryId(any());
         }
 
         @Test
@@ -281,6 +312,7 @@ class CategoryServiceTest {
                     .isEqualTo(CategoryErrorCode.CATEGORY_NOT_FOUND);
 
             then(categoryRepository).should(never()).existsByParentId(any());
+            then(productRepository).should(never()).existsByCategoryId(any());
         }
     }
 
