@@ -393,31 +393,23 @@ class ProductRepositoryTest {
         }
 
         @Test
-        @DisplayName("existsByCategoryIdIn — 상품이 붙어 있으면 true")
+        @DisplayName("existsByCategoryId — 상품이 붙어 있으면 true")
         void existsWhenProductAttached() {
-            assertThat(productRepository.existsByCategoryIdIn(List.of(tshirt.getId()))).isTrue();
+            assertThat(productRepository.existsByCategoryId(tshirt.getId())).isTrue();
         }
 
         @Test
-        @DisplayName("existsByCategoryIdIn — 숨긴 상품만 있어도 true (행이 남아 FK가 걸린다)")
+        @DisplayName("existsByCategoryId — 숨긴 상품만 있어도 true (행이 남아 FK가 걸린다)")
         void existsEvenWhenOnlyHidden() {
-            assertThat(productRepository.existsByCategoryIdIn(List.of(outer.getId())))
+            assertThat(productRepository.existsByCategoryId(outer.getId()))
                     .as("soft delete라 행이 남는다 — 카테고리를 지우면 FK가 깨진다")
                     .isTrue();
         }
 
         @Test
-        @DisplayName("existsByCategoryIdIn — 상품이 없으면 false")
+        @DisplayName("existsByCategoryId — 상품이 없으면 false")
         void notExistsWhenEmpty() {
-            assertThat(productRepository.existsByCategoryIdIn(List.of(bag.getId()))).isFalse();
-        }
-
-        @Test
-        @DisplayName("existsByCategoryIdIn — 목록 중 하나라도 걸리면 true")
-        void existsIfAnyMatches() {
-            assertThat(productRepository.existsByCategoryIdIn(List.of(bag.getId(), tshirt.getId())))
-                    .as("대분류를 지울 때 자기 자신 + 자식들을 함께 검사하기 위한 동작이다")
-                    .isTrue();
+            assertThat(productRepository.existsByCategoryId(bag.getId())).isFalse();
         }
     }
 

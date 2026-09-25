@@ -7,6 +7,7 @@ import com.toyproject.backend.domain.category.dto.CategoryUpdateRequest;
 import com.toyproject.backend.domain.category.entity.Category;
 import com.toyproject.backend.domain.category.exception.CategoryErrorCode;
 import com.toyproject.backend.domain.category.repository.CategoryRepository;
+import com.toyproject.backend.domain.product.repository.ProductRepository;
 import com.toyproject.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,9 +39,9 @@ import java.util.Map;
  * <p><b>삭제는 하드 삭제다.</b> 상품({@code HIDDEN} soft delete)과 다르다 — 카테고리는 주문 이력에
  * 매달리지 않아 지워도 과거 기록이 깨지지 않는다.
  *
- * <p>⚠️ <b>"상품이 붙은 카테고리 삭제"를 아직 CA004로 막지 않는다.</b> FK(RESTRICT)가 삭제 자체는
- * 거부하지만 응답이 C005(409)로 나간다. 8단계에서 {@code ProductRepository}를 직접 읽어
- * CA004로 바꾼다(ADR 0014) — 지금 여기서 거는 것은 하위 카테고리 존재(CA002)뿐이다.
+ * <p>삭제를 막는 조건은 둘이다 — 하위 카테고리(CA002)와 붙어 있는 상품(CA004).
+ * 후자는 {@code ProductRepository}를 직접 읽어 판정한다(ADR 0014). FK(RESTRICT)만으로도
+ * 삭제 자체는 거부되지만 응답이 C005로 뭉개지므로, 도메인 코드로 먼저 걸러 CA004를 내보낸다.
  */
 @Slf4j
 @Service
@@ -49,6 +50,12 @@ import java.util.Map;
 public class CategoryService {
 
     private final CategoryRepository categoryRepository;
+
+    /**
+     * 도메인 간 <b>역방향</b> 참조다. 상품이 붙은 카테고리를 막는 이 검사 하나에만 쓰며,
+     * 다른 용도로 넓히지 않는다(ADR 0014).
+     */
+    private final ProductRepository productRepository;
 
     /**
      * 전체 트리 조회. {@code GET /api/categories}
@@ -116,7 +123,11 @@ public class CategoryService {
      * <p>하위 카테고리가 하나라도 있으면 거부한다. <b>2depth라 손자를 따질 필요가 없어</b>
      * 이 한 번의 검사로 끝난다 — 깊이가 무제한이었다면 하위 전체를 훑어야 했다.
      *
-     * @throws BusinessException 대상이 없으면 CA001(404), 하위 카테고리가 있으면 CA002(409)
+     * <p>상품 검사는 <b>자기 자신만</b> 본다. 하위가 있으면 앞의 CA002에서 이미 막히므로
+     * 여기 도달한 카테고리는 잎이고, 딸린 소분류의 상품을 따로 훑을 일이 없다.
+     *
+     * @throws BusinessException 대상이 없으면 CA001(404), 하위 카테고리가 있으면 CA002(409),
+     *                           상품이 붙어 있으면 CA004(409)
      */
     @Transactional
     public void delete(Long id) {
@@ -124,6 +135,9 @@ public class CategoryService {
 
         if (categoryRepository.existsByParentId(id)) {
             throw new BusinessException(CategoryErrorCode.CATEGORY_HAS_CHILDREN);
+        }
+        if (productRepository.existsByCategoryId(id)) {
+            throw new BusinessException(CategoryErrorCode.CATEGORY_HAS_PRODUCTS);
         }
         categoryRepository.delete(category);
     }

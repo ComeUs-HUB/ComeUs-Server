@@ -7,6 +7,7 @@ import com.toyproject.backend.domain.category.dto.CategoryUpdateRequest;
 import com.toyproject.backend.domain.category.entity.Category;
 import com.toyproject.backend.domain.category.exception.CategoryErrorCode;
 import com.toyproject.backend.domain.category.repository.CategoryRepository;
+import com.toyproject.backend.domain.product.repository.ProductRepository;
 import com.toyproject.backend.global.exception.BusinessException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -48,6 +49,9 @@ class CategoryServiceTest {
 
     @Mock
     private CategoryRepository categoryRepository;
+
+    @Mock
+    private ProductRepository productRepository;
 
     @InjectMocks
     private CategoryService categoryService;

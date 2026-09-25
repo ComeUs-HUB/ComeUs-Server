@@ -5,7 +5,6 @@ import com.toyproject.backend.domain.product.entity.ProductStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -21,12 +20,13 @@ import java.util.Optional;
 public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpecificationExecutor<Product> {
 
     /**
-     * 주어진 카테고리들에 상품이 하나라도 있는지. 카테고리 삭제 차단(CA004)에 쓴다.
+     * 그 카테고리에 상품이 하나라도 있는지. 카테고리 삭제 차단(CA004)에 쓴다.
      *
-     * <p>{@code CategoryService}가 직접 주입해 쓰는 유일한 진입점이다(ADR 0014).
-     * 대분류를 지우려면 하위 소분류에 붙은 상품까지 봐야 해서 목록을 받는다.
+     * <p>{@code CategoryService}가 직접 주입해 쓰는 유일한 진입점이다(ADR 0014 — 거기서는
+     * {@code existsByCategoryIdIn}으로 적혀 있다. 하위가 있으면 CA002가 먼저 막아 잎만 도달하므로
+     * 목록을 받을 이유가 없어 단건으로 좁혔다).
      */
-    boolean existsByCategoryIdIn(List<Long> categoryIds);
+    boolean existsByCategoryId(Long categoryId);
 
     /**
      * 특정 상태를 제외하고 id로 조회한다. <b>공개 상세 조회 전용</b>이다.
