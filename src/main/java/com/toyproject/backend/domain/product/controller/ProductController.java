@@ -1,8 +1,10 @@
 package com.toyproject.backend.domain.product.controller;
 
+import com.toyproject.backend.domain.product.dto.ProductCreateRequest;
 import com.toyproject.backend.domain.product.dto.ProductDetailResponse;
 import com.toyproject.backend.domain.product.dto.ProductListResponse;
 import com.toyproject.backend.domain.product.dto.ProductSearchRequest;
+import com.toyproject.backend.domain.product.dto.ProductUpdateRequest;
 import com.toyproject.backend.domain.product.service.ProductService;
 import com.toyproject.backend.global.exception.BusinessException;
 import com.toyproject.backend.global.exception.CommonErrorCode;
@@ -15,23 +17,29 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.net.URI;
 import java.util.Set;
 
 /**
- * [Phase 3 · 8단계] 상품 API. 지금은 조회 둘뿐이고 쓰기 셋은 이어서 붙는다.
+ * [Phase 3 · 8단계] 상품 API. 조회 둘은 비회원에게 열려 있고 쓰기 셋은 ADMIN만 호출한다.
  *
  * <p>{@code @AuthenticationPrincipal}을 받지 않는다 — 상품에는 소유자가 없고 HIDDEN을 권한으로
  * 분기하지 않기로 했으므로(ADR 0013) 누가 호출했는지가 동작을 바꾸지 않는다.
  * 권한 판정은 필터체인에서 끝난다.
  *
- * <p>둘 다 헤더나 200 이외 상태를 다루지 않으므로 {@code ResponseEntity}를 쓰지 않는다
- * (conventions/api-response.md).
+ * <p>{@code ResponseEntity}는 <b>헤더나 200 이외 상태가 필요할 때만</b> 쓴다
+ * (conventions/api-response.md) — 다섯 중 {@code POST} 하나다.
  */
 @Slf4j
 @RestController
@@ -74,6 +82,40 @@ public class ProductController {
     @GetMapping("/{id}")
     public ApiResponse<ProductDetailResponse> getDetail(@PathVariable Long id) {
         return ApiResponse.success(productService.getDetail(id));
+    }
+
+    /**
+     * 상품 등록. <b>201 + {@code Location}</b>으로 응답한다.
+     *
+     * <p>{@code Location}은 절대 URL이 아닌 <b>상대 경로</b>다 — 이유는 {@code CategoryController}와 같다.
+     */
+    @PostMapping
+    public ResponseEntity<ApiResponse<ProductDetailResponse>> create(
+            @Valid @RequestBody ProductCreateRequest request) {
+        ProductDetailResponse response = productService.create(request);
+
+        return ResponseEntity
+                .created(URI.create(BASE_PATH + "/" + response.id()))
+                .body(ApiResponse.success(response));
+    }
+
+    /**
+     * 상품 수정. 부분 수정이 아니라 <b>전체 교체</b>이며 {@code HIDDEN}을 푼다(ADR 0013).
+     */
+    @PutMapping("/{id}")
+    public ApiResponse<ProductDetailResponse> update(@PathVariable Long id,
+                                                     @Valid @RequestBody ProductUpdateRequest request) {
+        return ApiResponse.success(productService.update(id, request));
+    }
+
+    /**
+     * 상품 삭제(soft delete). <b>200 + {@code data: null}</b> — 204면 공통 응답 포맷이 깨진다.
+     */
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(@PathVariable Long id) {
+        productService.delete(id);
+
+        return ApiResponse.success(null);
     }
 
     /**

@@ -41,6 +41,8 @@ import java.util.List;
  *       <td>ADMIN 권한을 요구하는 <b>첫</b> 엔드포인트</td></tr>
  *   <tr><td>{@code GET /api/products}·{@code /api/products/{id}}</td><td>permitAll</td>
  *       <td>비회원 상품 탐색 — 목록과 단건 둘 다 연다</td></tr>
+ *   <tr><td>{@code /api/products} POST·PUT·DELETE</td><td>{@code hasRole("ADMIN")}</td>
+ *       <td>카테고리와 같은 배선을 그대로 쓴다</td></tr>
  *   <tr><td>{@code /api/users/me} (GET/PUT/DELETE)</td><td>authenticated</td><td>{@code anyRequest()}에 포함된다</td></tr>
  *   <tr><td>그 외</td><td>{@code anyRequest().authenticated()}</td><td>남은 공개 조회 API는 phase6에서 최종 점검</td></tr>
  * </table>
@@ -132,9 +134,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, PERMIT_ALL_POST).permitAll()
                         // 카테고리 쓰기는 ADMIN만. hasRole 은 ROLE_ 접두사를 스스로 붙이므로
                         // 여기에 Role.ADMIN.name() 을 그대로 넘긴다 — 접두사는 UserPrincipal 이 담당한다.
+                        // "ADMIN" 리터럴이 아닌 name() 인 이유: 상수 이름이 바뀌면 인가가 런타임에
+                        // 조용히 실패하는 대신 컴파일에서 걸린다.
                         .requestMatchers(HttpMethod.POST, CATEGORIES_PATH).hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.PUT, CATEGORIES_ITEM_PATH).hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.DELETE, CATEGORIES_ITEM_PATH).hasRole(Role.ADMIN.name())
+                        // 상품 쓰기도 같은 배선이다. POST만 컬렉션 경로이고 PUT·DELETE는 단건이다.
+                        .requestMatchers(HttpMethod.POST, PRODUCTS_PATH).hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.PUT, PRODUCTS_ITEM_PATH).hasRole(Role.ADMIN.name())
+                        .requestMatchers(HttpMethod.DELETE, PRODUCTS_ITEM_PATH).hasRole(Role.ADMIN.name())
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
