@@ -3,10 +3,13 @@ package com.toyproject.backend.domain.product.service;
 import com.toyproject.backend.domain.category.entity.Category;
 import com.toyproject.backend.domain.category.exception.CategoryErrorCode;
 import com.toyproject.backend.domain.category.service.CategoryService;
+import com.toyproject.backend.domain.product.dto.ProductCreateRequest;
 import com.toyproject.backend.domain.product.dto.ProductDetailResponse;
 import com.toyproject.backend.domain.product.dto.ProductListResponse;
 import com.toyproject.backend.domain.product.dto.ProductSearchRequest;
+import com.toyproject.backend.domain.product.dto.ProductUpdateRequest;
 import com.toyproject.backend.domain.product.entity.Product;
+import com.toyproject.backend.domain.product.entity.ProductImage;
 import com.toyproject.backend.domain.product.entity.ProductStatus;
 import com.toyproject.backend.domain.product.exception.ProductErrorCode;
 import com.toyproject.backend.domain.product.repository.ProductRepository;
@@ -16,6 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -77,6 +81,24 @@ class ProductServiceTest {
             product.addImage(imageUrl);
         }
         return product;
+    }
+
+    private static ProductCreateRequest createRequest(long categoryId, String name,
+                                                     String price, int stock, String... imageUrls) {
+        return new ProductCreateRequest(categoryId, name, name + " 설명",
+                new BigDecimal(price), stock, List.of(imageUrls));
+    }
+
+    private static ProductUpdateRequest updateRequest(long categoryId, String name,
+                                                     String price, int stock, String... imageUrls) {
+        return new ProductUpdateRequest(categoryId, name, name + " 설명",
+                new BigDecimal(price), stock, List.of(imageUrls));
+    }
+
+    /** {@code save}가 인자를 그대로 돌려주게 한다 — 응답 DTO가 저장된 엔티티를 읽기 때문이다. */
+    private void givenSaveReturnsArgument() {
+        given(productRepository.save(any(Product.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
     }
 
     private void givenPage(Page<Product> page) {
@@ -300,6 +322,207 @@ class ProductServiceTest {
                     .as("클라이언트가 null 검사 없이 순회할 수 있어야 한다")
                     .isNotNull()
                     .isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("등록")
+    class Create {
+
+        @Test
+        @DisplayName("카테고리는 CategoryService를 경유해 얻는다")
+        void delegatesCategoryLookup() {
+            given(categoryService.getCategory(9L)).willReturn(category(9L, "티셔츠"));
+            givenSaveReturnsArgument();
+
+            productService.create(createRequest(9L, "기본 반팔티", "19900", 10));
+
+            // CategoryRepository를 직접 주입하지 않는다는 규칙이 여기서 지켜지는지 본다(ADR 0014).
+            then(categoryService).should().getCategory(9L);
+        }
+
+        @Test
+        @DisplayName("없는 카테고리면 CA001이 그대로 전파되고 저장하지 않는다")
+        void absentCategoryIsCa001() {
+            given(categoryService.getCategory(99L))
+                    .willThrow(new BusinessException(CategoryErrorCode.CATEGORY_NOT_FOUND));
+
+            assertThatThrownBy(() -> productService.create(createRequest(99L, "기본 반팔티", "19900", 10)))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getErrorCode())
+                    .isEqualTo(CategoryErrorCode.CATEGORY_NOT_FOUND);
+
+            then(productRepository).should(never()).save(any());
+        }
+
+        @Test
+        @DisplayName("재고 0으로 등록하면 SOLD_OUT으로 저장된다")
+        void zeroStockStartsSoldOut() {
+            given(categoryService.getCategory(9L)).willReturn(category(9L, "티셔츠"));
+            givenSaveReturnsArgument();
+
+            productService.create(createRequest(9L, "오버핏 반팔티", "29900", 0));
+
+            assertThat(savedProduct().getStatus())
+                    .as("상태는 요청이 정하지 못한다 — 재고가 정한다")
+                    .isEqualTo(ProductStatus.SOLD_OUT);
+        }
+
+        @Test
+        @DisplayName("이미지는 보낸 순서대로 붙는다")
+        void imagesKeepRequestOrder() {
+            given(categoryService.getCategory(9L)).willReturn(category(9L, "티셔츠"));
+            givenSaveReturnsArgument();
+
+            productService.create(createRequest(9L, "기본 반팔티", "19900", 10,
+                    "https://cdn.example.com/a.jpg", "https://cdn.example.com/b.jpg"));
+
+            assertThat(savedProduct().getImages())
+                    .extracting(ProductImage::getImageUrl)
+                    .containsExactly("https://cdn.example.com/a.jpg", "https://cdn.example.com/b.jpg");
+        }
+
+        @Test
+        @DisplayName("이미지를 보내지 않아도 등록된다")
+        void imagesAreOptional() {
+            given(categoryService.getCategory(9L)).willReturn(category(9L, "티셔츠"));
+            givenSaveReturnsArgument();
+
+            ProductDetailResponse response = productService.create(
+                    createRequest(9L, "기본 반팔티", "19900", 10));
+
+            assertThat(response.imageUrls()).isEmpty();
+        }
+
+        private Product savedProduct() {
+            ArgumentCaptor<Product> captor = ArgumentCaptor.forClass(Product.class);
+            then(productRepository).should().save(captor.capture());
+            return captor.getValue();
+        }
+    }
+
+    @Nested
+    @DisplayName("수정")
+    class Update {
+
+        @Test
+        @DisplayName("숨긴 상품을 수정하면 HIDDEN이 풀린다 — 되살리는 통로다")
+        void updateUnhides() {
+            Product hidden = product(1L, "단종 티셔츠", "9900");
+            hidden.hide();
+            given(productRepository.findById(1L)).willReturn(Optional.of(hidden));
+            given(categoryService.getCategory(9L)).willReturn(category(9L, "티셔츠"));
+
+            productService.update(1L, updateRequest(9L, "부활 티셔츠", "19900", 10));
+
+            assertThat(hidden.getStatus())
+                    .as("increaseStock과 갈리는 지점이다 — 그쪽은 HIDDEN을 풀지 않는다(ADR 0013)")
+                    .isEqualTo(ProductStatus.ON_SALE);
+        }
+
+        @Test
+        @DisplayName("HIDDEN까지 읽어야 하므로 findById를 쓴다")
+        void readsHiddenRowsToo() {
+            given(productRepository.findById(1L))
+                    .willReturn(Optional.of(product(1L, "기본 반팔티", "19900")));
+            given(categoryService.getCategory(9L)).willReturn(category(9L, "티셔츠"));
+
+            productService.update(1L, updateRequest(9L, "기본 반팔티", "19900", 10));
+
+            then(productRepository).should().findById(1L);
+            // 공개 조회 메서드를 쓰면 숨긴 상품을 되살릴 수 없다.
+            then(productRepository).should(never()).findByIdAndStatusNot(any(), any());
+        }
+
+        @Test
+        @DisplayName("없는 상품이면 P001")
+        void absentProductIsP001() {
+            given(productRepository.findById(99L)).willReturn(Optional.empty());
+
+            assertThatThrownBy(() -> productService.update(99L, updateRequest(9L, "x", "19900", 10)))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getErrorCode())
+                    .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+        }
+
+        @Test
+        @DisplayName("이미지는 통째로 교체된다 — 빠진 것은 사라진다")
+        void imagesAreReplacedWholesale() {
+            Product product = product(1L, "기본 반팔티", "19900",
+                    "https://cdn.example.com/old-1.jpg", "https://cdn.example.com/old-2.jpg");
+            given(productRepository.findById(1L)).willReturn(Optional.of(product));
+            given(categoryService.getCategory(9L)).willReturn(category(9L, "티셔츠"));
+
+            ProductDetailResponse response = productService.update(1L,
+                    updateRequest(9L, "기본 반팔티", "19900", 10, "https://cdn.example.com/new.jpg"));
+
+            assertThat(response.imageUrls()).containsExactly("https://cdn.example.com/new.jpg");
+        }
+
+        @Test
+        @DisplayName("save를 다시 부르지 않는다 — 더티 체킹으로 반영된다")
+        void reliesOnDirtyChecking() {
+            given(productRepository.findById(1L))
+                    .willReturn(Optional.of(product(1L, "기본 반팔티", "19900")));
+            given(categoryService.getCategory(9L)).willReturn(category(9L, "티셔츠"));
+
+            productService.update(1L, updateRequest(9L, "바뀐 이름", "29900", 5));
+
+            then(productRepository).should(never()).save(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("삭제 — soft delete")
+    class Delete {
+
+        @Test
+        @DisplayName("행을 지우지 않고 HIDDEN으로 바꾼다")
+        void hidesInsteadOfDeleting() {
+            Product product = product(1L, "기본 반팔티", "19900");
+            given(productRepository.findById(1L)).willReturn(Optional.of(product));
+
+            productService.delete(1L);
+
+            assertThat(product.getStatus()).isEqualTo(ProductStatus.HIDDEN);
+            // 행을 지우면 주문 이력이 깨진다 — 상속받은 delete는 쓰지 않는다.
+            // delete(Specification) 오버로드가 JpaSpecificationExecutor에 있어 타입을 명시한다.
+            then(productRepository).should(never()).delete(any(Product.class));
+            then(productRepository).should(never()).deleteById(any());
+        }
+
+        @Test
+        @DisplayName("재고는 건드리지 않는다 — 숨김과 재고는 다른 축이다")
+        void keepsStockUntouched() {
+            Product product = product(1L, "기본 반팔티", "19900");
+            given(productRepository.findById(1L)).willReturn(Optional.of(product));
+
+            productService.delete(1L);
+
+            assertThat(product.getStockQuantity()).isEqualTo(10);
+        }
+
+        @Test
+        @DisplayName("없는 상품이면 P001")
+        void absentProductIsP001() {
+            given(productRepository.findById(99L)).willReturn(Optional.empty());
+
+            assertThatThrownBy(() -> productService.delete(99L))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getErrorCode())
+                    .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+        }
+
+        @Test
+        @DisplayName("이미 숨긴 상품을 또 삭제해도 HIDDEN 그대로다")
+        void deletingHiddenIsIdempotent() {
+            Product hidden = product(1L, "단종 티셔츠", "9900");
+            hidden.hide();
+            given(productRepository.findById(1L)).willReturn(Optional.of(hidden));
+
+            productService.delete(1L);
+
+            assertThat(hidden.getStatus()).isEqualTo(ProductStatus.HIDDEN);
         }
     }
 }
