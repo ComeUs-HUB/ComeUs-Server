@@ -4,7 +4,7 @@
 계약은 [architecture.md](architecture.md)·[domains/](domains/)·[conventions/](conventions/)가,
 결정 근거는 [decisions/](decisions/)가 소유한다.
 
-> 기준: 2026-09-22 · 브랜치 `feature/phase3-product`
+> 기준: 2026-09-26 · 브랜치 `feature/phase3-product`
 
 ## 요약
 
@@ -13,16 +13,16 @@
 | 0 | 환경 설정 — 프로젝트 골격, 의존성, 설정 파일 | ✅ |
 | 1 | 글로벌 기반 — 공통 응답, 예외 처리, 페이지네이션 | ✅ |
 | 2 | 인증/인가 — user/auth 도메인, Security, JWT | ✅ (브라우저 E2E 통과) |
-| 3 | 카테고리 / 상품 | 🔶 카테고리 ✅ (MySQL 실기동 통과) · 상품 🔶 (5~7단계 ✅ · 8단계 진행 중) |
+| 3 | 카테고리 / 상품 | 🔶 카테고리 ✅ (MySQL 실기동 통과) · 상품 🔶 (코드 ✅ · MySQL 실기동 남음) |
 | 4 | 구매 플로우 — Cart · Order · Payment | ⬜ |
 | 5 | 리뷰 | ⬜ |
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
-**다음 작업은 Phase 3 Product의 8단계** — 컨트롤러 조회 둘은 붙었고,
-쓰기 셋과 `SecurityConfig` 배선, CA004, MySQL 실기동이 남았다.
+**다음 작업은 Phase 3 Product의 MySQL 실기동** — 8단계 코드는 전부 끝났고,
+H2가 덮지 못하는 것들(`V3` 적용, `validate`, `@BatchSize` 쿼리 수)만 남았다.
 
-**현재 규모**: main 68개 파일 · 테스트 21개 클래스 273개 케이스.
+**현재 규모**: main 70개 파일 · 테스트 22개 클래스 316개 케이스.
 케이스 수는 `./gradlew test` 리포트 기준이라 **파라미터라이즈는 실행 횟수로 센다**.
 
 ## Phase 0 — 환경 설정 ✅
@@ -164,17 +164,17 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
       access token을 `.env`의 `JWT_SECRET`으로 직접 서명해 대체했다.
       카카오 왕복 자체는 Phase 2 E2E에서 검증됐다
 
-### 자동 테스트 — 4개 클래스 57개 케이스
+### 자동 테스트 — 4개 클래스 59개 케이스
 
 | 클래스 | 케이스 |
 |---|---|
 | `CategoryControllerTest` | 22 |
-| `CategoryServiceTest` | 19 |
+| `CategoryServiceTest` | 21 |
 | `CategoryRepositoryTest` | 10 |
 | `CategoryTest` | 6 |
 
-> `CategoryServiceTest`(15→19)와 `CategoryRepositoryTest`(5→10)는 상품 7단계에서 늘었다 —
-> `collectSelfAndChildIds`와 그것이 쓰는 `findSelfAndChildIds`가 카테고리 쪽에 추가됐다.
+> `CategoryServiceTest`(15→21)와 `CategoryRepositoryTest`(5→10)는 상품 작업에서 늘었다 —
+> 7단계의 `collectSelfAndChildIds`·`findSelfAndChildIds`와 8단계의 CA004 검사 때문이다.
 
 ### Product — 5~8단계 🔶 (5~7 ✅ · 8 진행 중)
 
@@ -187,28 +187,36 @@ Javadoc 표기도 `[Phase 3 · 5단계]`처럼 이어 붙인다.
 | 5 | 엔티티(`Product`·`ProductImage`·`ProductStatus`) + `V3__create_products.sql` | `ProductTest` | ✅ |
 | 6 | Repository + `ProductSpecifications` — 조립을 한곳에 모은다 | `ProductRepositoryTest` | ✅ |
 | 7 | 조회 서비스 + DTO 4종, `CategoryService`에 자식 id 조회 추가 | `ProductServiceTest` | ✅ |
-| 8 | 컨트롤러 + `SecurityConfig` 배선 + 카테고리 삭제 차단(CA004) | `ProductControllerTest` + MySQL 실기동 | 🔶 |
+| 8 | 컨트롤러 + `SecurityConfig` 배선 + 카테고리 삭제 차단(CA004) | `ProductControllerTest` + MySQL 실기동 | 🔶 (코드 ✅) |
 
-#### 8단계 — 진행 중
+#### 8단계 — 코드 완료, 실기동 남음
 
 - [x] 컨트롤러 조회 둘(`getList`·`getDetail`)과 `sanitize` —
       정렬 화이트리스트 위반은 C001(400), `size`는 100에서 잘린다
-- [ ] **쓰기 셋** — `ProductService`의 등록·수정·삭제(soft delete)와 POST/PUT/DELETE.
+- [x] **쓰기 셋** — `ProductService`의 등록·수정·삭제(soft delete)와 POST/PUT/DELETE.
       `HIDDEN`까지 읽는 조회를 쓰므로 목록·상세와 헬퍼를 공유하지 않는다([ADR 0013](decisions/0013-hide-soft-deleted-products-everywhere.md))
 - [x] `SecurityConfig` 조회 permitAll — `GET /api/products`와 `/api/products/*` 둘 다 연다
-- [ ] `SecurityConfig` 쓰기 `hasRole('ADMIN')` — 엔드포인트가 생기는 커밋에서 함께 붙인다.
-      그전까지 `POST /api/products`는 `anyRequest().authenticated()`에 걸려 401이다
-- [ ] 카테고리 삭제 차단 CA004
-- [ ] `ProductControllerTest`
+- [x] `SecurityConfig` 쓰기 `hasRole('ADMIN')` — POST는 컬렉션, PUT·DELETE는 단건 경로다
+- [x] 카테고리 삭제 차단 CA004 — `CategoryService`가 `ProductRepository`를 직접 읽는다.
+      ADR 0014가 예고한 역방향 참조가 여기서 처음 생겼다
+- [x] `ProductControllerTest` — 조회 22 + 쓰기 6
 - [ ] MySQL 실기동 (아래 체크리스트)
 
-#### 자동 테스트 — 3개 클래스 62개 케이스 (5~7단계)
+> CA004를 넣으며 `existsByCategoryIdIn(List)`을 `existsByCategoryId(Long)`으로 좁혔다.
+> 하위가 있으면 CA002가 먼저 막아 잎만 도달하므로 목록을 받을 이유가 없다 —
+> [ADR 0014](decisions/0014-category-reads-product-repository.md) 본문에는 옛 이름으로 남아 있다.
+
+#### 자동 테스트 — 4개 클래스 103개 케이스
 
 | 클래스 | 케이스 |
 |---|---|
-| `ProductRepositoryTest` | 29 |
+| `ProductControllerTest` | 28 |
+| `ProductRepositoryTest` | 28 |
+| `ProductServiceTest` | 28 |
 | `ProductTest` | 19 |
-| `ProductServiceTest` | 14 |
+
+> `ProductRepositoryTest`가 29→28인 것은 `existsByCategoryIdIn`의 목록 동작을 보던 케이스가
+> 시그니처 축소로 사라졌기 때문이다.
 
 이 Phase에서 **처음 생기는 것이 넷**이다 — 페이징·정렬·동적 필터(`PageResponse`의 첫 실사용,
 Specification 도입), soft delete, 도메인 간 **양방향** 참조
@@ -235,8 +243,6 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
 - [ ] USER 토큰으로 쓰기 요청 → 403(A002), 같은 토큰으로 조회는 200
 
 남은 것:
-- [ ] **상품이 붙은 카테고리의 삭제 차단** — 8단계에서 `CA004`로 막는다.
-      그때까지 걸 수 있는 것은 하위 카테고리 존재(CA002)뿐이다 (`CategoryService` Javadoc의 ⚠️)
 - [ ] **이미지 파일 업로드 API** — 이번 범위 밖이다. `product_images` 테이블과 URL 등록까지만 만들고,
       멀티파트 업로드·로컬 스토리지·URL 발급은 별도로 다룬다
       ([ADR 0012](decisions/0012-image-urls-in-separate-table.md))

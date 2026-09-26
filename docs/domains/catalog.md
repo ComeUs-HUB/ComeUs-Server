@@ -24,8 +24,11 @@ id, name, parentCategory(self-join, nullable), displayOrder, createdAt
 | DELETE | `/api/categories/{id}` | 카테고리 삭제 | ADMIN | 200 + `data: null` |
 
 - 단건 조회 API는 **없다.** 트리 하나로 화면이 구성되므로 만들지 않았다
-- `Location`은 절대 URL이 아니라 **상대 경로**(`/api/categories/1`)다 — 프록시 뒤에서
-  호스트·스킴이 어긋나지 않게 하기 위함이다
+- `Location`은 절대 URL이 아니라 **상대 경로**(`/api/categories/1`)다.
+  운영에서는 `nginx(https://api.example.com) → 앱(http://localhost:8080)` 구조라
+  앱이 보는 주소가 내부 주소다 — 절대 URL을 만들면 그 값이 그대로 클라이언트에 나가 따라갈 수 없다.
+  상대 경로면 받는 쪽이 자기가 요청한 주소를 기준으로 해석하므로(RFC 3986 §5) 프록시 구성과 무관해진다
+  ([deployment.md](../deployment.md))
 - DELETE가 204가 아닌 이유: 바디가 없으면 공통 `{success, data, error}` 포맷이 깨진다
   ([conventions/api-response.md](../conventions/api-response.md))
 
