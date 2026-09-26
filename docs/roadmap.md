@@ -13,14 +13,14 @@
 | 0 | 환경 설정 — 프로젝트 골격, 의존성, 설정 파일 | ✅ |
 | 1 | 글로벌 기반 — 공통 응답, 예외 처리, 페이지네이션 | ✅ |
 | 2 | 인증/인가 — user/auth 도메인, Security, JWT | ✅ (브라우저 E2E 통과) |
-| 3 | 카테고리 / 상품 | 🔶 카테고리 ✅ (MySQL 실기동 통과) · 상품 🔶 (코드 ✅ · MySQL 실기동 남음) |
+| 3 | 카테고리 / 상품 | ✅ 카테고리 · 상품 모두 MySQL 실기동 통과 |
 | 4 | 구매 플로우 — Cart · Order · Payment | ⬜ |
 | 5 | 리뷰 | ⬜ |
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
-**다음 작업은 Phase 3 Product의 MySQL 실기동** — 8단계 코드는 전부 끝났고,
-H2가 덮지 못하는 것들(`V3` 적용, `validate`, `@BatchSize` 쿼리 수)만 남았다.
+**Phase 3이 끝났다.** 다음은 Phase 4 구매 플로우이며, 착수 전에 **동시성 제어 방식을
+ADR로 정해야 한다** — 되돌리기 비용이 큰 결정이다([domains/purchase.md](domains/purchase.md)).
 
 **현재 규모**: main 70개 파일 · 테스트 22개 클래스 316개 케이스.
 케이스 수는 `./gradlew test` 리포트 기준이라 **파라미터라이즈는 실행 횟수로 센다**.
@@ -123,10 +123,10 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 
 > `AuthControllerTest`는 이전에 16으로 적혀 있었다. `@Test` 메서드만 센 값이고, `@ParameterizedTest` 하나가 5회 실행된다 — Gradle 리포트와 맞추어 21로 고쳤다.
 
-## Phase 3 — 카테고리 / 상품 🔶 (Category ✅ · Product 🔶)
+## Phase 3 — 카테고리 / 상품 ✅
 
 계약: [domains/catalog.md](domains/catalog.md).
-**카테고리는 끝났고 상품은 8단계만 남았다.** 상품에 필요한 결정은 모두 확정됐다 —
+**카테고리·상품 모두 끝났고 각각 MySQL 실기동까지 통과했다.** 근거가 된 결정은 넷이다 —
 [ADR 0011](decisions/0011-jpa-specification-for-product-filter.md)·[0012](decisions/0012-image-urls-in-separate-table.md)·[0013](decisions/0013-hide-soft-deleted-products-everywhere.md)·[0014](decisions/0014-category-reads-product-repository.md).
 
 ### Category — 1~4단계 ✅
@@ -176,7 +176,7 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 > `CategoryServiceTest`(15→21)와 `CategoryRepositoryTest`(5→10)는 상품 작업에서 늘었다 —
 > 7단계의 `collectSelfAndChildIds`·`findSelfAndChildIds`와 8단계의 CA004 검사 때문이다.
 
-### Product — 5~8단계 🔶 (5~7 ✅ · 8 진행 중)
+### Product — 5~8단계 ✅
 
 카테고리가 1~4단계를 썼으므로 상품은 5단계부터 잇고,
 Javadoc 표기도 `[Phase 3 · 5단계]`처럼 이어 붙인다.
@@ -187,9 +187,9 @@ Javadoc 표기도 `[Phase 3 · 5단계]`처럼 이어 붙인다.
 | 5 | 엔티티(`Product`·`ProductImage`·`ProductStatus`) + `V3__create_products.sql` | `ProductTest` | ✅ |
 | 6 | Repository + `ProductSpecifications` — 조립을 한곳에 모은다 | `ProductRepositoryTest` | ✅ |
 | 7 | 조회 서비스 + DTO 4종, `CategoryService`에 자식 id 조회 추가 | `ProductServiceTest` | ✅ |
-| 8 | 컨트롤러 + `SecurityConfig` 배선 + 카테고리 삭제 차단(CA004) | `ProductControllerTest` + MySQL 실기동 | 🔶 (코드 ✅) |
+| 8 | 컨트롤러 + `SecurityConfig` 배선 + 카테고리 삭제 차단(CA004) | `ProductControllerTest` + MySQL 실기동 | ✅ |
 
-#### 8단계 — 코드 완료, 실기동 남음
+#### 8단계 — 완료
 
 - [x] 컨트롤러 조회 둘(`getList`·`getDetail`)과 `sanitize` —
       정렬 화이트리스트 위반은 C001(400), `size`는 100에서 잘린다
@@ -200,7 +200,7 @@ Javadoc 표기도 `[Phase 3 · 5단계]`처럼 이어 붙인다.
 - [x] 카테고리 삭제 차단 CA004 — `CategoryService`가 `ProductRepository`를 직접 읽는다.
       ADR 0014가 예고한 역방향 참조가 여기서 처음 생겼다
 - [x] `ProductControllerTest` — 조회 22 + 쓰기 6
-- [ ] MySQL 실기동 (아래 체크리스트)
+- [x] MySQL 실기동 (아래 체크리스트)
 
 > CA004를 넣으며 `existsByCategoryIdIn(List)`을 `existsByCategoryId(Long)`으로 좁혔다.
 > 하위가 있으면 CA002가 먼저 막아 잎만 도달하므로 목록을 받을 이유가 없다 —
@@ -223,24 +223,31 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
 ([ADR 0014](decisions/0014-category-reads-product-repository.md)),
 그리고 `Category`가 의도적으로 피했던 `@OneToMany` 컬렉션(이미지).
 
-#### MySQL 실기동 — 확인할 것 (8단계 완료 후)
+#### MySQL 실기동 (2026-09-26)
 
 테스트는 H2 `create-drop`이라 `V3__create_products.sql`을 **실행하지 않는다.**
 스키마가 엔티티와 어긋나도 `./gradlew test`는 통과하므로, 아래는 `local` 프로파일 실기동으로만
-확인된다. **무엇을 확인하면 끝인지는 착수 전에 고정해 뒀다.**
+확인된다. **착수 전에 고정해 둔 열 항목을 그대로 확인했다.**
 
-- [ ] `V3` 최초 적용 — `v2 → v3`, `flyway_schema_history`에 `success=1`
-- [ ] Hibernate `validate` 통과 — `DECIMAL(10,2)`와 `VARCHAR` enum 매핑이 여기서 처음 대조된다
-- [ ] 비회원 `GET /api/products` 200 + 빈 `PageResponse`(`totalElements: 0`, `hasNext: false`)
-- [ ] ADMIN 토큰으로 등록 → 201 + `Location`이 절대 URL이 아닌 상대 경로
-- [ ] **대분류 `categoryId` 필터에 소분류 상품이 딸려 나온다** —
-      서비스 테스트는 mock이라 여기서 처음 검증된다
-- [ ] **soft delete 왕복** — DELETE → 목록에서 사라짐 → 상세 404(P001) →
-      DB에 행은 남아 있음(`status='HIDDEN'`) → PUT으로 `ON_SALE` 복귀 → 목록에 다시 나타남
-- [ ] 상품이 붙은 카테고리 DELETE → CA004(409), 상품을 옮긴 뒤 삭제 → 200
-- [ ] `?sort=foo` → C001(**400**, 500 아님) · `?size=9999` → 100으로 잘림
-- [ ] `@BatchSize`가 실제로 동작 — `show-sql`로 목록 조회 쿼리 수 확인
-- [ ] USER 토큰으로 쓰기 요청 → 403(A002), 같은 토큰으로 조회는 200
+- [x] `V3` 최초 적용 — `v2 → v3`, `flyway_schema_history`에 `success=1`
+- [x] Hibernate `validate` 통과 — `DECIMAL(10,2)`와 `VARCHAR` enum 매핑이 여기서 처음 대조됐다
+- [x] 비회원 `GET /api/products` 200 + 빈 `PageResponse`(`totalElements: 0`, `hasNext: false`)
+- [x] ADMIN 토큰으로 등록 → 201 + `Location: /api/products/1`(절대 URL 아님).
+      응답 바디에 `stockQuantity` 키가 없는 것도 함께 확인됐다([ADR 0015](decisions/0015-no-stock-quantity-in-public-response.md))
+- [x] **대분류 `categoryId` 필터에 소분류 상품이 딸려 나온다** —
+      서비스 테스트는 mock이라 여기서 처음 검증됐다
+- [x] **soft delete 왕복** — DELETE 200 → 목록 0건 → 상세 404(P001) →
+      DB에 `status='HIDDEN'` 행 잔존 → PUT으로 `ON_SALE` 복귀 → 목록에 다시 나타남
+- [x] 상품이 붙은 카테고리 DELETE → CA004(409), 상품을 옮긴 뒤 삭제 → 200
+- [x] `?sort=foo` → C001(**400**, 500 아님) · `?size=9999` → `pageSize: 100`
+- [x] **`@BatchSize`가 실제로 동작** — 상품 5건 목록 조회에 쿼리 **2건**
+      (`select products` 1 + `select product_images` 1). 없었다면 1+5=6건이었다.
+      `where product_id in (?)`의 플레이스홀더가 100개로, `@BatchSize(size = 100)`이
+      페이지 상한과 맞춰져 있음이 드러난다
+- [x] USER 토큰으로 쓰기 요청 → 403(A002), 같은 토큰으로 조회는 200
+- [ ] **브라우저 왕복은 미확인.** 카테고리 때와 같은 이유다 — FE 페이지가 없어
+      access token을 `.env`의 `JWT_SECRET`으로 직접 서명해 대체했다.
+      카카오 왕복 자체는 Phase 2 E2E에서 검증됐다
 
 남은 것:
 - [ ] **이미지 파일 업로드 API** — 이번 범위 밖이다. `product_images` 테이블과 URL 등록까지만 만들고,
