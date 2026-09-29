@@ -39,8 +39,9 @@ public record ProductCreateRequest(
         @Digits(integer = 8, fraction = 2, message = "가격은 소수점 두 자리까지의 8자리 수입니다.")
         BigDecimal price,
 
+        @NotNull(message = "재고는 필수입니다.")
         @PositiveOrZero(message = "재고는 0 이상이어야 합니다.")
-        int stockQuantity,
+        Integer stockQuantity,
 
         List<@NotBlank @Size(max = 500, message = "이미지 URL은 500자를 넘을 수 없습니다.") String> imageUrls
 ) {
