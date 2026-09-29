@@ -127,10 +127,8 @@ public class Product {
     }
 
     /**
-     * 재고 복구.
-     *
-     * <p>⚠️ {@code HIDDEN}은 풀지 않는다. 풀면 Phase 4의 주문 취소가 재고를 되돌릴 때
-     * 삭제된 상품이 목록에 다시 뜬다 — soft delete가 조용히 뒤집히는 유일한 경로다.
+     * 재고 복구. {@code HIDDEN}은 풀지 않는다 — 풀면 Phase 4의 주문 취소가
+     * 삭제된 상품을 목록에 되살린다(ADR 0013).
      */
     public void increaseStock(int quantity) {
         this.stockQuantity += quantity;
@@ -169,7 +167,7 @@ public class Product {
     /**
      * 이미지 전체 교체. 빠진 행은 {@code orphanRemoval}이 지운다.
      *
-     * <p>⚠️ 컬렉션 인스턴스를 새로 대입하지 않는다 — Hibernate가 추적하던 인스턴스가 바뀌면
+     * <p>컬렉션 인스턴스를 새로 대입하지 않는다 — Hibernate가 추적하던 인스턴스가 바뀌면
      * {@code orphanRemoval}이 동작하지 않는다.
      */
     public void replaceImages(List<String> imageUrls) {
