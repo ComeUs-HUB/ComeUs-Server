@@ -119,7 +119,11 @@ public class ProductController {
     }
 
     /**
-     * 정렬 필드를 검증하고 페이지 크기를 상한으로 자른다.
+     * 정렬 필드를 검증하고, 페이지 크기를 자르고, {@code id}를 tie-breaker로 붙인다.
+     *
+     * <p>{@code price}·{@code name}은 물론 기본값인 {@code createdAt}도 동률이 생긴다.
+     * 전순서가 아니면 페이지를 넘길 때 같은 상품이 두 번 나오거나 빠진다 —
+     * 카테고리가 {@code displayOrder} 다음에 {@code id}를 두는 것과 같은 이유다.
      *
      * @throws BusinessException 허용되지 않은 정렬 필드면 C001(400)
      */
@@ -132,6 +136,6 @@ public class ProductController {
 
         int size = Math.min(pageable.getPageSize(), MAX_PAGE_SIZE);
 
-        return PageRequest.of(pageable.getPageNumber(), size, pageable.getSort());
+        return PageRequest.of(pageable.getPageNumber(), size, pageable.getSort().and(Sort.by("id")));
     }
 }
