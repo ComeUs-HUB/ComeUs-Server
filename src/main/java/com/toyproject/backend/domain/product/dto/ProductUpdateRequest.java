@@ -29,6 +29,7 @@ public record ProductUpdateRequest(
         @Size(max = 100, message = "상품 이름은 100자를 넘을 수 없습니다.")
         String name,
 
+        @Size(max = 16_000, message = "상품 설명은 16000자를 넘을 수 없습니다.")
         String description,
 
         @NotNull(message = "가격은 필수입니다.")

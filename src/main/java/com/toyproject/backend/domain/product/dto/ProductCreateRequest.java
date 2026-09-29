@@ -16,7 +16,8 @@ import java.util.List;
  * <p>재고 0으로 등록하면 {@code SOLD_OUT}으로 시작한다 — 상태는 요청이 정하지 못한다.
  *
  * <p>{@code @Size}·{@code @Digits}는 {@code products} 컬럼과 맞춘 값이다. 어긋나면
- * C001이어야 할 실패가 DB까지 내려가 C005로 나간다.
+ * C001이어야 할 실패가 DB까지 내려가 C005로 나간다. {@code description}의 16,000은
+ * {@code TEXT}(65,535바이트)를 문자당 최대 4바이트로 나눈 값보다 낮게 잡은 것이다.
  *
  * @param description 없어도 된다
  * @param imageUrls   생략하면 빈 목록이다. 담은 순서가 곧 전시 순서다
@@ -30,6 +31,7 @@ public record ProductCreateRequest(
         @Size(max = 100, message = "상품 이름은 100자를 넘을 수 없습니다.")
         String name,
 
+        @Size(max = 16_000, message = "상품 설명은 16000자를 넘을 수 없습니다.")
         String description,
 
         @NotNull(message = "가격은 필수입니다.")
