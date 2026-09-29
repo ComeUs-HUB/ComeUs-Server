@@ -8,6 +8,7 @@ import com.toyproject.backend.domain.category.repository.CategoryRepository;
 import com.toyproject.backend.domain.product.dto.ProductCreateRequest;
 import com.toyproject.backend.domain.product.dto.ProductUpdateRequest;
 import com.toyproject.backend.domain.product.entity.Product;
+import com.toyproject.backend.domain.product.entity.ProductStatus;
 import com.toyproject.backend.domain.product.repository.ProductRepository;
 import com.toyproject.backend.domain.user.entity.User;
 import com.toyproject.backend.domain.user.repository.UserRepository;
@@ -584,6 +585,46 @@ class ProductControllerTest {
                             .content(blankName))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.error.code").value("C001"));
+        }
+
+        @Test
+        @DisplayName("stockQuantity를 빼먹으면 C001 — 조용히 0이 되어 재고를 날리면 안 된다")
+        void missingStockQuantityIsC001() throws Exception {
+            String noStock = """
+                    {"categoryId":%d,"name":"기본 반팔티","description":"설명","price":19900}
+                    """.formatted(tshirt.getId());
+
+            mockMvc.perform(post(BASE_URI)
+                            .header(HttpHeaders.AUTHORIZATION, bearerOf("kakao-admin", true))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(noStock))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("C001"));
+        }
+
+        @Test
+        @DisplayName("PUT에서 stockQuantity를 빼먹어도 재고가 0으로 덮이지 않는다")
+        void missingStockQuantityDoesNotWipeStock() throws Exception {
+            long id = saveProduct(tshirt, "기본 반팔티", "19900", 10).getId();
+            em.flush();
+            em.clear();
+
+            String noStock = """
+                    {"categoryId":%d,"name":"바뀐 이름","description":"설명","price":19900}
+                    """.formatted(tshirt.getId());
+
+            mockMvc.perform(put(BASE_URI + "/{id}", id)
+                            .header(HttpHeaders.AUTHORIZATION, bearerOf("kakao-admin", true))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(noStock))
+                    .andExpect(status().isBadRequest());
+
+            em.clear();
+            assertThat(productRepository.findById(id))
+                    .get()
+                    .extracting(Product::getStockQuantity, Product::getStatus)
+                    .as("거절됐으니 재고와 상태가 그대로여야 한다")
+                    .containsExactly(10, ProductStatus.ON_SALE);
         }
 
         @Test
