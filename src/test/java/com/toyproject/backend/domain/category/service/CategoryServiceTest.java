@@ -7,6 +7,7 @@ import com.toyproject.backend.domain.category.dto.CategoryUpdateRequest;
 import com.toyproject.backend.domain.category.entity.Category;
 import com.toyproject.backend.domain.category.exception.CategoryErrorCode;
 import com.toyproject.backend.domain.category.repository.CategoryRepository;
+import com.toyproject.backend.domain.product.repository.ProductRepository;
 import com.toyproject.backend.global.exception.BusinessException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -48,6 +49,9 @@ class CategoryServiceTest {
 
     @Mock
     private CategoryRepository categoryRepository;
+
+    @Mock
+    private ProductRepository productRepository;
 
     @InjectMocks
     private CategoryService categoryService;
@@ -246,10 +250,40 @@ class CategoryServiceTest {
             Category top = root(TOP_ID, "상의", 1);
             given(categoryRepository.findById(TOP_ID)).willReturn(Optional.of(top));
             given(categoryRepository.existsByParentId(TOP_ID)).willReturn(false);
+            given(productRepository.existsByCategoryId(TOP_ID)).willReturn(false);
 
             categoryService.delete(TOP_ID);
 
             then(categoryRepository).should().delete(top);
+        }
+
+        @Test
+        @DisplayName("상품이 붙어 있으면 CA004 — 삭제가 실제로 일어나지 않는다")
+        void rejectsWhenHasProducts() {
+            given(categoryRepository.findById(TOP_ID)).willReturn(Optional.of(root(TOP_ID, "상의", 1)));
+            given(categoryRepository.existsByParentId(TOP_ID)).willReturn(false);
+            given(productRepository.existsByCategoryId(TOP_ID)).willReturn(true);
+
+            assertThatThrownBy(() -> categoryService.delete(TOP_ID))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getErrorCode())
+                    .as("FK가 막아 C005로 뭉개지기 전에 도메인이 먼저 판정한다")
+                    .isEqualTo(CategoryErrorCode.CATEGORY_HAS_PRODUCTS);
+
+            then(categoryRepository).should(never()).delete(any());
+        }
+
+        @Test
+        @DisplayName("상품 검사는 자기 자신만 본다 — 하위는 CA002가 이미 막았다")
+        void checksOwnCategoryOnly() {
+            given(categoryRepository.findById(TOP_ID)).willReturn(Optional.of(root(TOP_ID, "상의", 1)));
+            given(categoryRepository.existsByParentId(TOP_ID)).willReturn(false);
+            given(productRepository.existsByCategoryId(TOP_ID)).willReturn(false);
+
+            categoryService.delete(TOP_ID);
+
+            // 자식 id까지 훑을 이유가 없다 — 여기 도달한 카테고리는 잎이다.
+            then(productRepository).should().existsByCategoryId(TOP_ID);
         }
 
         @Test
@@ -264,6 +298,7 @@ class CategoryServiceTest {
                     .isEqualTo(CategoryErrorCode.CATEGORY_HAS_CHILDREN);
 
             then(categoryRepository).should(never()).delete(any());
+            then(productRepository).should(never()).existsByCategoryId(any());
         }
 
         @Test
@@ -277,6 +312,52 @@ class CategoryServiceTest {
                     .isEqualTo(CategoryErrorCode.CATEGORY_NOT_FOUND);
 
             then(categoryRepository).should(never()).existsByParentId(any());
+            then(productRepository).should(never()).existsByCategoryId(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("[Phase 3 · 7단계] 하위 id 모으기 — 상품 필터가 쓴다")
+    class CollectSelfAndChildIds {
+
+        @Test
+        @DisplayName("대분류면 자기 자신과 소분류 id가 함께 나온다")
+        void rootReturnsSelfAndChildren() {
+            given(categoryRepository.findSelfAndChildIds(1L)).willReturn(List.of(1L, 3L, 4L));
+
+            assertThat(categoryService.collectSelfAndChildIds(1L))
+                    .containsExactly(1L, 3L, 4L);
+        }
+
+        @Test
+        @DisplayName("소분류면 자기 자신 하나다 — 2depth라 손자가 없다")
+        void childReturnsSelfOnly() {
+            given(categoryRepository.findSelfAndChildIds(3L)).willReturn(List.of(3L));
+
+            assertThat(categoryService.collectSelfAndChildIds(3L)).containsExactly(3L);
+        }
+
+        @Test
+        @DisplayName("빈 결과면 CA001 — 빈 목록으로 뭉개지 않는다")
+        void emptyResultIsNotFound() {
+            given(categoryRepository.findSelfAndChildIds(99L)).willReturn(List.of());
+
+            assertThatThrownBy(() -> categoryService.collectSelfAndChildIds(99L))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getErrorCode())
+                    .as("존재하는 카테고리는 자기 자신이 반드시 걸리므로 빈 결과는 부재를 뜻한다")
+                    .isEqualTo(CategoryErrorCode.CATEGORY_NOT_FOUND);
+        }
+
+        @Test
+        @DisplayName("존재 확인을 위한 조회를 따로 하지 않는다 — 쿼리 한 번으로 끝낸다")
+        void doesNotQueryTwice() {
+            given(categoryRepository.findSelfAndChildIds(1L)).willReturn(List.of(1L));
+
+            categoryService.collectSelfAndChildIds(1L);
+
+            // findById를 먼저 부르면 필요 없는 엔티티를 통째로 읽는 쿼리가 하나 더 붙는다
+            then(categoryRepository).should(never()).findById(any());
         }
     }
 }

@@ -7,6 +7,7 @@ import com.toyproject.backend.domain.category.dto.CategoryUpdateRequest;
 import com.toyproject.backend.domain.category.entity.Category;
 import com.toyproject.backend.domain.category.exception.CategoryErrorCode;
 import com.toyproject.backend.domain.category.repository.CategoryRepository;
+import com.toyproject.backend.domain.product.repository.ProductRepository;
 import com.toyproject.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,27 +20,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * [Phase 3 · 3단계] 카테고리 서비스
+ * [Phase 3 · 3단계] 카테고리 서비스. 트리 조회와 CRUD.
  *
- * <p><b>역할</b><br>
- * 카테고리 트리 조회와 CRUD. <b>카테고리를 만드는 규칙은 전부 여기와 {@link Category}에 있다</b> —
- * 다른 도메인(product)은 {@code CategoryRepository}가 아니라 이 클래스의 공개 메서드만 경유한다.
+ * <p>다른 도메인은 {@code CategoryRepository}가 아니라 이 클래스의 공개 메서드를 경유한다 —
+ * 2depth 불변식이 {@link Category#child(Category, String, int)}에 있어서다. 같은 이유로
+ * 깊이 검증을 서비스에서 다시 하지 않는다.
  *
- * <p><b>설계</b>
- * <ul>
- *   <li>깊이 검증을 <b>여기서 하지 않는다.</b> {@link Category#child(Category, String, int)}가 이미 막고 있고,
- *       서비스가 같은 검사를 한 번 더 하면 규칙이 두 곳으로 갈라진다.</li>
- *   <li>상태 변경은 엔티티의 도메인 메서드({@code updateInfo})에 위임하고 더티 체킹으로 반영한다.
- *       서비스에서 필드를 직접 세팅하거나 {@code save}를 다시 부르지 않는다 — {@code UserService}와 같다.</li>
- *   <li>엔티티를 그대로 반환하지 않고 DTO로 바꿔 내보낸다.</li>
- * </ul>
- *
- * <p><b>삭제는 하드 삭제다.</b> 상품({@code HIDDEN} soft delete)과 다르다 — 카테고리는 주문 이력에
- * 매달리지 않아 지워도 과거 기록이 깨지지 않는다.
- *
- * <p>⚠️ <b>"상품이 붙은 카테고리 삭제"는 아직 막지 않는다.</b> {@code Product}가 없어 FK 자체가 없다.
- * Phase 3-2에서 {@code products.category_id}가 생기면 그때 함께 막아야 한다 —
- * 지금 걸 수 있는 것은 하위 카테고리 존재(CA002)뿐이다.
+ * <p>반환은 DTO다. 예외는 {@link #getCategory(Long)} — 상품이 FK 연관을 맺으려면
+ * 영속 인스턴스 자체가 필요하다.
  */
 @Slf4j
 @Service
@@ -48,6 +36,12 @@ import java.util.Map;
 public class CategoryService {
 
     private final CategoryRepository categoryRepository;
+
+    /**
+     * 도메인 간 <b>역방향</b> 참조다. 상품이 붙은 카테고리를 막는 이 검사 하나에만 쓰며,
+     * 다른 용도로 넓히지 않는다(ADR 0014).
+     */
+    private final ProductRepository productRepository;
 
     /**
      * 전체 트리 조회. {@code GET /api/categories}
@@ -110,12 +104,12 @@ public class CategoryService {
     }
 
     /**
-     * 카테고리 삭제. {@code DELETE /api/categories/{id}}
+     * 카테고리 삭제(하드 삭제). 하위 카테고리와 붙어 있는 상품이 둘 다 없어야 한다.
      *
-     * <p>하위 카테고리가 하나라도 있으면 거부한다. <b>2depth라 손자를 따질 필요가 없어</b>
-     * 이 한 번의 검사로 끝난다 — 깊이가 무제한이었다면 하위 전체를 훑어야 했다.
+     * <p>상품 검사가 자기 자신만 보는 것은 CA002가 먼저 막아 잎만 도달하기 때문이다(ADR 0014).
      *
-     * @throws BusinessException 대상이 없으면 CA001(404), 하위 카테고리가 있으면 CA002(409)
+     * @throws BusinessException 대상이 없으면 CA001(404), 하위 카테고리가 있으면 CA002(409),
+     *                           상품이 붙어 있으면 CA004(409)
      */
     @Transactional
     public void delete(Long id) {
@@ -124,7 +118,42 @@ public class CategoryService {
         if (categoryRepository.existsByParentId(id)) {
             throw new BusinessException(CategoryErrorCode.CATEGORY_HAS_CHILDREN);
         }
+        if (productRepository.existsByCategoryId(id)) {
+            throw new BusinessException(CategoryErrorCode.CATEGORY_HAS_PRODUCTS);
+        }
         categoryRepository.delete(category);
+    }
+
+    /**
+     * 자기 자신과 하위 카테고리의 id를 모은다. 상품 목록 필터가 쓰는 진입점이다.
+     *
+     * <p>2depth 고정이라 재귀가 없다. 존재 확인을 따로 하지 않는 것은 존재하는 카테고리가
+     * 질의에 반드시 걸려 <b>빈 결과가 곧 "없는 카테고리"</b>이기 때문이다 — 조회 한 번으로
+     * CA001 판정까지 끝난다.
+     *
+     * @throws BusinessException 그런 카테고리가 없으면 CA001(404). 빈 목록으로 뭉개지 않는다
+     */
+    public List<Long> collectSelfAndChildIds(Long categoryId) {
+        List<Long> ids = categoryRepository.findSelfAndChildIds(categoryId);
+
+        if (ids.isEmpty()) {
+            throw new BusinessException(CategoryErrorCode.CATEGORY_NOT_FOUND);
+        }
+        return ids;
+    }
+
+    /**
+     * id로 카테고리를 읽는다. 없으면 CA001.
+     *
+     * <p><b>{@code ProductService}가 상품 등록·수정에서 {@code Category}를 얻는 진입점이다</b> —
+     * {@code CategoryRepository}는 category 패키지 밖에서 주입하지 않는다.
+     *
+     * <p>{@code UserService.getActiveUser}와 달리 <b>404가 맞다.</b> 클라이언트가 경로 변수나
+     * 요청 바디로 카테고리를 <b>직접 지목</b>하므로 "네가 지목한 것이 없다"가 정확한 설명이다.
+     */
+    public Category getCategory(Long id) {
+        return categoryRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(CategoryErrorCode.CATEGORY_NOT_FOUND));
     }
 
     /**
@@ -145,17 +174,5 @@ public class CategoryService {
                     .add(CategoryTreeResponse.of(category));
         }
         return grouped;
-    }
-
-    /**
-     * id로 카테고리를 읽는다. 없으면 CA001.
-     *
-     * <p>{@code UserService.getActiveUser}와 달리 <b>404가 맞다.</b> 클라이언트가 경로 변수로
-     * 카테고리를 <b>직접 지목</b>하므로 "네가 지목한 것이 없다"가 정확한 설명이다.
-     * 회원 API는 지목 수단이 없어 401로 내렸지만 여기는 사정이 다르다.
-     */
-    private Category getCategory(Long id) {
-        return categoryRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(CategoryErrorCode.CATEGORY_NOT_FOUND));
     }
 }

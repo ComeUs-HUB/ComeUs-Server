@@ -1,7 +1,7 @@
 # 배포
 
-컨테이너화 → CI/CD → 서버 배포 → 운영까지. 아직 아무것도 만들지 않았다 —
-Dockerfile, docker-compose.yml, `.github/workflows` 모두 부재다.
+컨테이너화 → CI/CD → 서버 배포 → 운영까지. **배포 파이프라인은 아직 없다** —
+Dockerfile과 docker-compose.yml이 부재하고, `.github/workflows`에는 코드 리뷰 워크플로 하나뿐이다.
 진행 현황은 [roadmap.md](roadmap.md)가 소유한다.
 
 ## ⚠️ 배포 형태 제약 — 먼저 읽을 것
@@ -85,6 +85,14 @@ Dockerfile, docker-compose.yml, `.github/workflows` 모두 부재다.
 - HTTP → HTTPS 강제 리다이렉트
 - ⚠️ **카카오 개발자 콘솔에 prod Redirect URI 등록** — 누락하면 카카오가 `KOE006`으로 거부해
   운영에서 로그인이 첫 시도부터 실패한다. local만 등록돼 있다
+
+**앱은 `X-Forwarded-*`에 기대지 않는다.** 201 응답의 `Location`을 상대 경로로 내보내고,
+그 값은 **받는 쪽이 자기 요청 URI 기준으로 해석**하므로 프록시가 스킴·호스트를 전달하지 않아도
+응답이 깨지지 않는다. 절대 URL을 골랐다면 `server.forward-headers-strategy`나 nginx의
+`proxy_redirect` 중 하나를 반드시 설정해야 했다
+([conventions/api-response.md](conventions/api-response.md)).
+반대로 카카오 로그인의 302는 절대 URL이 필요한데, 그 값은 요청에서 추론하지 않고
+`app.frontend.base-url`·`kakao.redirect-uri` 설정에서 읽는다 — prod 값이 틀리면 로그인이 깨진다
 
 확인할 것:
 - [ ] 헬스체크가 HTTPS로 정상 응답

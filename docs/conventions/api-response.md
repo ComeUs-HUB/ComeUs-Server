@@ -144,7 +144,10 @@ Spring Data `Pageable`을 컨트롤러 파라미터로 바인딩한다(`page`, `
 `ApiResponse` 생성자가 막으므로 여기 두지 않는다.
 
 - 컨트롤러 반환 타입이 위 표와 맞는지 — 헤더·상태 제어가 없는데 `ResponseEntity`로 감싸지 않았는지
-- 201 응답에 `Location` 헤더 포함
+- 201 응답에 `Location` 헤더 포함. **상대 경로**(`/api/products/1`)로 쓴다 —
+  받는 쪽이 요청 URI를 기준으로 해석하므로(RFC 3986 §5) 앱이 자기 공개 주소를 알 필요가 없다.
+  절대 URL로 조립하면 리버스 프록시 뒤에서 내부 주소가 나가고, 그걸 막으려면
+  `X-Forwarded-*` 처리나 프록시의 헤더 재작성이 따라붙는다 ([deployment.md](../deployment.md))
 - 에러 응답의 HTTP 상태 == `ErrorCode.getHttpStatus()` (하드코딩 금지)
 - `rejectedValue` 200자 제한 적용
 - `global/response`·`global/exception`·`global/util`이 `domain.*`를 import하지 않음

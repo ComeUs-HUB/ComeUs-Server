@@ -29,3 +29,6 @@
 | [0010](0010-access-denied-handler-for-authorization.md) | 인가 실패(403)는 `JwtAccessDeniedHandler`가 맡는다 | 채택 |
 | [0011](0011-jpa-specification-for-product-filter.md) | 상품 목록의 동적 필터는 JPA Specification으로 시작 | 채택 |
 | [0012](0012-image-urls-in-separate-table.md) | 상품·리뷰 이미지는 별도 테이블에 URL만 저장 | 채택 |
+| [0013](0013-hide-soft-deleted-products-everywhere.md) | soft delete된 상품은 ADMIN에게도 숨긴다 | 채택 |
+| [0014](0014-category-reads-product-repository.md) | 카테고리 삭제 차단은 `ProductRepository`를 직접 읽는다 | 채택 |
+| [0015](0015-no-stock-quantity-in-public-response.md) | 공개 상품 응답은 재고 수량을 담지 않는다 | 채택 |
