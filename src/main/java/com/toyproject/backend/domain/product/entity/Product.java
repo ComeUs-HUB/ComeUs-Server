@@ -113,9 +113,12 @@ public class Product {
     /**
      * 재고 차감. {@code HIDDEN}이면 상태를 건드리지 않는다.
      *
-     * @throws BusinessException 재고가 모자라면 P002(409). 이때 재고는 그대로다
+     * @throws BusinessException        재고가 모자라면 P002(409). 이때 재고는 그대로다
+     * @throws IllegalArgumentException {@code quantity}가 1 미만이면
      */
     public void decreaseStock(int quantity) {
+        requirePositive(quantity);
+
         if (this.stockQuantity < quantity) {
             throw new BusinessException(ProductErrorCode.OUT_OF_STOCK);
         }
@@ -129,8 +132,12 @@ public class Product {
     /**
      * 재고 복구. {@code HIDDEN}은 풀지 않는다 — 풀면 Phase 4의 주문 취소가
      * 삭제된 상품을 목록에 되살린다(ADR 0013).
+     *
+     * @throws IllegalArgumentException {@code quantity}가 1 미만이면
      */
     public void increaseStock(int quantity) {
+        requirePositive(quantity);
+
         this.stockQuantity += quantity;
 
         if (!isHidden()) {
@@ -184,6 +191,16 @@ public class Product {
     /** 밖에서 컬렉션을 고치면 {@code displayOrder}가 어긋나므로 불변 목록을 돌려준다. */
     public List<ProductImage> getImages() {
         return Collections.unmodifiableList(this.images);
+    }
+
+    /**
+     * 재고 증감은 양수만 받는다. 음수를 허용하면 차감이 증가가 되고 P002 검사도 우회된다 —
+     * 클라이언트 입력이 아니라 호출자 버그이므로 {@code BusinessException}이 아니다.
+     */
+    private static void requirePositive(int quantity) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("재고 증감 수량은 1 이상이어야 합니다: " + quantity);
+        }
     }
 
     /**
