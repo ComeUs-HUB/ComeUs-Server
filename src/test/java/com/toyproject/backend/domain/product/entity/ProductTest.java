@@ -86,6 +86,29 @@ class ProductTest {
     class DecreaseStock {
 
         @Test
+        @DisplayName("음수를 넘기면 거절한다 — 차감이 증가로 뒤집히면 안 된다")
+        void rejectsNegativeQuantity() {
+            Product product = product(10);
+
+            assertThatThrownBy(() -> product.decreaseStock(-5))
+                    .as("허용하면 재고가 15가 되고 P002 검사도 우회된다")
+                    .isInstanceOf(IllegalArgumentException.class);
+
+            assertThat(product.getStockQuantity())
+                    .as("거절됐으니 재고는 그대로다")
+                    .isEqualTo(10);
+        }
+
+        @Test
+        @DisplayName("0을 넘기면 거절한다 — 아무것도 하지 않는 호출은 버그다")
+        void rejectsZeroQuantity() {
+            Product product = product(10);
+
+            assertThatThrownBy(() -> product.decreaseStock(0))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
         @DisplayName("일부만 깎으면 ON_SALE을 유지한다")
         void partialDecreaseKeepsOnSale() {
             Product product = product(10);
@@ -129,6 +152,19 @@ class ProductTest {
     @Nested
     @DisplayName("재고를 채우면 품절만 풀린다")
     class IncreaseStock {
+
+        @Test
+        @DisplayName("음수·0을 넘기면 거절한다")
+        void rejectsNonPositiveQuantity() {
+            Product product = product(10);
+
+            assertThatThrownBy(() -> product.increaseStock(-5))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> product.increaseStock(0))
+                    .isInstanceOf(IllegalArgumentException.class);
+
+            assertThat(product.getStockQuantity()).isEqualTo(10);
+        }
 
         @Test
         @DisplayName("SOLD_OUT은 ON_SALE로 돌아온다")
