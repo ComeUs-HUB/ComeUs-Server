@@ -274,14 +274,9 @@ class ProductControllerTest {
     @DisplayName("GET /api/products — 페이징과 정렬")
     class Paging {
 
-        /**
-         * {@code createdAt}로만 정렬하면 순서가 등록 시각에 의존한다. 같은 트랜잭션 안에서
-         * 연달아 저장하면 {@code DATETIME(6)}이라도 값이 갈릴지 보장되지 않으므로,
-         * 정렬 순서를 확인하는 테스트에서만 간격을 두고 둘을 심는다.
-         */
-        private void seedTwoWithGap() throws InterruptedException {
+        /** {@code createdAt}이 동률이어도 id tie-breaker 가 순서를 확정한다 — 간격을 둘 필요가 없다. */
+        private void seedTwo() {
             saveProduct(tshirt, "먼저 등록한 상품", "10000", 1);
-            Thread.sleep(10);
             saveProduct(tshirt, "나중 등록한 상품", "20000", 1);
             em.flush();
             em.clear();
@@ -290,7 +285,7 @@ class ProductControllerTest {
         @Test
         @DisplayName("파라미터가 없으면 size 20, createdAt 내림차순이 기본이다")
         void defaultsToCreatedAtDescWithSizeTwenty() throws Exception {
-            seedTwoWithGap();
+            seedTwo();
 
             MvcResult result = mockMvc.perform(get(BASE_URI))
                     .andExpect(status().isOk())
@@ -300,6 +295,31 @@ class ProductControllerTest {
             assertThat(namesOf(result))
                     .as("나중에 등록한 상품이 먼저 나와야 createdAt 내림차순이다")
                     .containsExactly("나중 등록한 상품", "먼저 등록한 상품");
+        }
+
+        @Test
+        @DisplayName("같은 값끼리는 id 로 갈린다 — 페이지를 넘겨도 중복·누락이 없다")
+        void tiesAreBrokenById() throws Exception {
+            for (int i = 1; i <= 5; i++) {
+                saveProduct(tshirt, "동일가 상품" + i, "19900", 1);
+            }
+            em.flush();
+            em.clear();
+
+            List<String> paged = new ArrayList<>();
+            for (int page = 0; page < 3; page++) {
+                paged.addAll(namesOf(mockMvc.perform(get(BASE_URI)
+                                .param("sort", "price,asc")
+                                .param("size", "2")
+                                .param("page", String.valueOf(page)))
+                        .andExpect(status().isOk())
+                        .andReturn()));
+            }
+
+            assertThat(paged)
+                    .as("가격이 모두 같아 tie-breaker 가 없으면 페이지 사이에서 순서가 흔들린다")
+                    .doesNotHaveDuplicates()
+                    .hasSize(5);
         }
 
         @Test
