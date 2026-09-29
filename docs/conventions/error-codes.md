@@ -81,8 +81,9 @@ public interface ErrorCode {          // global/exception/ErrorCode.java
 | R002 | `REVIEW_ALREADY_EXISTS` | 409 | 〃 |
 | R003 | `REVIEW_NOT_ALLOWED` | 403 | 〃 |
 
-Category·Product·Cart·Order·Payment·Review의 코드는 **해당 도메인 구현 전에 선반영**된 것이다.
-enum은 있지만 이를 던지는 코드는 아직 없다.
+Cart·Order·Payment·Review의 코드는 **해당 도메인 구현 전에 선반영**된 것이다 —
+enum은 있지만 이를 던지는 코드가 아직 없다.
+Category·Product는 Phase 3에서 구현돼 CA001~CA004·P001·P002가 모두 실제로 던져진다.
 
 ## 도메인별 구체 예외 클래스
 

@@ -1,7 +1,7 @@
 # category / product — 카테고리 · 상품
 
 > 이 문서는 **계약**이고, 무엇이 끝났는지는 [roadmap.md](../roadmap.md)가 소유한다.
-> **Category는 전부, Product는 조회 경로(목록·상세)까지 코드에 있다.**
+> **Category·Product 모두 조회와 ADMIN CRUD까지 코드에 있다.**
 
 ADMIN 접근 제어는 Category 구현과 함께 들어왔다 — `hasRole("ADMIN")`이 `SecurityConfig`에 붙어 있고,
 인가 실패는 A002(403)로 나간다
@@ -40,8 +40,7 @@ id, name, parentCategory(self-join, nullable), displayOrder, createdAt
 - 삭제는 **하드 삭제**다. 상품(`HIDDEN` soft delete)과 다르다 — 카테고리는 주문 이력에
   매달리지 않아 지워도 과거 기록이 깨지지 않는다
 - 수정은 **이름과 전시 순서만** 바꾼다. 부모 변경은 요청 DTO에 필드조차 없다
-- ⚠️ **"상품이 붙은 카테고리 삭제"는 아직 막지 못한다.** `Product`가 없어 FK 자체가 없다 —
-  `products.category_id`가 생기는 시점에 함께 막아야 한다
+- 상품이 붙어 있으면 삭제할 수 없다 → `CA004 CATEGORY_HAS_PRODUCTS` (아래 Product 규칙 참고)
 
 ### 확정된 것 (착수 시 결정)
 

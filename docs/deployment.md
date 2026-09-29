@@ -1,7 +1,7 @@
 # 배포
 
-컨테이너화 → CI/CD → 서버 배포 → 운영까지. 아직 아무것도 만들지 않았다 —
-Dockerfile, docker-compose.yml, `.github/workflows` 모두 부재다.
+컨테이너화 → CI/CD → 서버 배포 → 운영까지. **배포 파이프라인은 아직 없다** —
+Dockerfile과 docker-compose.yml이 부재하고, `.github/workflows`에는 코드 리뷰 워크플로 하나뿐이다.
 진행 현황은 [roadmap.md](roadmap.md)가 소유한다.
 
 ## ⚠️ 배포 형태 제약 — 먼저 읽을 것
