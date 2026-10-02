@@ -3,7 +3,7 @@
 > 아직 코드가 없다. 이 문서는 **구현할 계약**이고, 진행 현황은 [roadmap.md](../roadmap.md)가 소유한다.
 > `ReviewErrorCode`만 선반영돼 있다.
 
-배송 완료된 주문에 한해 리뷰를 남긴다. [purchase.md](purchase.md)의 Order 상태 흐름이 먼저
+배송 완료된 주문에 한해 리뷰를 남긴다. [purchase/order.md](purchase/order.md)의 상태 흐름이 먼저
 확정되어야 작성 가능 조건을 판단할 수 있다.
 
 ## 엔티티

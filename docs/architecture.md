@@ -23,9 +23,9 @@
 | Auth | 카카오 로그인 · JWT/Refresh Token 발급·검증 | 〃 |
 | Category | 상품 카테고리 | [domains/catalog.md](domains/catalog.md) |
 | Product | 상품 CRUD · 검색 | 〃 |
-| Cart | 장바구니 | [domains/purchase.md](domains/purchase.md) |
-| Order | 주문 생성·조회·취소 | 〃 |
-| Payment | 결제 · 환불 | 〃 |
+| Cart | 장바구니 | [domains/purchase/cart.md](domains/purchase/cart.md) |
+| Order | 주문 생성·조회·취소 | [domains/purchase/order.md](domains/purchase/order.md) |
+| Payment | 결제 · 환불 | [domains/purchase/payment.md](domains/purchase/payment.md) |
 | Review | 상품 리뷰 | [domains/review.md](domains/review.md) |
 
 ## 패키지 구조
@@ -114,7 +114,7 @@ com.toyproject.backend
     `payment → order`(`Payment.order`). `product → category`와 같은 모양이고, 참조할 엔티티는
     그 도메인의 **Service에서 받는다**(`ProductService`가 `categoryService.getCategory()`를
     쓰는 것과 같다). Phase 5의 review도 같은 방식으로 `user`·`product`·`order`를 참조한다
-    ([domains/purchase.md](domains/purchase.md))
+    ([domains/purchase/](domains/purchase/README.md))
   - `order → cart` — **서비스 호출로 생기는 유일한 의존이다.** `OrderService.create()` 하나가
     `CartService`를 경유한다. 순환이 없어 `category → product`처럼 Repository로 내릴 이유가 없고,
     주문이 장바구니에서 **읽고 지우는** 둘을 하므로 빈 장바구니 처리 같은 규칙이 `CartService`에

@@ -20,7 +20,7 @@
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
 **Phase 3이 끝났다.** 다음은 Phase 4 구매 플로우이며, 착수 전에 **동시성 제어 방식을
-ADR로 정해야 한다** — 되돌리기 비용이 큰 결정이다([domains/purchase.md](domains/purchase.md)).
+ADR로 정해야 한다** — 되돌리기 비용이 큰 결정이다([domains/purchase/order.md](domains/purchase/order.md)).
 
 **현재 규모**: main 70개 파일 · 테스트 22개 클래스 316개 케이스.
 케이스 수는 `./gradlew test` 리포트 기준이라 **파라미터라이즈는 실행 횟수로 센다**.
@@ -256,7 +256,7 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
 
 ## Phase 4 — 구매 플로우 ⬜
 
-계약: [domains/purchase.md](domains/purchase.md).
+계약: [domains/purchase/](domains/purchase/README.md).
 **동시성 제어 방식은 정한 뒤 ADR로 남긴다** — 되돌리기 비용이 큰 결정이다.
 
 ## Phase 5 — 리뷰 ⬜

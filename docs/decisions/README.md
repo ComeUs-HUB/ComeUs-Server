@@ -46,7 +46,7 @@
 
 ### purchase — 장바구니 · 주문 · 결제
 
-계약은 [domains/purchase.md](../domains/purchase.md)가 소유한다.
+계약은 [domains/purchase/](../domains/purchase/README.md)가 소유한다.
 
 | # | 결정 | 상태 |
 |---|---|---|

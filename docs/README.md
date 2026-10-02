@@ -21,7 +21,10 @@
 |---|---|
 | user · auth | [domains/auth.md](domains/auth.md) |
 | category · product | [domains/catalog.md](domains/catalog.md) |
-| cart · order · payment | [domains/purchase.md](domains/purchase.md) |
+| cart | [domains/purchase/cart.md](domains/purchase/cart.md) |
+| order | [domains/purchase/order.md](domains/purchase/order.md) |
+| payment | [domains/purchase/payment.md](domains/purchase/payment.md) |
+| 구매 플로우 공통 · 엔티티 관계 | [domains/purchase/](domains/purchase/README.md) |
 | review | [domains/review.md](domains/review.md) |
 
 ## 구조 — 세 개의 축
