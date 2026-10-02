@@ -122,7 +122,9 @@ status(PENDING/PAID/SHIPPING/DELIVERED/CANCELLED), shippingAddress, createdAt
   장바구니는 그대로 남아야 한다 — 거절당했는데 장바구니까지 비는 것이 최악이다
 - 주문 시점 가격을 `priceAtOrder`에 **스냅샷** 저장 — 이후 상품 가격이 바뀌어도 이미 성립한 주문의
   금액은 유지되어야 한다
-- PAID 이후 취소 시 재고 복구
+- **`CANCELLED`로 가는 모든 전환이 재고를 복구한다.** 점유를 시작한 것이 주문 생성이므로
+  결제 전(`PENDING`)이든 후(`PAID`)든, 회원이 취소하든 ADMIN이 바꾸든 같다.
+  결제 실패([Payment](#payment))와 환불도 이 규칙에 흡수된다
 - SHIPPING 이후 회원이 직접 취소 불가 → `O002 ORDER_CANCEL_NOT_ALLOWED`
 
 ### 착수 전 정할 것
