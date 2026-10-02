@@ -283,7 +283,8 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
 
 결정되면 [decisions/](decisions/)에 ADR로 남기고 여기서 지운다.
 
-- [ ] **상품 옵션(사이즈·색상)** — Phase 4는 옵션 없이 `상품 : 수량`으로 간다. 도입하려면 재고를
+- [ ] **상품 옵션(사이즈·색상)** — Phase 4는 옵션 없이 `상품 : 수량`으로 간다
+      ([ADR 0018](decisions/purchase/0018-no-product-options-yet.md)). 도입하려면 재고를
       상품 단위(`Product.stockQuantity`)에서 옵션 단위로 내릴지 함께 정해야 하고, 그때
       [ADR 0015](decisions/catalog/0015-no-stock-quantity-in-public-response.md)의 전제
       (`stockQuantity == 0` ↔ `status == SOLD_OUT`)가 깨지므로 그 ADR을 대체해야 한다

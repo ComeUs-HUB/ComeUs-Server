@@ -108,10 +108,18 @@ com.toyproject.backend
     유일하게 Service가 아니라 Repository(`ProductRepository.existsByCategoryId`)를 직접 읽는데,
     Service를 경유하면 생성자 주입 순환이 된다
     ([ADR 0014](decisions/catalog/0014-category-reads-product-repository.md))
-  - `order → cart` — Phase 4 착수 시점에 들어온다. `OrderService`가 `CartService`를 경유한다.
-    순환이 없어 `category → product`처럼 Repository로 내릴 이유가 없고, 주문이 장바구니에서
-    **읽고 지우는** 둘을 하므로 빈 장바구니 처리 같은 규칙이 `CartService`에 모여 있어야 한다
+  - **아래 둘은 Phase 4 착수 시점에 들어온다.**
+  - 엔티티 참조 다섯 — `cart → user`(`Cart.user`), `cart → product`(`CartItem.product`),
+    `order → user`(`Order.user`), `order → product`(`OrderItem.product`),
+    `payment → order`(`Payment.order`). `product → category`와 같은 모양이고, 참조할 엔티티는
+    그 도메인의 **Service에서 받는다**(`ProductService`가 `categoryService.getCategory()`를
+    쓰는 것과 같다). Phase 5의 review도 같은 방식으로 `user`·`product`·`order`를 참조한다
     ([domains/purchase.md](domains/purchase.md))
+  - `order → cart` — **서비스 호출로 생기는 유일한 의존이다.** `OrderService.create()` 하나가
+    `CartService`를 경유한다. 순환이 없어 `category → product`처럼 Repository로 내릴 이유가 없고,
+    주문이 장바구니에서 **읽고 지우는** 둘을 하므로 빈 장바구니 처리 같은 규칙이 `CartService`에
+    모여 있어야 한다
+    ([ADR 0017](decisions/purchase/0017-order-copies-cart-and-cuts-the-link.md))
 - `BusinessException`이 `ErrorCode`를 **인터페이스 타입**으로 들고 있어, 새 도메인이 에러 코드를
   추가해도 `global`을 고치지 않는다 ([conventions/error-codes.md](conventions/error-codes.md))
 

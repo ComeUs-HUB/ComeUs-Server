@@ -57,6 +57,9 @@ id, name, parentCategory(self-join, nullable), displayOrder, createdAt
 id, name, description, price, stockQuantity, category,
 status(ON_SALE/SOLD_OUT/HIDDEN), createdAt, updatedAt
 
+**옵션(사이즈·색상)은 없다.** 재고는 상품 단위 `stockQuantity` 하나이며, 옵션 도입은
+[ADR 0018](../decisions/purchase/0018-no-product-options-yet.md)이 범위 밖으로 뒀다.
+
 이미지는 이 테이블에 두지 않는다 — `product_images`가 `product_id`로 참조하며 URL만 담는다
 ([ADR 0012](../decisions/catalog/0012-image-urls-in-separate-table.md)).
 

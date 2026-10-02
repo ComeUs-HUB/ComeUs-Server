@@ -19,25 +19,11 @@ CartItem  N ── 1  Product    단방향. Product는 장바구니를 모른다
 OrderItem N ── 1  Product    단방향
 ```
 
-### Cart와 Order 사이에는 연관관계를 두지 않는다
+**Cart와 Order 사이에는 연관관계를 두지 않는다.** 주문은 장바구니를 값으로 복사하고 원본을 지운다 —
+`cartItemId` 목록은 요청 입력일 뿐 영속 관계가 아니다. 근거는 [ADR 0017](../decisions/purchase/0017-order-copies-cart-and-cuts-the-link.md).
 
-장바구니 하나에서 주문이 여러 번 나오므로 **논리적 cardinality는 `Cart 1 : Order N`이 맞다.**
-그러나 그 사실은 `User 1 : Order N`이 이미 표현하고(Cart는 User와 1:1), FK로 매핑하지 않는다.
-
-- **가리킬 행이 사라진다.** 주문이 성립하면 그 `cartItem`을 지우고, `DELETE /api/cart`로 전체를
-  비울 수도 있다. `OrderItem`이 `cart_item_id`를 들면 dangling FK가 된다
-- **스냅샷이 깨진다.** Order는 `priceAtOrder`로 주문 시점을 고정한 기록이고 Cart는 지금 바뀌는
-  상태다. 고정된 기록이 살아있는 행을 참조하면 고정의 의미가 없다
-- **양방향이 된다.** `Cart → Order` FK는 장바구니가 주문을 알게 만들어
-  [architecture.md](../architecture.md)의 단방향 규칙에 걸린다
-
-`cartItemId` 목록은 **요청 입력일 뿐 영속 관계가 아니다.** `OrderService`가 그 id로 `CartItem`을
-읽어 `OrderItem`으로 값을 복사하고 원본을 지운다. 복사가 끝나면 연결은 끊긴다.
-
-### 도메인 간 의존은 `order → cart` 단방향이다
-
-cart는 order를 모른다. 방향과 경유 지점(`OrderService` → `CartService`)은
-[architecture.md의 의존 규칙](../architecture.md#의존-규칙)이 소유한다.
+도메인 간 의존은 `order → cart` 단방향이고 cart는 order를 모른다. 방향과 경유 지점
+(`OrderService` → `CartService`)은 [architecture.md의 의존 규칙](../architecture.md#의존-규칙)이 소유한다.
 
 ## Cart
 
@@ -58,33 +44,20 @@ id, user, cartItems[ { product, quantity } ]
 ### 규칙
 
 - 회원 1명당 장바구니 1개 (1:1)
-- **"동일 항목"은 상품ID로 판단한다.** 옵션(사이즈·색상)은 초기 범위 밖이다 —
-  `Product`에 옵션이 없고 재고도 상품 단위 하나뿐이어서, 옵션을 받으면 검증할 원천이 없고
-  옵션별 재고도 표현할 수 없다. 도입 조건은 [roadmap.md](../roadmap.md)의 미결 사항에 있다
+- **"동일 항목"은 상품ID로 판단한다.** 옵션(사이즈·색상)은 초기 범위 밖이다 — [ADR 0018](../decisions/purchase/0018-no-product-options-yet.md)
 - 동일 항목 재담기 시 수량 합산
 - 재고 초과 수량은 담을 수 없다 → `CT002 CART_QUANTITY_EXCEEDED`.
   **검사 대상은 합산 후 수량(기존 + 요청)이다** — 1개씩 나눠 담아 재고를 넘기는 경로를 막는다
 
 ### 담기 검사는 재고를 점유하지 않는다
 
-담기 시점에 재고를 검사하지만 **차감하지도 예약하지도 않는다.** 담은 뒤 품절될 수 있고, 그때는
-주문 생성이 `P002`로 거절한다. **재고 점유는 결제 대기(주문 `PENDING`)에서 일어난다** — [Order](#order) 참고.
-
-그러면서도 담기에서 검사하는 이유는 [ADR 0015](../decisions/catalog/0015-no-stock-quantity-in-public-response.md)가 공개 응답에서 재고 수량을 뺐기 때문이다.
-FE가 수량 상한을 알 수 없으므로, 담기에서 걸러주지 않으면 사용자는 담아둔 뒤 **주문 단계에서야**
-거절당한다. 그 거절은 사용자가 감수할 부분이 아니다.
-
-- 담기 검사(`CT002`)는 **UX용 선행 거절**이고 보장이 아니다
-- 주문 생성의 `P002`(`Product.decreaseStock()`)가 **유일한 방어선**이다.
-  담기에서 걸렀다는 이유로 주문에서 생략하지 않는다
-- ⚠️ [ADR 0015](../decisions/catalog/0015-no-stock-quantity-in-public-response.md) 본문은 담기 거절을 `P002`로 적었다. 담기는 `decreaseStock()`을 호출하지 않으므로
-  그 경로의 코드는 `CT002`다. ADR은 고치지 않으므로 이 문서가 바로잡는다
+담기 시점에 재고를 검사하지만 **차감하지도 예약하지도 않는다.** 담기 검사(`CT002`)는 UX용 선행
+거절이고 보장이 아니다 — 담은 뒤 품절될 수 있고, 그때는 주문 생성의 `P002`가 거절한다.
+**재고 점유는 결제 대기(주문 `PENDING`)에서 일어난다.** 근거와 배제한 대안은 [ADR 0016](../decisions/purchase/0016-stock-reserved-at-order-not-cart.md).
 
 ### 조회 응답
 
-- 항목별 **구매 가능 여부를 불리언으로** 담는다 — 담은 뒤 재고가 줄었을 수 있다.
-  재고 수량은 담지 않는다([ADR 0015](../decisions/catalog/0015-no-stock-quantity-in-public-response.md)). 그 ADR이 "상한이 필요하면 장바구니 응답에 둔다"고 열어둔 자리지만,
-  수량을 담으면 회원가입만으로 재고를 읽을 수 있어 불리언으로 시작한다 — 필요해지면 더한다
+- 항목별 **구매 가능 여부를 불리언으로** 담는다. 재고 수량은 담지 않는다 — [ADR 0016](../decisions/purchase/0016-stock-reserved-at-order-not-cart.md)
 - **서버가 수량을 자동 조정하지 않는다.** 사용자가 넣은 값은 그대로 두고 주문 시점에 거절한다
 
 ## Order
@@ -111,10 +84,10 @@ status(PENDING/PAID/SHIPPING/DELIVERED/CANCELLED), shippingAddress, createdAt
   - 주문이 성립하면 **그 항목만** 장바구니에서 지운다. 선택하지 않은 항목은 남는다
   - 타인의 항목이거나 존재하지 않는 id → `CT001 CART_ITEM_NOT_FOUND`
   - 빈 목록 → `C001 INVALID_INPUT_VALUE`
-  - **장바구니를 거치지 않는 "바로 구매"는 초기 범위 밖이다** — 입력이 장바구니에 묶인다
+  - **장바구니를 거치지 않는 "바로 구매"는 초기 범위 밖이다** — 입력이 장바구니에 묶인다([ADR 0017](../decisions/purchase/0017-order-copies-cart-and-cuts-the-link.md))
 - 주문 생성 시 재고 차감. **동시에 마지막 재고를 두고 경쟁해도 음수로 내려가면 안 된다**
-- **재고 점유는 결제 대기에서 일어난다.** 주문 생성(`PENDING`)의 차감이 곧 점유다.
-  결제 성공이 점유를 확정(`PAID`)하고, 결제 실패·취소가 복구한다. 장바구니는 점유하지 않는다
+- **재고 점유는 결제 대기에서 일어난다.** 주문 생성(`PENDING`)의 차감이 곧 점유이고,
+  결제 성공이 확정(`PAID`)한다. 장바구니는 점유하지 않는다 — [ADR 0016](../decisions/purchase/0016-stock-reserved-at-order-not-cart.md)
 - **`cartItem` 삭제와 재고 차감은 한 트랜잭션이다.** 재고 부족(`P002`)으로 주문이 실패하면
   장바구니는 그대로 남아야 한다 — 거절당했는데 장바구니까지 비는 것이 최악이다
 - 주문 시점 가격을 `priceAtOrder`에 **스냅샷** 저장 — 이후 상품 가격이 바뀌어도 이미 성립한 주문의
