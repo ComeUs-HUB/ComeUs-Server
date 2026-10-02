@@ -36,11 +36,8 @@ OrderItem N ── 1  Product    단방향
 
 ### 도메인 간 의존은 `order → cart` 단방향이다
 
-cart는 order를 모른다. **`OrderService`는 `CartService`를 경유한다** —
-[ADR 0014](../decisions/catalog/0014-category-reads-product-repository.md)가 Repository로 내린 것은
-순환을 끊기 위해서였고 `order → cart`에는 순환이 없다. 순환이 없을 때의 선례는 `auth → user`이며
-그쪽은 Service를 경유한다. 또 주문은 장바구니에서 **읽고 지우는** 둘을 하므로, 빈 장바구니 처리 같은
-cart 쪽 규칙이 `CartService`에 모여 있어야 `OrderService`로 새지 않는다.
+cart는 order를 모른다. 방향과 경유 지점(`OrderService` → `CartService`)은
+[architecture.md의 의존 규칙](../architecture.md#의존-규칙)이 소유한다.
 
 ## Cart
 
