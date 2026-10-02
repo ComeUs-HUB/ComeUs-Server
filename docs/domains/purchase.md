@@ -6,6 +6,42 @@
 장바구니 → 주문 → 결제로 이어지는 핵심 흐름. [auth.md](auth.md)(로그인 사용자)와
 [catalog.md](catalog.md)(상품·재고)가 먼저 준비되어야 시작할 수 있다.
 
+## 엔티티 관계
+
+```
+User  1 ──  1  Cart          cart.user_id (unique)
+Cart  1 ──  N  CartItem      cart_item.cart_id, orphanRemoval = true
+User  1 ──  N  Order         orders.user_id
+Order 1 ──  N  OrderItem     order_item.order_id
+Order 1 ──  1  Payment       payment.order_id (unique)
+
+CartItem  N ── 1  Product    단방향. Product는 장바구니를 모른다
+OrderItem N ── 1  Product    단방향
+```
+
+### Cart와 Order 사이에는 연관관계를 두지 않는다
+
+장바구니 하나에서 주문이 여러 번 나오므로 **논리적 cardinality는 `Cart 1 : Order N`이 맞다.**
+그러나 그 사실은 `User 1 : Order N`이 이미 표현하고(Cart는 User와 1:1), FK로 매핑하지 않는다.
+
+- **가리킬 행이 사라진다.** 주문이 성립하면 그 `cartItem`을 지우고, `DELETE /api/cart`로 전체를
+  비울 수도 있다. `OrderItem`이 `cart_item_id`를 들면 dangling FK가 된다
+- **스냅샷이 깨진다.** Order는 `priceAtOrder`로 주문 시점을 고정한 기록이고 Cart는 지금 바뀌는
+  상태다. 고정된 기록이 살아있는 행을 참조하면 고정의 의미가 없다
+- **양방향이 된다.** `Cart → Order` FK는 장바구니가 주문을 알게 만들어
+  [architecture.md](../architecture.md)의 단방향 규칙에 걸린다
+
+`cartItemId` 목록은 **요청 입력일 뿐 영속 관계가 아니다.** `OrderService`가 그 id로 `CartItem`을
+읽어 `OrderItem`으로 값을 복사하고 원본을 지운다. 복사가 끝나면 연결은 끊긴다.
+
+### 도메인 간 의존은 `order → cart` 단방향이다
+
+cart는 order를 모른다. **`OrderService`는 `CartService`를 경유한다** —
+[ADR 0014](../decisions/catalog/0014-category-reads-product-repository.md)가 Repository로 내린 것은
+순환을 끊기 위해서였고 `order → cart`에는 순환이 없다. 순환이 없을 때의 선례는 `auth → user`이며
+그쪽은 Service를 경유한다. 또 주문은 장바구니에서 **읽고 지우는** 둘을 하므로, 빈 장바구니 처리 같은
+cart 쪽 규칙이 `CartService`에 모여 있어야 `OrderService`로 새지 않는다.
+
 ## Cart
 
 ### 엔티티
@@ -82,6 +118,8 @@ status(PENDING/PAID/SHIPPING/DELIVERED/CANCELLED), shippingAddress, createdAt
 - 주문 생성 시 재고 차감. **동시에 마지막 재고를 두고 경쟁해도 음수로 내려가면 안 된다**
 - **재고 점유는 결제 대기에서 일어난다.** 주문 생성(`PENDING`)의 차감이 곧 점유다.
   결제 성공이 점유를 확정(`PAID`)하고, 결제 실패·취소가 복구한다. 장바구니는 점유하지 않는다
+- **`cartItem` 삭제와 재고 차감은 한 트랜잭션이다.** 재고 부족(`P002`)으로 주문이 실패하면
+  장바구니는 그대로 남아야 한다 — 거절당했는데 장바구니까지 비는 것이 최악이다
 - 주문 시점 가격을 `priceAtOrder`에 **스냅샷** 저장 — 이후 상품 가격이 바뀌어도 이미 성립한 주문의
   금액은 유지되어야 한다
 - PAID 이후 취소 시 재고 복구
