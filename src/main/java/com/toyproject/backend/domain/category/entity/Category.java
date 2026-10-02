@@ -29,7 +29,7 @@ import java.time.LocalDateTime;
  * <p><b>설계</b>
  * <ul>
  *   <li>Setter를 만들지 않는다. {@code User}와 같은 규칙이다 — 상태 변경은 아래 도메인 메서드로만 열린다.</li>
- *   <li>{@code updatedAt}을 두지 않는다. 계약({@code docs/domains/catalog.md})에 없고,
+ *   <li>{@code updatedAt}을 두지 않는다. 계약({@code docs/domains/catalog/category.md})에 없고,
  *       카테고리는 수정 이력을 추적할 대상이 아니다. 그래서 {@code @LastModifiedDate}도 없다.</li>
  *   <li><b>{@code @OneToMany children}을 두지 않는다.</b> 트리 조립은 서비스가 전체를 한 번에 읽어
  *       메모리에서 부모 id로 묶는다. 컬렉션을 매핑하면 N+1을 부르거나 {@code @BatchSize} 같은

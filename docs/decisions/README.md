@@ -34,7 +34,7 @@
 
 ### catalog — 카테고리 · 상품
 
-계약은 [domains/catalog.md](../domains/catalog.md)가 소유한다.
+계약은 [domains/catalog/](../domains/catalog/README.md)가 소유한다.
 
 | # | 결정 | 상태 |
 |---|---|---|

@@ -125,7 +125,7 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 
 ## Phase 3 — 카테고리 / 상품 ✅
 
-계약: [domains/catalog.md](domains/catalog.md).
+계약: [domains/catalog/](domains/catalog/README.md).
 **카테고리·상품 모두 끝났고 각각 MySQL 실기동까지 통과했다.** 근거가 된 결정은 넷이다 —
 [ADR 0011](decisions/catalog/0011-jpa-specification-for-product-filter.md)·[0012](decisions/catalog/0012-image-urls-in-separate-table.md)·[0013](decisions/catalog/0013-hide-soft-deleted-products-everywhere.md)·[0014](decisions/catalog/0014-category-reads-product-repository.md).
 

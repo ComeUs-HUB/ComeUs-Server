@@ -2,7 +2,7 @@
 
 - 상태: 채택
 - 일자: 2026-10-02
-- 관련: [domains/purchase/](../../domains/purchase/README.md), [domains/catalog.md](../../domains/catalog.md), [ADR 0015](../catalog/0015-no-stock-quantity-in-public-response.md)
+- 관련: [domains/purchase/](../../domains/purchase/README.md), [domains/catalog/](../../domains/catalog/README.md), [ADR 0015](../catalog/0015-no-stock-quantity-in-public-response.md)
 
 ## 맥락
 

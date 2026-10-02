@@ -43,7 +43,7 @@ import java.util.List;
  * {@link #updateInfo}는 <b>푼다.</b> 의도된 비대칭이며 이 클래스에서 가장 틀리기 쉬운 지점이다
  * (ADR 0013).
  *
- * <p>삭제는 {@link #hide()}로 상태만 바꾸고 행은 남긴다. 계약은 {@code docs/domains/catalog.md}.
+ * <p>삭제는 {@link #hide()}로 상태만 바꾸고 행은 남긴다. 계약은 {@code docs/domains/catalog/product.md}.
  */
 @Entity
 @Table(name = "products")
