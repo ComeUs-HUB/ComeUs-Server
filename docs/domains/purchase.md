@@ -10,7 +10,7 @@
 
 ### 엔티티
 
-id, user, cartItems[ { product, size, color, quantity } ]
+id, user, cartItems[ { product, quantity } ]
 
 ### API
 
@@ -25,7 +25,9 @@ id, user, cartItems[ { product, size, color, quantity } ]
 ### 규칙
 
 - 회원 1명당 장바구니 1개 (1:1)
-- **"동일 항목"은 상품ID + 옵션 조합으로 판단한다.** 같은 상품이라도 사이즈·색상이 다르면 별개 항목이다
+- **"동일 항목"은 상품ID로 판단한다.** 옵션(사이즈·색상)은 초기 범위 밖이다 —
+  `Product`에 옵션이 없고 재고도 상품 단위 하나뿐이어서, 옵션을 받으면 검증할 원천이 없고
+  옵션별 재고도 표현할 수 없다. 도입 조건은 [roadmap.md](../roadmap.md)의 미결 사항에 있다
 - 동일 항목 재담기 시 수량 합산
 - 재고 초과 수량은 담을 수 없다 → `CT002 CART_QUANTITY_EXCEEDED`.
   **검사 대상은 합산 후 수량(기존 + 요청)이다** — 1개씩 나눠 담아 재고를 넘기는 경로를 막는다
@@ -56,7 +58,7 @@ FE가 수량 상한을 알 수 없으므로, 담기에서 걸러주지 않으면
 
 ### 엔티티
 
-id, user, orderItems[ { product, size, color, quantity, priceAtOrder } ], totalAmount,
+id, user, orderItems[ { product, quantity, priceAtOrder } ], totalAmount,
 status(PENDING/PAID/SHIPPING/DELIVERED/CANCELLED), shippingAddress, createdAt
 
 ### API
