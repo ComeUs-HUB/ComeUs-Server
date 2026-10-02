@@ -2,11 +2,11 @@
 
 - 상태: 채택
 - 일자: 2026-09-16
-- 관련: [architecture.md](../architecture.md), [domains/catalog.md](../domains/catalog.md)
+- 관련: [architecture.md](../../architecture.md), [domains/catalog.md](../../domains/catalog.md)
 
 ## 맥락
 
-[architecture.md](../architecture.md)의 의존 규칙은 이렇다.
+[architecture.md](../../architecture.md)의 의존 규칙은 이렇다.
 
 > **도메인 간 참조는 단방향으로 유지한다.** 현재 유일한 도메인 간 의존은 `auth → user`이며,
 > auth는 `UserRepository`가 아니라 `UserService`의 공개 메서드만 경유한다
@@ -44,7 +44,7 @@ Product가 생기면 **두 요구가 동시에** 생긴다.
 | `CategoryService → ProductService` | **생성자 주입 순환.** Spring이 기동 시점에 실패시킨다. `@Lazy`나 setter 주입으로 깨는 방법은 있으나 순환을 숨길 뿐 설계를 고치지 않는다 |
 | 도메인 이벤트 발행 | 삭제 거절은 **동기 응답**이어야 한다. 이벤트로 비동기가 되면 409를 돌려줄 시점을 놓친다 |
 | FK `ON DELETE RESTRICT`만으로 처리 | DB가 막아주지만 `DataIntegrityViolationException`이 올라와 **C005(409)**로 나간다. 원인이 "하위 카테고리"인지 "상품"인지 FE가 가릴 수 없다 — `error-codes.md`가 코드 값을 대외 계약으로 정의한 이유와 어긋난다 |
-| 양쪽 Javadoc에만 적기 | 배제한 대안이 있으면 본문보다 ADR이 맞다([conventions/git.md](../conventions/git.md)). Javadoc은 "이 코드가 무엇을 하는가"의 주인이지 **"왜 규칙을 깼는가"의 주인이 아니다** |
+| 양쪽 Javadoc에만 적기 | 배제한 대안이 있으면 본문보다 ADR이 맞다([conventions/git.md](../../conventions/git.md)). Javadoc은 "이 코드가 무엇을 하는가"의 주인이지 **"왜 규칙을 깼는가"의 주인이 아니다** |
 
 ## 결과 / 되돌리려면
 

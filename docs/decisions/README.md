@@ -7,28 +7,51 @@
 
 - **한 번 쓴 ADR은 고치지 않는다.** 오타 수정 외에는 본문을 바꾸지 않는다.
 - 결정이 뒤집히면 기존 파일의 `상태:`를 `대체됨 → ADR NNNN`으로만 바꾸고, **새 ADR을 추가**한다.
-- 번호는 이어붙이기만 한다. 재사용·재정렬하지 않는다.
+- 번호는 이어붙이기만 한다. 재사용·재정렬하지 않는다. **번호는 디렉터리와 무관하게 전역으로 이어진다.**
 - 다른 문서는 결정 근거를 복사하지 않고 여기로 링크한다.
+- 파일은 [domains/](../domains/)와 같은 이름의 디렉터리에 둔다 — `auth/`, `catalog/`, `purchase/`, `review/`.
+  도메인이 아니라 `global/` 소관인 결정(필터체인, 스키마 관리 등)은 `platform/`에 둔다.
+  두 도메인에 걸치면 **결정을 촉발한 쪽**에 두고 다른 쪽에서 링크한다(예: [0012](catalog/0012-image-urls-in-separate-table.md)).
 
 일반적인 모범 사례와 **다르게** 정한 것, 되돌리는 비용이 큰 것, 리뷰에서 이견이 있었던 것만 남긴다.
 "당연한 선택"은 ADR로 만들지 않는다.
 
 ## 목록
 
+### auth — 회원 · 인증
+
+계약은 [domains/auth.md](../domains/auth.md)가 소유한다.
+
 | # | 결정 | 상태 |
 |---|---|---|
-| [0001](0001-kakao-only-oauth.md) | 카카오 OAuth 전용 로그인 — 이메일+비밀번호 없음 | 채택 |
-| [0002](0002-backend-owns-redirect-uri.md) | `redirect_uri`는 백엔드가 소유한다 | 채택 |
-| [0003](0003-no-pkce-yet.md) | PKCE 미적용 | 보류 |
-| [0004](0004-no-refresh-token-rotation.md) | Refresh Token Rotation 미적용 | 보류 |
-| [0005](0005-opaque-refresh-token-hashed-in-db.md) | Refresh Token은 불투명 랜덤 문자열, DB엔 해시만 | 채택 |
-| [0006](0006-cookie-samesite-and-path.md) | 쿠키 2종의 `SameSite`·`Path`를 다르게 둔다 | 채택 |
-| [0007](0007-single-entrypoint-for-401-403.md) | 401·403을 `JwtAuthenticationEntryPoint` 하나가 전담 | 대체됨 → 0010 |
-| [0008](0008-flyway-owns-schema.md) | 스키마 소유자는 Flyway (`ddl-auto: validate`) | 채택 |
-| [0009](0009-signup-race-retry-at-login-boundary.md) | 가입 경합을 로그인 경계에서 1회 재시도로 흡수 | 채택 |
-| [0010](0010-access-denied-handler-for-authorization.md) | 인가 실패(403)는 `JwtAccessDeniedHandler`가 맡는다 | 채택 |
-| [0011](0011-jpa-specification-for-product-filter.md) | 상품 목록의 동적 필터는 JPA Specification으로 시작 | 채택 |
-| [0012](0012-image-urls-in-separate-table.md) | 상품·리뷰 이미지는 별도 테이블에 URL만 저장 | 채택 |
-| [0013](0013-hide-soft-deleted-products-everywhere.md) | soft delete된 상품은 ADMIN에게도 숨긴다 | 채택 |
-| [0014](0014-category-reads-product-repository.md) | 카테고리 삭제 차단은 `ProductRepository`를 직접 읽는다 | 채택 |
-| [0015](0015-no-stock-quantity-in-public-response.md) | 공개 상품 응답은 재고 수량을 담지 않는다 | 채택 |
+| [0001](auth/0001-kakao-only-oauth.md) | 카카오 OAuth 전용 로그인 — 이메일+비밀번호 없음 | 채택 |
+| [0002](auth/0002-backend-owns-redirect-uri.md) | `redirect_uri`는 백엔드가 소유한다 | 채택 |
+| [0003](auth/0003-no-pkce-yet.md) | PKCE 미적용 | 보류 |
+| [0004](auth/0004-no-refresh-token-rotation.md) | Refresh Token Rotation 미적용 | 보류 |
+| [0005](auth/0005-opaque-refresh-token-hashed-in-db.md) | Refresh Token은 불투명 랜덤 문자열, DB엔 해시만 | 채택 |
+| [0006](auth/0006-cookie-samesite-and-path.md) | 쿠키 2종의 `SameSite`·`Path`를 다르게 둔다 | 채택 |
+| [0009](auth/0009-signup-race-retry-at-login-boundary.md) | 가입 경합을 로그인 경계에서 1회 재시도로 흡수 | 채택 |
+
+### catalog — 카테고리 · 상품
+
+계약은 [domains/catalog.md](../domains/catalog.md)가 소유한다.
+
+| # | 결정 | 상태 |
+|---|---|---|
+| [0011](catalog/0011-jpa-specification-for-product-filter.md) | 상품 목록의 동적 필터는 JPA Specification으로 시작 | 채택 |
+| [0012](catalog/0012-image-urls-in-separate-table.md) | 상품·리뷰 이미지는 별도 테이블에 URL만 저장 | 채택 |
+| [0013](catalog/0013-hide-soft-deleted-products-everywhere.md) | soft delete된 상품은 ADMIN에게도 숨긴다 | 채택 |
+| [0014](catalog/0014-category-reads-product-repository.md) | 카테고리 삭제 차단은 `ProductRepository`를 직접 읽는다 | 채택 |
+| [0015](catalog/0015-no-stock-quantity-in-public-response.md) | 공개 상품 응답은 재고 수량을 담지 않는다 | 채택 |
+
+### platform — 전역 기반
+
+계약은 [architecture.md](../architecture.md)가 소유한다.
+
+| # | 결정 | 상태 |
+|---|---|---|
+| [0007](platform/0007-single-entrypoint-for-401-403.md) | 401·403을 `JwtAuthenticationEntryPoint` 하나가 전담 | 대체됨 → 0010 |
+| [0008](platform/0008-flyway-owns-schema.md) | 스키마 소유자는 Flyway (`ddl-auto: validate`) | 채택 |
+| [0010](platform/0010-access-denied-handler-for-authorization.md) | 인가 실패(403)는 `JwtAccessDeniedHandler`가 맡는다 | 채택 |
+
+`purchase/`·`review/`는 해당 Phase에서 첫 ADR이 생길 때 만든다.

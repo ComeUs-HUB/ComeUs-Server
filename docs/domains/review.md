@@ -33,4 +33,4 @@ id, user, product, order, rating(1~5), content, imageUrls, createdAt
 
 이미지 저장 방식은 **정해졌다** — `review_images` 별도 테이블에 URL만 담고, 스토리지는 로컬로
 시작해 추후 AWS S3로 옮긴다. 상품 이미지와 같은 방식이다
-([ADR 0012](../decisions/0012-image-urls-in-separate-table.md)).
+([ADR 0012](../decisions/catalog/0012-image-urls-in-separate-table.md)).

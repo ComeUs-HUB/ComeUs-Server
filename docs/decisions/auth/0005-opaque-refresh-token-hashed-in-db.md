@@ -2,7 +2,7 @@
 
 - 상태: 채택
 - 일자: 2026-08-13
-- 관련: [ADR 0004](0004-no-refresh-token-rotation.md), [ADR 0006](0006-cookie-samesite-and-path.md), [domains/auth.md](../domains/auth.md)
+- 관련: [ADR 0004](0004-no-refresh-token-rotation.md), [ADR 0006](0006-cookie-samesite-and-path.md), [domains/auth.md](../../domains/auth.md)
 
 ## 맥락
 

@@ -2,7 +2,7 @@
 
 - 상태: 보류 (도입 예정, 선행 검증 필요)
 - 일자: 2026-08-25
-- 관련: [ADR 0002](0002-backend-owns-redirect-uri.md), [roadmap.md](../roadmap.md)
+- 관련: [ADR 0002](0002-backend-owns-redirect-uri.md), [roadmap.md](../../roadmap.md)
 
 ## 맥락
 

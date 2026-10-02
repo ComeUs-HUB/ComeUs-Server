@@ -34,7 +34,7 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 - `src/test/resources/application.yml`에 H2 인메모리 테스트 설정 준비됨
 - `JpaConfig`의 `@EnableJpaAuditing`, `BackendApplication`의 `@ConfigurationPropertiesScan` 적용
 - Flyway(`flyway-core` + `flyway-mysql`)는 Phase 2에서 함께 도입됨
-  ([ADR 0008](decisions/0008-flyway-owns-schema.md))
+  ([ADR 0008](decisions/platform/0008-flyway-owns-schema.md))
 
 도메인 패키지는 **미리 만들지 않는다.** `cart`·`order`·`payment`·`review`에는
 현재 `exception/*ErrorCode`만 있고, 나머지 하위 폴더는 각 Phase 착수 시점에 만든다
@@ -127,7 +127,7 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 
 계약: [domains/catalog.md](domains/catalog.md).
 **카테고리·상품 모두 끝났고 각각 MySQL 실기동까지 통과했다.** 근거가 된 결정은 넷이다 —
-[ADR 0011](decisions/0011-jpa-specification-for-product-filter.md)·[0012](decisions/0012-image-urls-in-separate-table.md)·[0013](decisions/0013-hide-soft-deleted-products-everywhere.md)·[0014](decisions/0014-category-reads-product-repository.md).
+[ADR 0011](decisions/catalog/0011-jpa-specification-for-product-filter.md)·[0012](decisions/catalog/0012-image-urls-in-separate-table.md)·[0013](decisions/catalog/0013-hide-soft-deleted-products-everywhere.md)·[0014](decisions/catalog/0014-category-reads-product-repository.md).
 
 ### Category — 1~4단계 ✅
 
@@ -141,7 +141,7 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 | 4 | 컨트롤러 + `SecurityConfig` 배선(permitAll·`hasRole`) | `CategoryControllerTest` + MySQL 실기동 |
 
 이 Phase에서 **처음 생긴 것이 셋**이다. 비회원에게 열린 조회 API, ADMIN 인가 판정
-([ADR 0010](decisions/0010-access-denied-handler-for-authorization.md)), 그리고 경로 변수
+([ADR 0010](decisions/platform/0010-access-denied-handler-for-authorization.md)), 그리고 경로 변수
 (`/api/categories/{id}` — `MethodArgumentTypeMismatchException` 핸들러가 이때 필요해졌다).
 
 ### MySQL 실기동 (2026-09-15)
@@ -194,7 +194,7 @@ Javadoc 표기도 `[Phase 3 · 5단계]`처럼 이어 붙인다.
 - [x] 컨트롤러 조회 둘(`getList`·`getDetail`)과 `sanitize` —
       정렬 화이트리스트 위반은 C001(400), `size`는 100에서 잘린다
 - [x] **쓰기 셋** — `ProductService`의 등록·수정·삭제(soft delete)와 POST/PUT/DELETE.
-      `HIDDEN`까지 읽는 조회를 쓰므로 목록·상세와 헬퍼를 공유하지 않는다([ADR 0013](decisions/0013-hide-soft-deleted-products-everywhere.md))
+      `HIDDEN`까지 읽는 조회를 쓰므로 목록·상세와 헬퍼를 공유하지 않는다([ADR 0013](decisions/catalog/0013-hide-soft-deleted-products-everywhere.md))
 - [x] `SecurityConfig` 조회 permitAll — `GET /api/products`와 `/api/products/*` 둘 다 연다
 - [x] `SecurityConfig` 쓰기 `hasRole('ADMIN')` — POST는 컬렉션, PUT·DELETE는 단건 경로다
 - [x] 카테고리 삭제 차단 CA004 — `CategoryService`가 `ProductRepository`를 직접 읽는다.
@@ -204,7 +204,7 @@ Javadoc 표기도 `[Phase 3 · 5단계]`처럼 이어 붙인다.
 
 > CA004를 넣으며 `existsByCategoryIdIn(List)`을 `existsByCategoryId(Long)`으로 좁혔다.
 > 하위가 있으면 CA002가 먼저 막아 잎만 도달하므로 목록을 받을 이유가 없다 —
-> [ADR 0014](decisions/0014-category-reads-product-repository.md) 본문에는 옛 이름으로 남아 있다.
+> [ADR 0014](decisions/catalog/0014-category-reads-product-repository.md) 본문에는 옛 이름으로 남아 있다.
 
 #### 자동 테스트 — 4개 클래스 103개 케이스
 
@@ -220,7 +220,7 @@ Javadoc 표기도 `[Phase 3 · 5단계]`처럼 이어 붙인다.
 
 이 Phase에서 **처음 생기는 것이 넷**이다 — 페이징·정렬·동적 필터(`PageResponse`의 첫 실사용,
 Specification 도입), soft delete, 도메인 간 **양방향** 참조
-([ADR 0014](decisions/0014-category-reads-product-repository.md)),
+([ADR 0014](decisions/catalog/0014-category-reads-product-repository.md)),
 그리고 `Category`가 의도적으로 피했던 `@OneToMany` 컬렉션(이미지).
 
 #### MySQL 실기동 (2026-09-26)
@@ -233,7 +233,7 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
 - [x] Hibernate `validate` 통과 — `DECIMAL(10,2)`와 `VARCHAR` enum 매핑이 여기서 처음 대조됐다
 - [x] 비회원 `GET /api/products` 200 + 빈 `PageResponse`(`totalElements: 0`, `hasNext: false`)
 - [x] ADMIN 토큰으로 등록 → 201 + `Location: /api/products/1`(절대 URL 아님).
-      응답 바디에 `stockQuantity` 키가 없는 것도 함께 확인됐다([ADR 0015](decisions/0015-no-stock-quantity-in-public-response.md))
+      응답 바디에 `stockQuantity` 키가 없는 것도 함께 확인됐다([ADR 0015](decisions/catalog/0015-no-stock-quantity-in-public-response.md))
 - [x] **대분류 `categoryId` 필터에 소분류 상품이 딸려 나온다** —
       서비스 테스트는 mock이라 여기서 처음 검증됐다
 - [x] **soft delete 왕복** — DELETE 200 → 목록 0건 → 상세 404(P001) →
@@ -252,7 +252,7 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
 남은 것:
 - [ ] **이미지 파일 업로드 API** — 이번 범위 밖이다. `product_images` 테이블과 URL 등록까지만 만들고,
       멀티파트 업로드·로컬 스토리지·URL 발급은 별도로 다룬다
-      ([ADR 0012](decisions/0012-image-urls-in-separate-table.md))
+      ([ADR 0012](decisions/catalog/0012-image-urls-in-separate-table.md))
 
 ## Phase 4 — 구매 플로우 ⬜
 
@@ -270,8 +270,8 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
       `/api/products`(목록·단건)는 8단계에서 처리했다. 남은 것은 리뷰 목록이며,
       그 전까지는 `anyRequest().authenticated()`가 막는다
 - [x] ADMIN 권한 체크 도입 시 `AccessDeniedHandler` 재검토 — Phase 3에서 완료.
-      [ADR 0010](decisions/0010-access-denied-handler-for-authorization.md)이
-      [ADR 0007](decisions/0007-single-entrypoint-for-401-403.md)을 대체한다
+      [ADR 0010](decisions/platform/0010-access-denied-handler-for-authorization.md)이
+      [ADR 0007](decisions/platform/0007-single-entrypoint-for-401-403.md)을 대체한다
 
 테스트는 별도 Phase로 미루지 않는다 — **각 도메인 구현과 함께 작성한다.** Phase 2가 그렇게 진행됐다.
 
@@ -286,13 +286,13 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
 - [ ] **ADMIN 계정 발급 방식** — Phase 6에서 결정. 현재는 운영자가 DB에서 직접 바꾼다
       (`UPDATE users SET role = 'ADMIN' WHERE id = ?`). 승격 API는 없고, 도메인 메서드만 열려 있다
 - [ ] **PKCE 도입** — 보류 사유가 하나만 남았다.
-      [ADR 0003](decisions/0003-no-pkce-yet.md)
+      [ADR 0003](decisions/auth/0003-no-pkce-yet.md)
 - [ ] **Refresh Token Rotation + 재사용 탐지** — 함께 도입해야 한다.
-      [ADR 0004](decisions/0004-no-refresh-token-rotation.md)
+      [ADR 0004](decisions/auth/0004-no-refresh-token-rotation.md)
 - [ ] **만료 `refresh_tokens` row 정리 배치** — `expiresAt` 검사로 거절되므로 기능상 무해
 - [ ] **LOCAL 로그인** — `V4__add_password.sql`(V2는 카테고리가, V3는 상품이 가져갔다) + `PasswordEncoder` + `Provider.LOCAL` +
       `AuthErrorCode`에 `INVALID_CREDENTIALS` 재추가.
-      [ADR 0001](decisions/0001-kakao-only-oauth.md)
+      [ADR 0001](decisions/auth/0001-kakao-only-oauth.md)
 - [ ] **외부 PG 연동** — 포트원 등. 현재 Mock 전제
 - [ ] **Redis 도입** — Refresh Token 저장, 인기 상품 캐싱
 - [ ] **쿠폰 / 포인트 도메인** 추가 여부
@@ -301,8 +301,8 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
 확정된 것:
 - [x] 소셜 로그인은 **카카오 전용** — 구글 등 추가는 `Provider` enum 상수 추가로 확장
 - [x] **상품 목록 동적 필터는 JPA Specification** — 복잡해지면 QueryDSL로 리팩터링.
-      [ADR 0011](decisions/0011-jpa-specification-for-product-filter.md)
+      [ADR 0011](decisions/catalog/0011-jpa-specification-for-product-filter.md)
 - [x] **상품·리뷰 이미지는 별도 테이블에 URL만** — 스토리지는 로컬 → 추후 AWS S3.
-      [ADR 0012](decisions/0012-image-urls-in-separate-table.md)
+      [ADR 0012](decisions/catalog/0012-image-urls-in-separate-table.md)
 - [x] **공개 상품 응답에 재고 수량을 담지 않는다** — 품절은 `status`가 표현한다.
-      [ADR 0015](decisions/0015-no-stock-quantity-in-public-response.md)
+      [ADR 0015](decisions/catalog/0015-no-stock-quantity-in-public-response.md)

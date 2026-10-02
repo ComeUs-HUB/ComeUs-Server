@@ -72,7 +72,7 @@ public record ApiResponse<T>(boolean success, T data, ErrorResponse error) {
 판단 여지를 두지 않기 위한 기계적 규칙이다. 덕분에 **시그니처만 봐도 그 응답이 헤더를 건드리는지**
 알 수 있다 — `POST /api/auth/refresh`가 `ApiResponse<TokenResponse>`인 것은 rotation을 하지 않아
 **재발급 응답에 `Set-Cookie`가 없다**는 뜻이다
-([ADR 0004](../decisions/0004-no-refresh-token-rotation.md)). 전부 `ResponseEntity`로 감싸면
+([ADR 0004](../decisions/auth/0004-no-refresh-token-rotation.md)). 전부 `ResponseEntity`로 감싸면
 이 신호가 사라진다.
 
 **예외 처리와는 무관하다.** 예외가 나면 컨트롤러는 반환값을 만들지 못하고 종료하며, 응답은
@@ -87,7 +87,7 @@ plain 반환이어도 실패 시 상태 코드는 정상적으로 내려간다
 **예외**: `GET /api/auth/kakao/authorize`와 `/callback`은 이 포맷을 따르지 않는다. 항상 302이며,
 실패도 예외를 던지지 않고 `{FE}/oauth/complete?error={code}`로 리다이렉트한다.
 브라우저 네비게이션이라 JSON이 사용자 화면에 노출되면 안 되기 때문이다 —
-[ADR 0002](../decisions/0002-backend-owns-redirect-uri.md).
+[ADR 0002](../decisions/auth/0002-backend-owns-redirect-uri.md).
 
 ## `ErrorResponse`
 
@@ -136,7 +136,7 @@ Spring Data `Pageable`을 컨트롤러 파라미터로 바인딩한다(`page`, `
 ⚠️ **401/403은 이 핸들러를 타지 않는다.** 필터 단계에서 발생하므로 인증 실패는
 `JwtAuthenticationEntryPoint`가, 인가 실패(403)는 `JwtAccessDeniedHandler`가
 `ObjectMapper`로 같은 포맷의 JSON을 직접 쓴다 —
-[ADR 0010](../decisions/0010-access-denied-handler-for-authorization.md).
+[ADR 0010](../decisions/platform/0010-access-denied-handler-for-authorization.md).
 
 ## 지킬 것
 

@@ -87,7 +87,7 @@ fix/<범위>          단독 버그 수정
 - 검증란에는 `./gradlew test` 결과와, 자동 테스트로 덮이지 않는 부분을 무엇으로 확인했는지 쓴다
   (브라우저 E2E 등)
 - 리뷰에서 제안받았으나 채택하지 않은 대안은 **ADR로 남긴다.** PR 코멘트에만 두면 사라진다 —
-  예: [ADR 0009](../decisions/0009-signup-race-retry-at-login-boundary.md)
+  예: [ADR 0009](../decisions/auth/0009-signup-race-retry-at-login-boundary.md)
 
 ## 이슈
 

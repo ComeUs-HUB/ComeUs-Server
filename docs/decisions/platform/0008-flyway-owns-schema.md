@@ -2,7 +2,7 @@
 
 - 상태: 채택
 - 일자: 2026-08-13
-- 관련: [architecture.md](../architecture.md), [roadmap.md](../roadmap.md)
+- 관련: [architecture.md](../../architecture.md), [roadmap.md](../../roadmap.md)
 
 ## 맥락
 

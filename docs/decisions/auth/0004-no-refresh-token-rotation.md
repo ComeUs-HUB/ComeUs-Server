@@ -2,7 +2,7 @@
 
 - 상태: 보류
 - 일자: 2026-08-24
-- 관련: [ADR 0005](0005-opaque-refresh-token-hashed-in-db.md), [domains/auth.md](../domains/auth.md)
+- 관련: [ADR 0005](0005-opaque-refresh-token-hashed-in-db.md), [domains/auth.md](../../domains/auth.md)
 
 ## 맥락
 

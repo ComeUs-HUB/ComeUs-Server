@@ -15,7 +15,7 @@ Dockerfile과 docker-compose.yml이 부재하고, `.github/workflows`에는 코�
 분리 배포가 불가피해지면 **`refresh_token`의** `SameSite=None; Secure` 전환과
 **CSRF 토큰 도입을 함께** 진행해야 한다. (`oauth_state`는 kakao→BE 구간이라 FE 배포 위치와 무관하다 —
 계속 `Lax`로 둔다.)
-근거: [ADR 0006](decisions/0006-cookie-samesite-and-path.md).
+근거: [ADR 0006](decisions/auth/0006-cookie-samesite-and-path.md).
 
 이것이 배포 방식이 인증 설계를 되짚는 유일한 지점이므로, 호스팅을 고르기 전에 확인한다.
 

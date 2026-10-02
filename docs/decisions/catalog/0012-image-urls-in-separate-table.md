@@ -2,7 +2,7 @@
 
 - 상태: 채택
 - 일자: 2026-09-15
-- 관련: [domains/catalog.md](../domains/catalog.md), [domains/review.md](../domains/review.md)
+- 관련: [domains/catalog.md](../../domains/catalog.md), [domains/review.md](../../domains/review.md)
 
 ## 맥락
 
@@ -10,7 +10,7 @@
 **DB에 어떻게 매핑할 것인가**, 그리고 **파일 자체를 어디에 둘 것인가**.
 
 두 도메인이 따로 정하면 업로드·삭제 경로가 갈라지므로 **같은 방식으로 정한다**는 것이 전제였다
-([catalog.md](../domains/catalog.md)).
+([catalog.md](../../domains/catalog.md)).
 
 ## 결정
 
@@ -34,6 +34,6 @@
 - **S3 전환 시 바뀌는 것은 업로드 처리와 URL 발급뿐이다.** 기존 행의 URL은 그대로 두거나
   일괄 치환한다 — 테이블 구조는 건드리지 않는다
 - 전환 전까지 이미지 파일은 배포 서버의 로컬 경로에 남으므로, **서버를 새로 띄우면 유실된다.**
-  운영 배포([deployment.md](../deployment.md)) 전에 S3 도입 여부를 확정해야 하는 이유다
+  운영 배포([deployment.md](../../deployment.md)) 전에 S3 도입 여부를 확정해야 하는 이유다
 - 이미지 삭제는 **행 삭제와 파일 삭제 두 단계**다. 파일 삭제가 실패해도 행은 지워지므로
   고아 파일이 남을 수 있다 — 정리 배치는 필요해지는 시점에 만든다
