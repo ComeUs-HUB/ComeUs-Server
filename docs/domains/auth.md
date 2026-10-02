@@ -55,7 +55,7 @@
 | createdAt | LocalDateTime | `@CreatedDate` |
 
 `user 1 : token N`이고 DB엔 해시만 저장한다 — 근거는
-[ADR 0005](../decisions/0005-opaque-refresh-token-hashed-in-db.md).
+[ADR 0005](../decisions/auth/0005-opaque-refresh-token-hashed-in-db.md).
 로그아웃은 해당 row만, 탈퇴는 해당 유저 전체 row를 삭제한다.
 
 ## Repository
@@ -81,7 +81,7 @@
 
 **가입 경합**은 `AuthService`가 `DataIntegrityViolationException`을 잡아 로그인 DB 구간을 **1회 재시도**해
 흡수한다. ⚠️ 카카오 왕복이 트랜잭션 밖에 있어야 재시도가 1회용 인가 코드를 재사용하지 않는다 —
-[ADR 0009](../decisions/0009-signup-race-retry-at-login-boundary.md).
+[ADR 0009](../decisions/auth/0009-signup-race-retry-at-login-boundary.md).
 
 ## API
 
@@ -114,7 +114,7 @@
 
 ⚠️ `SameSite`를 둘 다 `Strict`로 맞추면 **로그인이 전부 실패한다.** 삭제할 때도 발급할 때와 **같은 `Path`를
 반드시 지정**해야 쿠키가 지워진다. 근거와 함정 전체는
-[ADR 0006](../decisions/0006-cookie-samesite-and-path.md).
+[ADR 0006](../decisions/auth/0006-cookie-samesite-and-path.md).
 
 ## 로그인 흐름
 
@@ -145,7 +145,7 @@
 
 **access token은 이 흐름에서 발급하지 않는다** — 7번의 `/api/auth/refresh`가 발급한다.
 그 결과 access token이 URL에 실리는 경로가 설계상 존재하지 않는다 —
-[ADR 0002](../decisions/0002-backend-owns-redirect-uri.md).
+[ADR 0002](../decisions/auth/0002-backend-owns-redirect-uri.md).
 
 ## 토큰
 
@@ -169,7 +169,7 @@
   - **예외 시 short-circuit 하지 않는다.** request attribute에 사유만 남기고 체인을 계속 진행한다
 
 401 응답은 `JwtAuthenticationEntryPoint`가, 인가 실패 403은 `JwtAccessDeniedHandler`가 쓴다 —
-[ADR 0010](../decisions/0010-access-denied-handler-for-authorization.md).
+[ADR 0010](../decisions/platform/0010-access-denied-handler-for-authorization.md).
 ⚠️ **익명 요청은 권한 부족이어도 EntryPoint로 간다**(필터가 `SecurityContext`를 비우기 때문).
 그래서 auth·user 엔드포인트의 A001·A003·A004·A008 동작은 Phase 3 이후에도 그대로다.
 
@@ -248,4 +248,4 @@ FE는 **인가 코드를 다루지 않는다.** authorize URL 조립도, 콜백 
    401이면 미로그인 처리 — 2번과 동일한 호출이라 로직을 공유할 수 있다
 6. 401 인터셉터: refresh → 성공 시 원요청 재시도, 실패 시 로그인 화면
 7. refresh 단일 Promise 묶기는 **권장(필수 아님)** — rotation이 없어 동시 호출도 모두 성공한다
-   ([ADR 0004](../decisions/0004-no-refresh-token-rotation.md))
+   ([ADR 0004](../decisions/auth/0004-no-refresh-token-rotation.md))

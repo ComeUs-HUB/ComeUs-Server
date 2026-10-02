@@ -2,13 +2,13 @@
 
 - 상태: 채택
 - 일자: 2026-09-16
-- 관련: [domains/catalog.md](../domains/catalog.md), [architecture.md](../architecture.md)
+- 관련: [domains/catalog.md](../../domains/catalog.md), [architecture.md](../../architecture.md)
 
 ## 맥락
 
 상품 삭제는 **soft delete**다(`status = HIDDEN`). 주문 이력에 연결된 상품이 사라지면 안 되므로
 행을 지우지 않는다 — 카테고리를 하드 삭제로 둔 것과 갈리는 지점이고, 그 근거는 카테고리가
-주문 이력에 매달리지 않는다는 것이었다([catalog.md](../domains/catalog.md)).
+주문 이력에 매달리지 않는다는 것이었다([catalog.md](../../domains/catalog.md)).
 
 그 결과 **지워진 행이 DB에 남는다.** 조회 API가 그것을 어떻게 다룰지는 계약에 없었다.
 카테고리는 하드 삭제라 이 질문 자체가 없었다.

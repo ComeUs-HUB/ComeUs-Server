@@ -2,7 +2,7 @@
 
 - 상태: 채택
 - 일자: 2026-08-26
-- 관련: [ADR 0001](0001-kakao-only-oauth.md), [domains/auth.md](../domains/auth.md)
+- 관련: [ADR 0001](0001-kakao-only-oauth.md), [domains/auth.md](../../domains/auth.md)
 
 ## 맥락
 

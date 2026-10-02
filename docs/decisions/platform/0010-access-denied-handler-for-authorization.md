@@ -3,7 +3,7 @@
 - 상태: 채택
 - 일자: 2026-09-15
 - 대체: [ADR 0007](0007-single-entrypoint-for-401-403.md)
-- 관련: [architecture.md](../architecture.md), [conventions/api-response.md](../conventions/api-response.md)
+- 관련: [architecture.md](../../architecture.md), [conventions/api-response.md](../../conventions/api-response.md)
 
 ## 맥락
 

@@ -82,7 +82,7 @@
  */
 ```
 
-지운 것은 사라지지 않았다. "왜 두 축을 나눴나"는 [ADR 0013](../decisions/0013-hide-soft-deleted-products-everywhere.md)에,
+지운 것은 사라지지 않았다. "왜 두 축을 나눴나"는 [ADR 0013](../decisions/catalog/0013-hide-soft-deleted-products-everywhere.md)에,
 상수별 의미는 이름 자체에 있다.
 
 ## 태그

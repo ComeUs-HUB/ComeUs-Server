@@ -2,7 +2,7 @@
 
 - 상태: 채택
 - 일자: 2026-08-13
-- 관련: [ADR 0002](0002-backend-owns-redirect-uri.md), [domains/auth.md](../domains/auth.md)
+- 관련: [ADR 0002](0002-backend-owns-redirect-uri.md), [domains/auth.md](../../domains/auth.md)
 
 ## 맥락
 

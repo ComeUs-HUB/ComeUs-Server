@@ -17,18 +17,18 @@
 
 | # | 결정 | 상태 |
 |---|---|---|
-| [0001](0001-kakao-only-oauth.md) | 카카오 OAuth 전용 로그인 — 이메일+비밀번호 없음 | 채택 |
-| [0002](0002-backend-owns-redirect-uri.md) | `redirect_uri`는 백엔드가 소유한다 | 채택 |
-| [0003](0003-no-pkce-yet.md) | PKCE 미적용 | 보류 |
-| [0004](0004-no-refresh-token-rotation.md) | Refresh Token Rotation 미적용 | 보류 |
-| [0005](0005-opaque-refresh-token-hashed-in-db.md) | Refresh Token은 불투명 랜덤 문자열, DB엔 해시만 | 채택 |
-| [0006](0006-cookie-samesite-and-path.md) | 쿠키 2종의 `SameSite`·`Path`를 다르게 둔다 | 채택 |
-| [0007](0007-single-entrypoint-for-401-403.md) | 401·403을 `JwtAuthenticationEntryPoint` 하나가 전담 | 대체됨 → 0010 |
-| [0008](0008-flyway-owns-schema.md) | 스키마 소유자는 Flyway (`ddl-auto: validate`) | 채택 |
-| [0009](0009-signup-race-retry-at-login-boundary.md) | 가입 경합을 로그인 경계에서 1회 재시도로 흡수 | 채택 |
-| [0010](0010-access-denied-handler-for-authorization.md) | 인가 실패(403)는 `JwtAccessDeniedHandler`가 맡는다 | 채택 |
-| [0011](0011-jpa-specification-for-product-filter.md) | 상품 목록의 동적 필터는 JPA Specification으로 시작 | 채택 |
-| [0012](0012-image-urls-in-separate-table.md) | 상품·리뷰 이미지는 별도 테이블에 URL만 저장 | 채택 |
-| [0013](0013-hide-soft-deleted-products-everywhere.md) | soft delete된 상품은 ADMIN에게도 숨긴다 | 채택 |
-| [0014](0014-category-reads-product-repository.md) | 카테고리 삭제 차단은 `ProductRepository`를 직접 읽는다 | 채택 |
-| [0015](0015-no-stock-quantity-in-public-response.md) | 공개 상품 응답은 재고 수량을 담지 않는다 | 채택 |
+| [0001](auth/0001-kakao-only-oauth.md) | 카카오 OAuth 전용 로그인 — 이메일+비밀번호 없음 | 채택 |
+| [0002](auth/0002-backend-owns-redirect-uri.md) | `redirect_uri`는 백엔드가 소유한다 | 채택 |
+| [0003](auth/0003-no-pkce-yet.md) | PKCE 미적용 | 보류 |
+| [0004](auth/0004-no-refresh-token-rotation.md) | Refresh Token Rotation 미적용 | 보류 |
+| [0005](auth/0005-opaque-refresh-token-hashed-in-db.md) | Refresh Token은 불투명 랜덤 문자열, DB엔 해시만 | 채택 |
+| [0006](auth/0006-cookie-samesite-and-path.md) | 쿠키 2종의 `SameSite`·`Path`를 다르게 둔다 | 채택 |
+| [0007](platform/0007-single-entrypoint-for-401-403.md) | 401·403을 `JwtAuthenticationEntryPoint` 하나가 전담 | 대체됨 → 0010 |
+| [0008](platform/0008-flyway-owns-schema.md) | 스키마 소유자는 Flyway (`ddl-auto: validate`) | 채택 |
+| [0009](auth/0009-signup-race-retry-at-login-boundary.md) | 가입 경합을 로그인 경계에서 1회 재시도로 흡수 | 채택 |
+| [0010](platform/0010-access-denied-handler-for-authorization.md) | 인가 실패(403)는 `JwtAccessDeniedHandler`가 맡는다 | 채택 |
+| [0011](catalog/0011-jpa-specification-for-product-filter.md) | 상품 목록의 동적 필터는 JPA Specification으로 시작 | 채택 |
+| [0012](catalog/0012-image-urls-in-separate-table.md) | 상품·리뷰 이미지는 별도 테이블에 URL만 저장 | 채택 |
+| [0013](catalog/0013-hide-soft-deleted-products-everywhere.md) | soft delete된 상품은 ADMIN에게도 숨긴다 | 채택 |
+| [0014](catalog/0014-category-reads-product-repository.md) | 카테고리 삭제 차단은 `ProductRepository`를 직접 읽는다 | 채택 |
+| [0015](catalog/0015-no-stock-quantity-in-public-response.md) | 공개 상품 응답은 재고 수량을 담지 않는다 | 채택 |

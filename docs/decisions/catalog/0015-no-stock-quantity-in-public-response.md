@@ -2,7 +2,7 @@
 
 - 상태: 채택
 - 일자: 2026-09-22
-- 관련: [domains/catalog.md](../domains/catalog.md), [ADR 0013](0013-hide-soft-deleted-products-everywhere.md)
+- 관련: [domains/catalog.md](../../domains/catalog.md), [ADR 0013](0013-hide-soft-deleted-products-everywhere.md)
 
 ## 맥락
 

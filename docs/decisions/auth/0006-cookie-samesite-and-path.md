@@ -2,7 +2,7 @@
 
 - 상태: 채택
 - 일자: 2026-08-25
-- 관련: [ADR 0002](0002-backend-owns-redirect-uri.md), [ADR 0005](0005-opaque-refresh-token-hashed-in-db.md), [domains/auth.md](../domains/auth.md), [deployment.md](../deployment.md)
+- 관련: [ADR 0002](0002-backend-owns-redirect-uri.md), [ADR 0005](0005-opaque-refresh-token-hashed-in-db.md), [domains/auth.md](../../domains/auth.md), [deployment.md](../../deployment.md)
 
 ## 맥락
 
@@ -44,7 +44,7 @@
    쿠키를 *보낼 때*만 관여한다.
 3. ⚠️ **`SameSite=Strict`가 배포 형태를 제약한다.** FE/BE를 동일 상위 도메인의 서브도메인으로 배포해야 한다
    (`app.example.com` / `api.example.com`). 분리하면 `/refresh`·`/logout`이 **동작 불능**이 된다 —
-   보안 약화가 아니라 인증 기능 파손이다. 자세한 내용은 [deployment.md](../deployment.md).
+   보안 약화가 아니라 인증 기능 파손이다. 자세한 내용은 [deployment.md](../../deployment.md).
 
 CSRF 토큰을 두지 않는 근거도 여기서 나온다: `SameSite=Strict`가 cross-site 요청에 쿠키를 붙이지 않아
 원천 차단된다. 위 배포 전제가 깨져 `SameSite=None`으로 가면 **CSRF 토큰 도입이 필수가 된다.**

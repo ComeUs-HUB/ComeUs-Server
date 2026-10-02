@@ -11,8 +11,8 @@
 |---|---|
 | 프로젝트 | 의류 판매 웹사이트 백엔드 REST API |
 | 기술 스택 | Spring Boot 3.5.0 · Java 21 · JPA · MySQL · Gradle (Kotlin DSL) |
-| 인증 | 카카오 OAuth + JWT ([ADR 0001](decisions/0001-kakao-only-oauth.md)) |
-| 스키마 | Flyway 소유, Hibernate는 `validate`만 ([ADR 0008](decisions/0008-flyway-owns-schema.md)) |
+| 인증 | 카카오 OAuth + JWT ([ADR 0001](decisions/auth/0001-kakao-only-oauth.md)) |
+| 스키마 | Flyway 소유, Hibernate는 `validate`만 ([ADR 0008](decisions/platform/0008-flyway-owns-schema.md)) |
 | 테스트 DB | H2 인메모리 (`MODE=MySQL`, `ddl-auto: create-drop`, Flyway 비활성) |
 
 ## 도메인
@@ -107,7 +107,7 @@ com.toyproject.backend
   - `category → product` — **역방향이며 카테고리 삭제 차단(CA004) 하나에만** 열려 있다.
     유일하게 Service가 아니라 Repository(`ProductRepository.existsByCategoryId`)를 직접 읽는데,
     Service를 경유하면 생성자 주입 순환이 된다
-    ([ADR 0014](decisions/0014-category-reads-product-repository.md))
+    ([ADR 0014](decisions/catalog/0014-category-reads-product-repository.md))
 - `BusinessException`이 `ErrorCode`를 **인터페이스 타입**으로 들고 있어, 새 도메인이 에러 코드를
   추가해도 `global`을 고치지 않는다 ([conventions/error-codes.md](conventions/error-codes.md))
 
@@ -123,13 +123,13 @@ com.toyproject.backend
   OAuth 왕복용 `oauth_state`는 **`Lax`**. `Path`·`Max-Age` 등 나머지 속성과 근거는
   [domains/auth.md](domains/auth.md)의 쿠키 표에 있다
 - Refresh Token은 DB `refresh_tokens`에 SHA-256 해시로 저장 (추후 Redis 교체 가능)
-  — [ADR 0005](decisions/0005-opaque-refresh-token-hashed-in-db.md)
+  — [ADR 0005](decisions/auth/0005-opaque-refresh-token-hashed-in-db.md)
 - **인증 실패(401)는 `JwtAuthenticationEntryPoint`, 인가 실패(403)는 `JwtAccessDeniedHandler`**가 맡는다
-  — [ADR 0010](decisions/0010-access-denied-handler-for-authorization.md) (Phase 3에서
-  [ADR 0007](decisions/0007-single-entrypoint-for-401-403.md)을 대체).
+  — [ADR 0010](decisions/platform/0010-access-denied-handler-for-authorization.md) (Phase 3에서
+  [ADR 0007](decisions/platform/0007-single-entrypoint-for-401-403.md)을 대체).
   ⚠️ **익명 요청은 권한 부족이어도 EntryPoint로 간다** — 필터가 실패 시 `SecurityContext`를 비우기 때문이다.
   토큰 없이 ADMIN 경로를 호출하면 403이 아니라 **401(A001)**이다
-- Refresh Token Rotation 미적용 — [ADR 0004](decisions/0004-no-refresh-token-rotation.md)
+- Refresh Token Rotation 미적용 — [ADR 0004](decisions/auth/0004-no-refresh-token-rotation.md)
 
 **CORS**: `allowCredentials(true)` 필수(쿠키 왕복). `allowedOrigins`는 `app.cors.allowed-origins`
 명시 목록. CORS가 필요한 것은 `/refresh`·`/logout`·`/users/me` **뿐**이다 —
@@ -145,7 +145,7 @@ cross-site 요청에 붙지 않아 원천 차단된다. (`oauth_state`는 자격
 이 논증과 무관하다. 인증된 API는 쿠키가 아닌 `Bearer` 토큰을 쓴다.)
 ⚠️ 이 근거와, **FE/BE를 동일 상위 도메인에 배포**한다는 전제는 **둘 다 `refresh_token`의 `Strict`에서만
 파생된다.** 전제가 깨져 `refresh_token`을 `SameSite=None`으로 바꾸면 CSRF 토큰 도입이 필수가 된다
-— [ADR 0006](decisions/0006-cookie-samesite-and-path.md), [deployment.md](deployment.md).
+— [ADR 0006](decisions/auth/0006-cookie-samesite-and-path.md), [deployment.md](deployment.md).
 
 ## RBAC 권한 매트릭스
 

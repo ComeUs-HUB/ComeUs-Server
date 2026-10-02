@@ -15,7 +15,7 @@ CREATE DATABASE toyproject CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
 스키마는 만들지 않아도 된다. **Flyway가 기동 시 `V1__init.sql`로 생성한다**
-([ADR 0008](docs/decisions/0008-flyway-owns-schema.md)).
+([ADR 0008](docs/decisions/platform/0008-flyway-owns-schema.md)).
 
 ### 2. `.env` — 프로젝트 루트
 

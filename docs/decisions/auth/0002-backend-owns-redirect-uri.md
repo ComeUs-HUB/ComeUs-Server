@@ -2,7 +2,7 @@
 
 - 상태: 채택
 - 일자: 2026-08-25
-- 관련: [ADR 0001](0001-kakao-only-oauth.md), [ADR 0003](0003-no-pkce-yet.md), [ADR 0006](0006-cookie-samesite-and-path.md), [domains/auth.md](../domains/auth.md)
+- 관련: [ADR 0001](0001-kakao-only-oauth.md), [ADR 0003](0003-no-pkce-yet.md), [ADR 0006](0006-cookie-samesite-and-path.md), [domains/auth.md](../../domains/auth.md)
 
 ## 맥락
 

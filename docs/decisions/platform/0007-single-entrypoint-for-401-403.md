@@ -2,7 +2,7 @@
 
 - 상태: 대체됨 → [ADR 0010](0010-access-denied-handler-for-authorization.md)
 - 일자: 2026-08-20 (A008 분리로 확장: 2026-08-24)
-- 관련: [domains/auth.md](../domains/auth.md), [conventions/api-response.md](../conventions/api-response.md)
+- 관련: [domains/auth.md](../../domains/auth.md), [conventions/api-response.md](../../conventions/api-response.md)
 
 ## 맥락
 
@@ -41,6 +41,6 @@ Spring Security는 인증 실패를 `AuthenticationEntryPoint`가, 인가 실패
    **구분해서 던져야** 한다.
 
 401/403 응답은 필터 단계라 `GlobalExceptionHandler`를 타지 않는다 → EntryPoint가 `ObjectMapper`로
-[공통 응답 포맷](../conventions/api-response.md)의 JSON을 직접 작성한다.
+[공통 응답 포맷](../../conventions/api-response.md)의 JSON을 직접 작성한다.
 
 ADMIN 권한 체크가 들어오면 `AccessDeniedHandler`의 도달 경로가 생기므로 **그 시점에 재검토**한다.

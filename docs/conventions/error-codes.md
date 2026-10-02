@@ -55,10 +55,10 @@ public interface ErrorCode {          // global/exception/ErrorCode.java
 - **A008이 auth에 있는 이유**: 회원 상태에서 파생되지만 실제 발생 지점이 `CustomUserDetailsService`·
   `JwtAuthenticationFilter`이고 "인증 거절 사유"로 소비된다.
 - **A005·A006·A009는 JSON으로 나가지 않는다.** 콜백에서 발생하므로 FE 복귀 URL의 `?error=` 값으로
-  전달된다(`{FE}/oauth/complete?error=A009`) — [ADR 0002](../decisions/0002-backend-owns-redirect-uri.md).
+  전달된다(`{FE}/oauth/complete?error=A009`) — [ADR 0002](../decisions/auth/0002-backend-owns-redirect-uri.md).
 - `INVALID_CREDENTIALS`(옛 U002)는 카카오 전용 설계에서 도달 경로가 없어 **삭제했다**.
   LOCAL 로그인을 도입하면 `AuthErrorCode`에 다시 추가한다 —
-  [ADR 0001](../decisions/0001-kakao-only-oauth.md).
+  [ADR 0001](../decisions/auth/0001-kakao-only-oauth.md).
 
 ## 도메인별
 
