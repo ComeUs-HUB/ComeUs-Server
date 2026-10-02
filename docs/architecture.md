@@ -9,7 +9,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 프로젝트 | 의류 판매 웹사이트 백엔드 REST API |
+| 프로젝트 | 커머스 플랫폼 백엔드 REST API |
 | 기술 스택 | Spring Boot 3.5.0 · Java 21 · JPA · MySQL · Gradle (Kotlin DSL) |
 | 인증 | 카카오 OAuth + JWT ([ADR 0001](decisions/auth/0001-kakao-only-oauth.md)) |
 | 스키마 | Flyway 소유, Hibernate는 `validate`만 ([ADR 0008](decisions/platform/0008-flyway-owns-schema.md)) |
