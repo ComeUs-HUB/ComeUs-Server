@@ -1,4 +1,4 @@
-# E-commerce Backend
+# ComeUs Backend
 
 커머스 플랫폼의 REST API 서버. Spring Boot 3.5.0 · Java 21 · JPA · MySQL · Gradle (Kotlin DSL).
 
