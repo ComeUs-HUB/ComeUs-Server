@@ -1,6 +1,6 @@
-# E-commerce Backend
+# ComeUs Backend
 
-의류 판매 웹사이트의 REST API 서버. Spring Boot 3.5.0 · Java 21 · JPA · MySQL · Gradle (Kotlin DSL).
+커머스 플랫폼의 REST API 서버. Spring Boot 3.5.0 · Java 21 · JPA · MySQL · Gradle (Kotlin DSL).
 
 카카오 OAuth 로그인과 JWT 인증까지 동작한다. 현재 진행 상황은 [docs/roadmap.md](docs/roadmap.md).
 

@@ -9,7 +9,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 프로젝트 | 의류 판매 웹사이트 백엔드 REST API |
+| 프로젝트 | 커머스 플랫폼 백엔드 REST API |
 | 기술 스택 | Spring Boot 3.5.0 · Java 21 · JPA · MySQL · Gradle (Kotlin DSL) |
 | 인증 | 카카오 OAuth + JWT ([ADR 0001](decisions/auth/0001-kakao-only-oauth.md)) |
 | 스키마 | Flyway 소유, Hibernate는 `validate`만 ([ADR 0008](decisions/platform/0008-flyway-owns-schema.md)) |
@@ -96,7 +96,7 @@ com.toyproject.backend
       | grep -v "global/security/\|global/config/SecurityConfig.java"
     #   → 비어야 한다
     ```
-- **도메인 간 참조는 방향을 고정하고, 리포지토리가 아니라 서비스를 경유한다.** 현재 셋이다
+- **도메인 간 참조는 방향을 고정하고, 리포지토리가 아니라 서비스를 경유한다.** 아래가 전부다
   - `auth → user` — `UserRepository`가 아니라 `UserService`의 공개 메서드만 쓴다
     ([domains/auth.md](domains/auth.md))
   - `user → auth` — 탈퇴가 토큰 정리까지 끝내야 해서 `UserController`가 `AuthService`의
@@ -108,6 +108,18 @@ com.toyproject.backend
     유일하게 Service가 아니라 Repository(`ProductRepository.existsByCategoryId`)를 직접 읽는데,
     Service를 경유하면 생성자 주입 순환이 된다
     ([ADR 0014](decisions/catalog/0014-category-reads-product-repository.md))
+  - **아래 둘은 Phase 4 착수 시점에 들어온다.**
+  - 엔티티 참조 다섯 — `cart → user`(`Cart.user`), `cart → product`(`CartItem.product`),
+    `order → user`(`Order.user`), `order → product`(`OrderItem.product`),
+    `payment → order`(`Payment.order`). `product → category`와 같은 모양이고, 참조할 엔티티는
+    그 도메인의 **Service에서 받는다**(`ProductService`가 `categoryService.getCategory()`를
+    쓰는 것과 같다). Phase 5의 review도 같은 방식으로 `user`·`product`·`order`를 참조한다
+    ([domains/purchase.md](domains/purchase.md))
+  - `order → cart` — **서비스 호출로 생기는 유일한 의존이다.** `OrderService.create()` 하나가
+    `CartService`를 경유한다. 순환이 없어 `category → product`처럼 Repository로 내릴 이유가 없고,
+    주문이 장바구니에서 **읽고 지우는** 둘을 하므로 빈 장바구니 처리 같은 규칙이 `CartService`에
+    모여 있어야 한다
+    ([ADR 0017](decisions/purchase/0017-order-copies-cart-and-cuts-the-link.md))
 - `BusinessException`이 `ErrorCode`를 **인터페이스 타입**으로 들고 있어, 새 도메인이 에러 코드를
   추가해도 `global`을 고치지 않는다 ([conventions/error-codes.md](conventions/error-codes.md))
 

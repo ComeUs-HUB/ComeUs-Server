@@ -6,11 +6,30 @@
 장바구니 → 주문 → 결제로 이어지는 핵심 흐름. [auth.md](auth.md)(로그인 사용자)와
 [catalog.md](catalog.md)(상품·재고)가 먼저 준비되어야 시작할 수 있다.
 
+## 엔티티 관계
+
+```
+User  1 ──  1  Cart          cart.user_id (unique)
+Cart  1 ──  N  CartItem      cart_item.cart_id, orphanRemoval = true
+User  1 ──  N  Order         orders.user_id
+Order 1 ──  N  OrderItem     order_item.order_id
+Order 1 ──  1  Payment       payment.order_id (unique)
+
+CartItem  N ── 1  Product    단방향. Product는 장바구니를 모른다
+OrderItem N ── 1  Product    단방향
+```
+
+**Cart와 Order 사이에는 연관관계를 두지 않는다.** 주문은 장바구니를 값으로 복사하고 원본을 지운다 —
+`cartItemId` 목록은 요청 입력일 뿐 영속 관계가 아니다. 근거는 [ADR 0017](../decisions/purchase/0017-order-copies-cart-and-cuts-the-link.md).
+
+도메인 간 의존은 `order → cart` 단방향이고 cart는 order를 모른다. 방향과 경유 지점
+(`OrderService` → `CartService`)은 [architecture.md의 의존 규칙](../architecture.md#의존-규칙)이 소유한다.
+
 ## Cart
 
 ### 엔티티
 
-id, user, cartItems[ { product, size, color, quantity } ]
+id, user, cartItems[ { product, quantity } ]
 
 ### API
 
@@ -25,15 +44,27 @@ id, user, cartItems[ { product, size, color, quantity } ]
 ### 규칙
 
 - 회원 1명당 장바구니 1개 (1:1)
-- **"동일 항목"은 상품ID + 옵션 조합으로 판단한다.** 같은 상품이라도 사이즈·색상이 다르면 별개 항목이다
+- **"동일 항목"은 상품ID로 판단한다.** 옵션(사이즈·색상)은 초기 범위 밖이다 — [ADR 0018](../decisions/purchase/0018-no-product-options-yet.md)
 - 동일 항목 재담기 시 수량 합산
-- 재고 초과 수량은 담을 수 없다 → `CT002 CART_QUANTITY_EXCEEDED`
+- 재고 초과 수량은 담을 수 없다 → `CT002 CART_QUANTITY_EXCEEDED`.
+  **검사 대상은 합산 후 수량(기존 + 요청)이다** — 1개씩 나눠 담아 재고를 넘기는 경로를 막는다
+
+### 담기 검사는 재고를 점유하지 않는다
+
+담기 시점에 재고를 검사하지만 **차감하지도 예약하지도 않는다.** 담기 검사(`CT002`)는 UX용 선행
+거절이고 보장이 아니다 — 담은 뒤 품절될 수 있고, 그때는 주문 생성의 `P002`가 거절한다.
+**재고 점유는 결제 대기(주문 `PENDING`)에서 일어난다.** 근거와 배제한 대안은 [ADR 0016](../decisions/purchase/0016-stock-reserved-at-order-not-cart.md).
+
+### 조회 응답
+
+- 항목별 **구매 가능 여부를 불리언으로** 담는다. 재고 수량은 담지 않는다 — [ADR 0016](../decisions/purchase/0016-stock-reserved-at-order-not-cart.md)
+- **서버가 수량을 자동 조정하지 않는다.** 사용자가 넣은 값은 그대로 두고 주문 시점에 거절한다
 
 ## Order
 
 ### 엔티티
 
-id, user, orderItems[ { product, size, color, quantity, priceAtOrder } ], totalAmount,
+id, user, orderItems[ { product, quantity, priceAtOrder } ], totalAmount,
 status(PENDING/PAID/SHIPPING/DELIVERED/CANCELLED), shippingAddress, createdAt
 
 ### API
@@ -49,16 +80,30 @@ status(PENDING/PAID/SHIPPING/DELIVERED/CANCELLED), shippingAddress, createdAt
 
 ### 규칙
 
+- **입력은 선택한 `cartItemId` 목록이다.** 장바구니 전체가 아니라 사용자가 고른 항목만 주문한다
+  - 주문이 성립하면 **그 항목만** 장바구니에서 지운다. 선택하지 않은 항목은 남는다
+  - 타인의 항목이거나 존재하지 않는 id → `CT001 CART_ITEM_NOT_FOUND`
+  - 빈 목록 → `C001 INVALID_INPUT_VALUE`
+  - **장바구니를 거치지 않는 "바로 구매"는 초기 범위 밖이다** — 입력이 장바구니에 묶인다([ADR 0017](../decisions/purchase/0017-order-copies-cart-and-cuts-the-link.md))
 - 주문 생성 시 재고 차감. **동시에 마지막 재고를 두고 경쟁해도 음수로 내려가면 안 된다**
+- **재고 점유는 결제 대기에서 일어난다.** 주문 생성(`PENDING`)의 차감이 곧 점유이고,
+  결제 성공이 확정(`PAID`)한다. 장바구니는 점유하지 않는다 — [ADR 0016](../decisions/purchase/0016-stock-reserved-at-order-not-cart.md)
+- **`cartItem` 삭제와 재고 차감은 한 트랜잭션이다.** 재고 부족(`P002`)으로 주문이 실패하면
+  장바구니는 그대로 남아야 한다 — 거절당했는데 장바구니까지 비는 것이 최악이다
 - 주문 시점 가격을 `priceAtOrder`에 **스냅샷** 저장 — 이후 상품 가격이 바뀌어도 이미 성립한 주문의
   금액은 유지되어야 한다
-- PAID 이후 취소 시 재고 복구
+- **`CANCELLED`로 가는 모든 전환이 재고를 복구한다.** 점유를 시작한 것이 주문 생성이므로
+  결제 전(`PENDING`)이든 후(`PAID`)든, 회원이 취소하든 ADMIN이 바꾸든 같다.
+  결제 실패([Payment](#payment))와 환불도 이 규칙에 흡수된다
 - SHIPPING 이후 회원이 직접 취소 불가 → `O002 ORDER_CANCEL_NOT_ALLOWED`
 
 ### 착수 전 정할 것
 
 - **동시성 제어 방식** — 비관적 락(`PESSIMISTIC_WRITE`), 낙관적 락+재시도, 원자적 감소 연산 중 선택.
   트레이드오프를 비교하고 **ADR로 남긴다**([decisions/](../decisions/))
+- **`PENDING` 주문의 만료 처리** — 결제되지 않은 주문이 재고를 계속 점유한다. 장바구니 예약을
+  배제한 이유(담아두고 사지 않으면 재고가 묶인다)가 범위만 좁혀 그대로 재현된다.
+  자동 취소 배치를 둘지, 사용자·ADMIN 취소에만 맡길지 정한다
 - 배송지도 주문 시점 스냅샷이 필요한지
 - 상태 전환표(각 상태에서 허용되는 다음 상태)를 확정
 
