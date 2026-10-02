@@ -44,6 +44,16 @@
 | [0014](catalog/0014-category-reads-product-repository.md) | 카테고리 삭제 차단은 `ProductRepository`를 직접 읽는다 | 채택 |
 | [0015](catalog/0015-no-stock-quantity-in-public-response.md) | 공개 상품 응답은 재고 수량을 담지 않는다 | 채택 |
 
+### purchase — 장바구니 · 주문 · 결제
+
+계약은 [domains/purchase.md](../domains/purchase.md)가 소유한다.
+
+| # | 결정 | 상태 |
+|---|---|---|
+| [0016](purchase/0016-stock-reserved-at-order-not-cart.md) | 재고 점유는 주문 생성에서 시작하고 장바구니는 점유하지 않는다 | 채택 |
+| [0017](purchase/0017-order-copies-cart-and-cuts-the-link.md) | 주문은 장바구니를 값으로 복사하고 연결을 끊는다 | 채택 |
+| [0018](purchase/0018-no-product-options-yet.md) | 상품 옵션(사이즈·색상)을 초기 범위 밖에 둔다 | 채택 |
+
 ### platform — 전역 기반
 
 계약은 [architecture.md](../architecture.md)가 소유한다.
@@ -54,4 +64,4 @@
 | [0008](platform/0008-flyway-owns-schema.md) | 스키마 소유자는 Flyway (`ddl-auto: validate`) | 채택 |
 | [0010](platform/0010-access-denied-handler-for-authorization.md) | 인가 실패(403)는 `JwtAccessDeniedHandler`가 맡는다 | 채택 |
 
-`purchase/`·`review/`는 해당 Phase에서 첫 ADR이 생길 때 만든다.
+`review/`는 Phase 5에서 첫 ADR이 생길 때 만든다.
