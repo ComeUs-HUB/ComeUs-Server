@@ -42,6 +42,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EntityListeners(AuditingEntityListener.class)
 public class Cart {
 
+    /** 담을 수 있는 상품 종류 상한. 합산은 종류를 늘리지 않으므로 새 항목이 생길 때만 걸린다. */
+    public static final int MAX_ITEM_TYPES = 50;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -69,13 +72,18 @@ public class Cart {
     /**
      * 상품 담기. 동일 상품이면 수량을 합산한다.
      *
-     * @throws BusinessException        합산 후 수량이 재고를 넘으면 CT002(409). 이때 항목은 그대로다
+     * @throws BusinessException        종류가 {@link #MAX_ITEM_TYPES}를 넘으면 CT003(409),
+     *                                  합산 후 수량이 재고를 넘으면 CT002(409). 둘 다 항목은 그대로다
      * @throws IllegalArgumentException {@code quantity}가 1 미만이면
      */
     public void addItem(Product product, int quantity) {
         requirePositive(quantity);
 
         CartItem found = findByProduct(product);
+        if (found == null) {
+            requireRoomForNewType();
+        }
+
         int merged = (found == null ? 0 : found.getQuantity()) + quantity;
         requireWithinStock(product, merged);
 
@@ -132,6 +140,13 @@ public class Cart {
             }
         }
         return null;
+    }
+
+    /** 상한이 없으면 조회 응답·주문 입력·전체 삭제의 크기가 모두 무제한이 된다. */
+    private void requireRoomForNewType() {
+        if (this.items.size() >= MAX_ITEM_TYPES) {
+            throw new BusinessException(CartErrorCode.CART_ITEM_LIMIT_EXCEEDED);
+        }
     }
 
     /** 담기 시점 검사일 뿐 재고를 점유하지 않는다 — 최종 판정은 주문 생성의 P002다(ADR 0016). */
