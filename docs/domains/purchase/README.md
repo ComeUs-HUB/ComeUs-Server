@@ -4,7 +4,7 @@
 > `CartErrorCode`·`OrderErrorCode`·`PaymentErrorCode`만 선반영돼 있다.
 
 장바구니 → 주문 → 결제로 이어지는 핵심 흐름. [auth.md](../auth.md)(로그인 사용자)와
-[catalog.md](../catalog/README.md)(상품·재고)가 먼저 준비되어야 시작할 수 있다.
+[catalog/](../catalog/README.md)(상품·재고)가 먼저 준비되어야 시작할 수 있다.
 
 도메인별 계약은 세 문서가 나눠 소유한다. 이 문서는 **셋에 걸친 것만** 담는다.
 

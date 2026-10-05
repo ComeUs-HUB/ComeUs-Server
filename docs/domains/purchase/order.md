@@ -4,7 +4,7 @@
 > `OrderErrorCode`만 선반영돼 있다.
 
 [cart.md](cart.md)의 항목을 값으로 복사해 성립하고, 결제는 [payment.md](payment.md)가 잇는다.
-셋에 걸친 엔티티 관계는 [purchase.md](README.md)가 소유한다.
+셋에 걸친 엔티티 관계는 [README.md](README.md)가 소유한다.
 
 ## 엔티티
 
