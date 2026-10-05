@@ -4,7 +4,7 @@
 > `PaymentErrorCode`만 선반영돼 있다.
 
 [order.md](order.md)의 주문 하나에 결제 하나가 붙는다. 셋에 걸친 엔티티 관계는
-[purchase.md](README.md)가 소유한다.
+[README.md](README.md)가 소유한다.
 
 ## 엔티티
 

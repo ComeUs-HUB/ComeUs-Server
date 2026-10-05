@@ -4,7 +4,7 @@
 > `CartErrorCode`만 선반영돼 있다.
 
 구매 플로우의 입구. 담긴 항목을 주문으로 옮기는 것은 [order.md](order.md)이며 **장바구니는 주문을
-모른다.** 셋에 걸친 엔티티 관계는 [purchase.md](README.md)가 소유한다.
+모른다.** 셋에 걸친 엔티티 관계는 [README.md](README.md)가 소유한다.
 
 ## 엔티티
 
