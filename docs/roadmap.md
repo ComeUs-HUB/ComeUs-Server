@@ -286,6 +286,9 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
       `cart → user`·`order → user`가 함께 쓴다([architecture.md](architecture.md))
 - [ ] **`SecurityConfig` 배선이 필요한지 판정** — `anyRequest().authenticated()`가 이미
       `/api/cart/**`를 막고 있다. 명시 배선이 불필요하면 Javadoc의 RBAC 표에만 행을 더한다
+- [ ] **요청 수량 상한 N을 정한다** — 3단계 DTO에 `@Max(N)`을 걸고 위반은 `C001`이다.
+      재고 초과는 그 뒤 `CT002`가 본다. 엔티티는 이미 합산을 `long`으로 계산해
+      `int` 오버플로로 재고 검사를 우회하는 경로를 막아 뒀다
 - [ ] **`V4` 번호 충돌 메모 정리** — 아래 미결 사항의 LOCAL 로그인 항목이 `V4__add_password.sql`을
       적어 두고 있다. Cart가 `V4`를 가져가므로 그 메모를 고친다
 
@@ -337,6 +340,11 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 - [ ] **LOCAL 로그인** — `V4__add_password.sql`(V2는 카테고리가, V3는 상품이 가져갔다) + `PasswordEncoder` + `Provider.LOCAL` +
       `AuthErrorCode`에 `INVALID_CREDENTIALS` 재추가.
       [ADR 0001](decisions/auth/0001-kakao-only-oauth.md)
+- [ ] **재고 기반 수량 셀렉터 상한** — 상품 상세 응답에 구매 가능 최대 수량을 노출하면 FE가
+      셀렉터를 그 값까지만 열 수 있다(무신사 방식). [ADR 0015](decisions/catalog/0015-no-stock-quantity-in-public-response.md)가 공개 응답에서 재고를 뺐으므로
+      **대체 ADR이 필요하다.** 스키마·엔티티·서버 검증은 바뀌지 않고 응답 필드 추가로 끝난다 —
+      0015가 "필드를 다시 넣는 것은 추가라 클라이언트를 깨지 않는다"고 적어둔 방향이다.
+      ⚠️ 노출해도 조회 시점 값이라 `CT002`·`P002` 거절은 남는다. UX 개선이지 검증 대체가 아니다
 - [ ] **외부 PG 연동** — 포트원 등. 현재 Mock 전제
 - [ ] **Redis 도입** — Refresh Token 저장, 인기 상품 캐싱
 - [ ] **쿠폰 / 포인트 도메인** 추가 여부
