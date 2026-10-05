@@ -84,13 +84,14 @@ public class Cart {
             requireRoomForNewType();
         }
 
-        int merged = (found == null ? 0 : found.getQuantity()) + quantity;
+        // int로 더하면 기존 수량 + Integer.MAX_VALUE가 음수로 넘쳐 재고 검사를 통과한다
+        long merged = (found == null ? 0L : found.getQuantity()) + quantity;
         requireWithinStock(product, merged);
 
         if (found == null) {
             this.items.add(CartItem.of(this, product, quantity));
         } else {
-            found.changeQuantity(merged);
+            found.changeQuantity((int) merged);
         }
     }
 
@@ -150,7 +151,7 @@ public class Cart {
     }
 
     /** 담기 시점 검사일 뿐 재고를 점유하지 않는다 — 최종 판정은 주문 생성의 P002다(ADR 0016). */
-    private static void requireWithinStock(Product product, int quantity) {
+    private static void requireWithinStock(Product product, long quantity) {
         if (quantity > product.getStockQuantity()) {
             throw new BusinessException(CartErrorCode.CART_QUANTITY_EXCEEDED);
         }
