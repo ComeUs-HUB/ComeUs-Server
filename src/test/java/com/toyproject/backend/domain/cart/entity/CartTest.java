@@ -71,6 +71,24 @@ class CartTest {
     }
 
     @Test
+    @DisplayName("합산이 int 범위를 넘겨도 재고 검사를 통과하지 못한다")
+    void mergedQuantityCannotOverflow() {
+        Cart cart = Cart.create(user());
+        Product product = product(10);
+        cart.addItem(product, 1);
+
+        assertThatThrownBy(() -> cart.addItem(product, Integer.MAX_VALUE))
+                .as("int로 합산하면 음수로 넘쳐 재고 검사를 통과하고 음수 수량이 저장된다")
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(CartErrorCode.CART_QUANTITY_EXCEEDED);
+
+        assertThat(cart.getItems().get(0).getQuantity())
+                .as("엔티티가 단독으로 막는다 — 요청 DTO의 상한은 2차 방어다")
+                .isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("다른 상품은 합산되지 않는다")
     void differentProductsAreSeparateItems() {
         Cart cart = Cart.create(user());
