@@ -51,7 +51,7 @@ import java.util.List;
  * <ul>
  *   <li><b>permitAll 조회</b>가 처음 생겼다. Phase 2까지 {@code permitAll}은 로그인 왕복 경로뿐이었고
  *       나머지는 전부 {@code anyRequest().authenticated()}에 걸려 있었다.
- *       카테고리 트리와 상품 조회는 비회원 탐색 경로라 열어야 한다([domains/catalog.md]).</li>
+ *       카테고리 트리와 상품 조회는 비회원 탐색 경로라 열어야 한다([domains/catalog/]).</li>
  *   <li><b>인가 판정</b>이 처음 생겼다. {@code hasRole("ADMIN")}이 붙는 순간
  *       "인증은 됐으나 권한이 부족한" 요청이 실제로 발생하고, 그 응답은
  *       {@link JwtAccessDeniedHandler}가 A002(403)로 내보낸다 — 그 클래스가 예고한 도달 경로가 여기다.</li>

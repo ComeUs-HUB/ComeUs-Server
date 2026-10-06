@@ -2,7 +2,7 @@
 
 - 상태: 채택
 - 일자: 2026-09-15
-- 관련: [domains/catalog.md](../../domains/catalog.md), [domains/review.md](../../domains/review.md)
+- 관련: [domains/catalog/](../../domains/catalog/README.md), [domains/review.md](../../domains/review.md)
 
 ## 맥락
 
@@ -10,7 +10,7 @@
 **DB에 어떻게 매핑할 것인가**, 그리고 **파일 자체를 어디에 둘 것인가**.
 
 두 도메인이 따로 정하면 업로드·삭제 경로가 갈라지므로 **같은 방식으로 정한다**는 것이 전제였다
-([catalog.md](../../domains/catalog.md)).
+([catalog/](../../domains/catalog/README.md)).
 
 ## 결정
 

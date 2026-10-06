@@ -20,8 +20,13 @@
 | 도메인 | 문서 |
 |---|---|
 | user · auth | [domains/auth.md](domains/auth.md) |
-| category · product | [domains/catalog.md](domains/catalog.md) |
-| cart · order · payment | [domains/purchase.md](domains/purchase.md) |
+| category | [domains/catalog/category.md](domains/catalog/category.md) |
+| product | [domains/catalog/product.md](domains/catalog/product.md) |
+| 카탈로그 공통 | [domains/catalog/](domains/catalog/README.md) |
+| cart | [domains/purchase/cart.md](domains/purchase/cart.md) |
+| order | [domains/purchase/order.md](domains/purchase/order.md) |
+| payment | [domains/purchase/payment.md](domains/purchase/payment.md) |
+| 구매 플로우 공통 · 엔티티 관계 | [domains/purchase/](domains/purchase/README.md) |
 | review | [domains/review.md](domains/review.md) |
 
 ## 구조 — 세 개의 축

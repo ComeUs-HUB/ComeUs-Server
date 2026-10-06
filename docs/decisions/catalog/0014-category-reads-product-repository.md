@@ -2,7 +2,7 @@
 
 - 상태: 채택
 - 일자: 2026-09-16
-- 관련: [architecture.md](../../architecture.md), [domains/catalog.md](../../domains/catalog.md)
+- 관련: [architecture.md](../../architecture.md), [domains/catalog/](../../domains/catalog/README.md)
 
 ## 맥락
 

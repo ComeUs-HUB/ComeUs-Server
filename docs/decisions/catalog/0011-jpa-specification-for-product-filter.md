@@ -2,7 +2,7 @@
 
 - 상태: 채택
 - 일자: 2026-09-15
-- 관련: [domains/catalog.md](../../domains/catalog.md), [conventions/api-response.md](../../conventions/api-response.md)
+- 관련: [domains/catalog/](../../domains/catalog/README.md), [conventions/api-response.md](../../conventions/api-response.md)
 
 ## 맥락
 

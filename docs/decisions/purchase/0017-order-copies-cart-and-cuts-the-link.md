@@ -2,7 +2,7 @@
 
 - 상태: 채택
 - 일자: 2026-10-02
-- 관련: [domains/purchase.md](../../domains/purchase.md), [architecture.md](../../architecture.md), [ADR 0014](../catalog/0014-category-reads-product-repository.md)
+- 관련: [domains/purchase/](../../domains/purchase/README.md), [architecture.md](../../architecture.md), [ADR 0014](../catalog/0014-category-reads-product-repository.md)
 
 ## 맥락
 
