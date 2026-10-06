@@ -73,6 +73,7 @@ public interface ErrorCode {          // global/exception/ErrorCode.java
 | P002 | `OUT_OF_STOCK` | 409 | 〃 |
 | CT001 | `CART_ITEM_NOT_FOUND` | 404 | `domain.cart.exception.CartErrorCode` |
 | CT002 | `CART_QUANTITY_EXCEEDED` | 409 | 〃 |
+| CT003 | `CART_ITEM_LIMIT_EXCEEDED` | 409 | 〃 |
 | O001 | `ORDER_NOT_FOUND` | 404 | `domain.order.exception.OrderErrorCode` |
 | O002 | `ORDER_CANCEL_NOT_ALLOWED` | 409 | 〃 |
 | PAY001 | `PAYMENT_NOT_FOUND` | 404 | `domain.payment.exception.PaymentErrorCode` |
