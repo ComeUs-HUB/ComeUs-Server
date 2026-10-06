@@ -13,7 +13,8 @@ jobs:
       github.event_name == 'pull_request' ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request &&
-       contains(github.event.comment.body, '@claude re-review'))
+       contains(github.event.comment.body, '@claude re-review') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     permissions:
       contents: read
       pull-requests: write
@@ -23,7 +24,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          # 범위 리뷰(`A..B`)에서 git diff가 커밋 이력을 읽어야 한다
+          fetch-depth: 0
           ref: ${{ github.event_name == 'issue_comment' && format('refs/pull/{0}/head', github.event.issue.number) || github.ref }}
 
       - name: Run Claude Code Review
@@ -34,7 +36,17 @@ jobs:
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
 
+            REVIEW REQUEST: ${{ github.event.comment.body || '(PR 열림 또는 Ready for review — 전체 리뷰)' }}
+
             이 PR의 코드를 리뷰해주세요. 한국어로 답변해주세요.
+
+            **리뷰 범위**
+            - 이 저장소는 도메인 하나를 PR 하나로 열고 단계별 커밋을 계속 쌓는다. 단계마다 리뷰를 요청한다
+            - REVIEW REQUEST에 커밋 범위(`A..B`)가 있으면 **그 범위만** 리뷰하세요.
+              `git log --oneline A..B`와 `git diff A..B`로 변경을 읽고, `gh pr diff`(PR 전체)는 맥락 확인에만 쓰세요
+            - 범위가 없으면 `gh pr diff`로 PR 전체를 리뷰하세요
+            - `gh pr view --comments`로 이전 리뷰를 먼저 읽고, **이미 지적했고 대응된 사항은 반복하지 마세요.**
+              범위 안의 변경이 이전 지적을 해소했는지는 확인해 주세요
 
             **먼저 docs/README.md 를 읽고 이 저장소의 규칙을 파악하세요.**
             - 결정 근거는 docs/decisions/ 의 ADR에 있습니다. **이미 ADR로 확정된 사항을 다시
@@ -58,4 +70,4 @@ jobs:
             Only post GitHub comments - don't submit review text as messages.
 
           claude_args: |
-            --allowedTools "Read,Grep,Glob,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --allowedTools "Read,Grep,Glob,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff:*),Bash(git log:*)"
