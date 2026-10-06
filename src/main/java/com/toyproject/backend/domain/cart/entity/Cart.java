@@ -72,8 +72,7 @@ public class Cart {
     /**
      * 상품 담기. 동일 상품이면 수량을 합산한다.
      *
-     * @throws BusinessException        종류가 {@link #MAX_ITEM_TYPES}를 넘으면 CT003(409),
-     *                                  합산 후 수량이 재고를 넘으면 CT002(409). 둘 다 항목은 그대로다
+     * @throws BusinessException        CT003·CT002
      * @throws IllegalArgumentException {@code quantity}가 1 미만이면
      */
     public void addItem(Product product, int quantity) {
@@ -143,7 +142,6 @@ public class Cart {
         return null;
     }
 
-    /** 상한이 없으면 조회 응답·주문 입력·전체 삭제의 크기가 모두 무제한이 된다. */
     private void requireRoomForNewType() {
         if (this.items.size() >= MAX_ITEM_TYPES) {
             throw new BusinessException(CartErrorCode.CART_ITEM_LIMIT_EXCEEDED);
@@ -157,10 +155,7 @@ public class Cart {
         }
     }
 
-    /**
-     * 수량은 양수만 받는다. 0 이하는 클라이언트 입력이 아니라 호출자 버그이므로
-     * {@code BusinessException}이 아니다 — 요청 DTO가 C001로 먼저 거른다.
-     */
+    /** 0 이하는 호출자 버그다 — 요청 DTO가 C001로 먼저 거른다. */
     private static void requirePositive(int quantity) {
         if (quantity <= 0) {
             throw new IllegalArgumentException("장바구니 수량은 1 이상이어야 합니다: " + quantity);

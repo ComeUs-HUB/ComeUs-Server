@@ -15,13 +15,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * [Phase 4 · 1단계] {@link Cart}의 합산·재고·종류 상한 불변식 검증
+ * [Phase 4 · 1단계] {@link Cart}의 합산·재고·종류 상한 불변식 검증.
  *
- * <p>틀렸을 때 <b>조용히 잘못된 결과가 나가는</b> 경로만 담는다 — 합산 후 검사를 우회하는 담기,
- * id 없는 인스턴스의 오합산, 상한이 찬 뒤의 합산이 그것이다.
- *
- * <p>{@code orphanRemoval}의 실제 {@code DELETE}와 uk 제약은 {@code CartRepositoryTest},
- * {@code HIDDEN} 상품 차단과 타인 항목 404는 {@code CartServiceTest}가 소유한다.
+ * <p>틀렸을 때 조용히 잘못된 결과가 나가는 경로만 담는다. DB 제약·서비스 규칙은 범위 밖이다.
  */
 @DisplayName("Cart")
 class CartTest {
