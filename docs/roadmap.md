@@ -4,7 +4,7 @@
 계약은 [architecture.md](architecture.md)·[domains/](domains/)·[conventions/](conventions/)가,
 결정 근거는 [decisions/](decisions/)가 소유한다.
 
-> 기준: 2026-10-02 · 브랜치 `feature/phase4-cart`
+> 기준: 2026-10-06 · 브랜치 `feature/phase4-cart`
 
 ## 요약
 
@@ -19,12 +19,12 @@
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
-**Phase 3이 끝났다.** 다음은 Phase 4 구매 플로우이고 Cart부터 들어간다.
+**Phase 4 Cart 1단계(엔티티)가 끝났다.** 다음은 Cart 2단계 Repository + `CartService`다.
 **동시성 제어 방식은 Order 착수 전까지 ADR로 정한다** — 되돌리기 비용이 큰 결정이지만
 재고를 차감하는 것은 Order이고 Cart는 읽기만 하므로 Cart는 그 결정 없이 착수할 수 있다
 ([domains/purchase/order.md](domains/purchase/order.md)).
 
-**현재 규모**: main 70개 파일 · 테스트 22개 클래스 316개 케이스.
+**현재 규모**: main 72개 파일 · 테스트 24개 클래스 332개 케이스.
 케이스 수는 `./gradlew test` 리포트 기준이라 **파라미터라이즈는 실행 횟수로 센다**.
 
 ## Phase 0 — 환경 설정 ✅
@@ -275,7 +275,7 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 
 | 단계 | 내용 | 검증 | |
 |---|---|---|---|
-| 1 | 엔티티(`Cart`·`CartItem`) + `V4__create_carts.sql` | `CartTest` | ⬜ |
+| 1 | 엔티티(`Cart`·`CartItem`) + `V4__create_carts.sql` | `CartTest` · `CartPersistenceTest` | ✅ |
 | 2 | Repository + `CartService` | `CartServiceTest` | ⬜ |
 | 3 | 컨트롤러 + DTO + `SecurityConfig` 점검 | `CartControllerTest` + MySQL 실기동 | ⬜ |
 
