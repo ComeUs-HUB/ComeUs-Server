@@ -4,7 +4,7 @@
 계약은 [architecture.md](architecture.md)·[domains/](domains/)·[conventions/](conventions/)가,
 결정 근거는 [decisions/](decisions/)가 소유한다.
 
-> 기준: 2026-09-26 · 브랜치 `feature/phase3-product`
+> 기준: 2026-10-06 · 브랜치 `feature/phase4-cart`
 
 ## 요약
 
@@ -19,10 +19,12 @@
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
-**Phase 3이 끝났다.** 다음은 Phase 4 구매 플로우이며, 착수 전에 **동시성 제어 방식을
-ADR로 정해야 한다** — 되돌리기 비용이 큰 결정이다([domains/purchase/order.md](domains/purchase/order.md)).
+**Phase 4 Cart 1단계(엔티티)가 끝났다.** 다음은 Cart 2단계 Repository + `CartService`다.
+**동시성 제어 방식은 Order 착수 전까지 ADR로 정한다** — 되돌리기 비용이 큰 결정이지만
+재고를 차감하는 것은 Order이고 Cart는 읽기만 하므로 Cart는 그 결정 없이 착수할 수 있다
+([domains/purchase/order.md](domains/purchase/order.md)).
 
-**현재 규모**: main 70개 파일 · 테스트 22개 클래스 316개 케이스.
+**현재 규모**: main 72개 파일 · 테스트 24개 클래스 332개 케이스.
 케이스 수는 `./gradlew test` 리포트 기준이라 **파라미터라이즈는 실행 횟수로 센다**.
 
 ## Phase 0 — 환경 설정 ✅
@@ -257,7 +259,47 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
 ## Phase 4 — 구매 플로우 ⬜
 
 계약: [domains/purchase/](domains/purchase/README.md).
-**동시성 제어 방식은 정한 뒤 ADR로 남긴다** — 되돌리기 비용이 큰 결정이다.
+결정 근거는 [ADR 0016](decisions/purchase/0016-stock-reserved-at-order-not-cart.md)·[0017](decisions/purchase/0017-order-copies-cart-and-cuts-the-link.md)·[0018](decisions/purchase/0018-no-product-options-yet.md)이 소유한다.
+
+구현 순서는 **Cart → Order → Payment**다. Cart만 구매 플로우 안에서 들어오는 의존이 없고
+재고를 점유하지 않아 되돌리기 비용이 가장 낮다. Payment는 Order 없이 엔티티가 성립하지 않는다.
+
+**동시성 제어 방식은 Cart 다음으로 미룬다.** 재고 차감은 Order의 일이고 Cart는 재고를 읽기만
+하므로([ADR 0016](decisions/purchase/0016-stock-reserved-at-order-not-cart.md)) Cart는 그 결정 없이
+착수할 수 있다. Order 착수 전까지 정하고 ADR로 남긴다.
+
+### Cart — 1~3단계 ⬜
+
+브랜치 `feature/phase4-cart`(master `1af5eaf`에서 분기).
+Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같다.
+
+| 단계 | 내용 | 검증 | |
+|---|---|---|---|
+| 1 | 엔티티(`Cart`·`CartItem`) + `V4__create_carts.sql` | `CartTest` · `CartPersistenceTest` | ✅ |
+| 2 | Repository + `CartService` | `CartServiceTest` | ⬜ |
+| 3 | 컨트롤러 + DTO + `SecurityConfig` 점검 | `CartControllerTest` + MySQL 실기동 | ⬜ |
+
+착수하며 확인할 것:
+
+- [ ] **`UserService`에 `User` 엔티티를 반환하는 메서드를 더한다** — `Cart`가 `User`를 참조하는데
+      공개 메서드 넷이 전부 DTO를 반환한다. `CategoryService.getCategory()`가 같은 자리다.
+      `cart → user`·`order → user`가 함께 쓴다([architecture.md](architecture.md))
+- [ ] **`SecurityConfig` 배선이 필요한지 판정** — `anyRequest().authenticated()`가 이미
+      `/api/cart/**`를 막고 있다. 명시 배선이 불필요하면 Javadoc의 RBAC 표에만 행을 더한다
+- [ ] **요청 수량 상한 N을 정한다** — 3단계 DTO에 `@Max(N)`을 걸고 위반은 `C001`이다.
+      재고 초과는 그 뒤 `CT002`가 본다. 엔티티는 이미 합산을 `long`으로 계산해
+      `int` 오버플로로 재고 검사를 우회하는 경로를 막아 뒀다
+- [ ] **`V4` 번호 충돌 메모 정리** — 아래 미결 사항의 LOCAL 로그인 항목이 `V4__add_password.sql`을
+      적어 두고 있다. Cart가 `V4`를 가져가므로 그 메모를 고친다
+
+### Order — 4~8단계 ⬜
+
+착수 전 **동시성 제어 ADR**이 필요하다. 그 밖에 정할 것은
+[order.md](domains/purchase/order.md)의 "착수 전 정할 것"에 있다.
+
+### Payment — 9~11단계 ⬜
+
+계약은 [payment.md](domains/purchase/payment.md).
 
 ## Phase 5 — 리뷰 ⬜
 
@@ -298,6 +340,11 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
 - [ ] **LOCAL 로그인** — `V4__add_password.sql`(V2는 카테고리가, V3는 상품이 가져갔다) + `PasswordEncoder` + `Provider.LOCAL` +
       `AuthErrorCode`에 `INVALID_CREDENTIALS` 재추가.
       [ADR 0001](decisions/auth/0001-kakao-only-oauth.md)
+- [ ] **재고 기반 수량 셀렉터 상한** — 상품 상세 응답에 구매 가능 최대 수량을 노출하면 FE가
+      셀렉터를 그 값까지만 열 수 있다(무신사 방식). [ADR 0015](decisions/catalog/0015-no-stock-quantity-in-public-response.md)가 공개 응답에서 재고를 뺐으므로
+      **대체 ADR이 필요하다.** 스키마·엔티티·서버 검증은 바뀌지 않고 응답 필드 추가로 끝난다 —
+      0015가 "필드를 다시 넣는 것은 추가라 클라이언트를 깨지 않는다"고 적어둔 방향이다.
+      ⚠️ 노출해도 조회 시점 값이라 `CT002`·`P002` 거절은 남는다. UX 개선이지 검증 대체가 아니다
 - [ ] **외부 PG 연동** — 포트원 등. 현재 Mock 전제
 - [ ] **Redis 도입** — Refresh Token 저장, 인기 상품 캐싱
 - [ ] **쿠폰 / 포인트 도메인** 추가 여부

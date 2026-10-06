@@ -53,6 +53,7 @@
 | [0016](purchase/0016-stock-reserved-at-order-not-cart.md) | 재고 점유는 주문 생성에서 시작하고 장바구니는 점유하지 않는다 | 채택 |
 | [0017](purchase/0017-order-copies-cart-and-cuts-the-link.md) | 주문은 장바구니를 값으로 복사하고 연결을 끊는다 | 채택 |
 | [0018](purchase/0018-no-product-options-yet.md) | 상품 옵션(사이즈·색상)을 초기 범위 밖에 둔다 | 채택 |
+| [0019](purchase/0019-cart-owns-item-deletion.md) | 장바구니 항목 삭제는 애그리거트가 소유한다 | 채택 |
 
 ### platform — 전역 기반
 
