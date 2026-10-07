@@ -10,6 +10,7 @@ import com.toyproject.backend.domain.user.service.UserService;
 import com.toyproject.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
@@ -17,8 +18,8 @@ import java.util.Optional;
 /**
  * [Phase 4 · 2단계] 장바구니 서비스. 불변식은 {@link Cart}가 소유하고 여기서는 조회·조립·트랜잭션만 한다.
  *
- * <p>쓰기는 장바구니 행을 잠가 같은 회원의 요청을 직렬화한다. 행이 없으면 잠그지 않고,
- * 동시 첫 담기는 {@code uk_carts_user_id} 위반 → C005(409)로 끝난다.
+ * <p>쓰기는 READ COMMITTED에서 장바구니 행을 잠가 같은 회원의 요청을 직렬화한다 — 락 뒤의 읽기가
+ * 최신 커밋을 봐야 한다(ADR 0020). 행이 없으면 잠그지 않고, 동시 첫 담기는 C005(409)로 끝난다.
  * 회원·상품은 각 서비스를 거친다 — 두 Repository는 자기 패키지 밖으로 나가지 않는다.
  */
 @Service
@@ -42,7 +43,7 @@ public class CartService {
      *
      * @throws BusinessException P001 · CT003 · CT002
      */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public CartResponse addItem(Long userId, Long productId, int quantity) {
         // 상품을 먼저 읽어야 P001일 때 빈 장바구니 행이 남지 않는다
         Product product = productService.getVisibleProduct(productId);
@@ -68,7 +69,7 @@ public class CartService {
     }
 
     /** @throws BusinessException CT001 · CT002 */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public CartResponse changeQuantity(Long userId, Long itemId, int quantity) {
         Cart cart = getLockedCart(userId);
         cart.changeQuantity(itemId, quantity);
@@ -76,7 +77,7 @@ public class CartService {
     }
 
     /** @throws BusinessException CT001 */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public CartResponse removeItem(Long userId, Long itemId) {
         Cart cart = getLockedCart(userId);
         cart.removeItem(itemId);
@@ -84,7 +85,7 @@ public class CartService {
     }
 
     /** 비어 있거나 장바구니가 없어도 실패하지 않는다. */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public CartResponse clear(Long userId) {
         findLockedCart(userId).ifPresent(Cart::clear);
         // 전체 삭제는 빈 응답을 return
