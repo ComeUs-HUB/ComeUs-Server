@@ -22,8 +22,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -200,5 +206,24 @@ class CartServiceTest {
                 .containsExactly(
                         tuple(10L, true),
                         tuple(20L, false));
+    }
+
+    @Test
+    @DisplayName("쓰기 메서드는 모두 READ COMMITTED다 — 새 쓰기 메서드도 빠뜨리지 않는다")
+    void everyWriteRunsInReadCommitted() {
+        List<Method> writes = Arrays.stream(CartService.class.getDeclaredMethods())
+                .filter(method -> Modifier.isPublic(method.getModifiers()))
+                .filter(method -> method.isAnnotationPresent(Transactional.class))
+                .filter(method -> !method.getAnnotation(Transactional.class).readOnly())
+                .toList();
+
+        assertThat(writes)
+                .as("담기·수량 변경·삭제·비우기")
+                .extracting(Method::getName)
+                .containsExactlyInAnyOrder("addItem", "changeQuantity", "removeItem", "clear");
+        assertThat(writes)
+                .as("REPEATABLE READ면 락 뒤의 일반 SELECT가 락 이전 스냅샷을 읽어 Lost Update가 난다(ADR 0020)")
+                .allSatisfy(method -> assertThat(method.getAnnotation(Transactional.class).isolation())
+                        .isEqualTo(Isolation.READ_COMMITTED));
     }
 }
