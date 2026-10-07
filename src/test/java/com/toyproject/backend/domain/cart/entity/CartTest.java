@@ -187,4 +187,26 @@ class CartTest {
                 .as("밖에서 넣을 수 있으면 재고 검사와 종류 상한을 모두 우회한다")
                 .isInstanceOf(UnsupportedOperationException.class);
     }
+
+    @Test
+    @DisplayName("isPurchasable은 지금 이 수량으로 주문이 통과할 때만 true다")
+    void purchasableMeansOrderWouldPass() {
+        Product shortage = product(5);
+        Product soldOut = product(5);
+        Product hidden = product(5);
+        Cart cart = Cart.create(user());
+        cart.addItem(product(5), 3);
+        cart.addItem(shortage, 3);
+        cart.addItem(soldOut, 3);
+        cart.addItem(hidden, 3);
+
+        shortage.decreaseStock(3);
+        soldOut.decreaseStock(5);
+        hidden.hide();
+
+        assertThat(cart.getItems())
+                .extracting(CartItem::isPurchasable)
+                .as("정상 / 재고 부족(2 < 3) / 품절 / 숨김. 상태만 보면 재고 부족이 true가 되어 주문의 P002와 어긋난다")
+                .containsExactly(true, false, false, false);
+    }
 }
