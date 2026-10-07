@@ -49,22 +49,19 @@ public class CartService {
         // 상품을 먼저 읽어야 P001일 때 빈 장바구니 행이 남지 않는다
         Product product = productService.getVisibleProduct(productId);
 
-        // Cart 존재
         Optional<Cart> locked = findLockedCart(userId);
         if (locked.isPresent()) {
             Cart cart = locked.get();
             cart.addItem(product, quantity);
-            // 새 항목의 id는 flush에서 생긴다
-            // 행이 존재하지 않아, flush 를 날리지 않으면 응답의 cartItemId 가 생기지 않는다.
+            // 새 항목의 id(cartItemId)는 flush에서 생긴다
             cartRepository.flush();
             return CartResponse.from(cart);
         }
 
-        // Cart 미 존재 -> 새로 생성 -> Lock 걸지 않음 (Gap Lock -> 데드락)
+        // 장바구니가 없으면 잠그지 않고 만든다
         Cart cart = Cart.create(userService.getUser(userId));
         cart.addItem(product, quantity);
-
-        // 동시 첫 담기의 uk 위반이 커밋 시점이 아닌 트랜잭션 내에서 터지게 해줌.
+        // 동시 첫 담기의 uk 위반을 커밋이 아니라 이 자리에서 드러낸다
         cartRepository.saveAndFlush(cart);
         return CartResponse.from(cart);
     }

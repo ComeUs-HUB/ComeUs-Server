@@ -28,8 +28,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * package-private이라 재고 검사를 우회해 수량을 바꿀 수 없다.
  */
 @Entity
-// uk를 V4에만 두면 H2(@DataJpaTest)에서 재현되지 않는다 — User와 같은 이유로 @Table에도 선언한다
-// 하나의 장바구니에 중복된 상품 존재를 방지하기 위한 유니크 제약
+// 장바구니당 상품 1행. V4에만 두면 H2(@DataJpaTest)에서 재현되지 않아 @Table에도 선언한다(User와 같다)
 @Table(
         name = "cart_items",
         uniqueConstraints = @UniqueConstraint(

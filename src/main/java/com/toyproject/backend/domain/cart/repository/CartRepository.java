@@ -18,7 +18,7 @@ import java.util.Optional;
  */
 public interface CartRepository extends JpaRepository<Cart, Long> {
 
-    /** EntityGraph : 항목과 상품을 쿼리 1회로 읽는다. */
+    /** 항목과 상품을 쿼리 1회로 읽는다. */
     @EntityGraph(attributePaths = {"items", "items.product"})
     Optional<Cart> findByUserId(Long userId);
 
