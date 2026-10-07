@@ -4,7 +4,7 @@
 계약은 [architecture.md](architecture.md)·[domains/](domains/)·[conventions/](conventions/)가,
 결정 근거는 [decisions/](decisions/)가 소유한다.
 
-> 기준: 2026-10-06 · 브랜치 `feature/phase4-cart`
+> 기준: 2026-10-07 · 브랜치 `feature/phase4-cart`
 
 ## 요약
 
@@ -19,12 +19,12 @@
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
-**Phase 4 Cart 1단계(엔티티)가 끝났다.** 다음은 Cart 2단계 Repository + `CartService`다.
+**Phase 4 Cart 2단계(Repository + `CartService`)가 끝났다.** 다음은 Cart 3단계 컨트롤러 + DTO다.
 **동시성 제어 방식은 Order 착수 전까지 ADR로 정한다** — 되돌리기 비용이 큰 결정이지만
 재고를 차감하는 것은 Order이고 Cart는 읽기만 하므로 Cart는 그 결정 없이 착수할 수 있다
 ([domains/purchase/order.md](domains/purchase/order.md)).
 
-**현재 규모**: main 72개 파일 · 테스트 24개 클래스 332개 케이스.
+**현재 규모**: main 76개 파일 · 테스트 26개 클래스 343개 케이스.
 케이스 수는 `./gradlew test` 리포트 기준이라 **파라미터라이즈는 실행 횟수로 센다**.
 
 ## Phase 0 — 환경 설정 ✅
@@ -276,14 +276,18 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 | 단계 | 내용 | 검증 | |
 |---|---|---|---|
 | 1 | 엔티티(`Cart`·`CartItem`) + `V4__create_carts.sql` | `CartTest` · `CartPersistenceTest` | ✅ |
-| 2 | Repository + `CartService` | `CartServiceTest` | ⬜ |
+| 2 | Repository + `CartService` | `CartServiceTest` · `CartRepositoryTest` | ✅ |
 | 3 | 컨트롤러 + DTO + `SecurityConfig` 점검 | `CartControllerTest` + MySQL 실기동 | ⬜ |
 
 착수하며 확인할 것:
 
-- [ ] **`UserService`에 `User` 엔티티를 반환하는 메서드를 더한다** — `Cart`가 `User`를 참조하는데
+- [x] **`UserService`에 `User` 엔티티를 반환하는 메서드를 더한다** — `Cart`가 `User`를 참조하는데
       공개 메서드 넷이 전부 DTO를 반환한다. `CategoryService.getCategory()`가 같은 자리다.
       `cart → user`·`order → user`가 함께 쓴다([architecture.md](architecture.md))
+- [x] **`CartItemRepository`는 두지 않는다** — 모든 쓰기가 `Cart`를 거치고 조회는
+      `CartRepository.findByUserId` 하나로 끝난다(ADR 0019가 2단계 판정으로 남긴 항목)
+- [x] **주문용 메서드(선택 항목 조회·삭제)는 Order 단계에서 더한다** — 반환 형태·트랜잭션 참여·
+      장바구니 락 위치가 Order 설계에 달려 있다([cart.md](domains/purchase/cart.md) "주문에 제공하는 것")
 - [ ] **`SecurityConfig` 배선이 필요한지 판정** — `anyRequest().authenticated()`가 이미
       `/api/cart/**`를 막고 있다. 명시 배선이 불필요하면 Javadoc의 RBAC 표에만 행을 더한다
 - [ ] **요청 수량 상한 N을 정한다** — 3단계 DTO에 `@Max(N)`을 걸고 위반은 `C001`이다.
@@ -291,10 +295,14 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
       `int` 오버플로로 재고 검사를 우회하는 경로를 막아 뒀다
 - [ ] **`V4` 번호 충돌 메모 정리** — 아래 미결 사항의 LOCAL 로그인 항목이 `V4__add_password.sql`을
       적어 두고 있다. Cart가 `V4`를 가져가므로 그 메모를 고친다
+- [ ] **장바구니 락을 MySQL에서 확인한다** — H2는 gap lock을 재현하지 않아 "없는 행은 잠그지 않는다"가
+      `./gradlew test`로 검증되지 않는다. 동시 첫 담기가 교착(500)이 아니라 `C005`(409)로 끝나는지 본다
 
 ### Order — 4~8단계 ⬜
 
-착수 전 **동시성 제어 ADR**이 필요하다. 그 밖에 정할 것은
+착수 전 **동시성 제어 ADR**이 필요하다. 이 ADR은 함께 정한다 —
+**주문 트랜잭션에서 장바구니 루트 락을 어디서 잡고 상품 락과 어떤 순서로 잡는지**, 그리고
+**주문 생성·결제의 멱등성 키** 도입 여부(장바구니에는 비용 대비 이득이 작아 두지 않았다). 그 밖에 정할 것은
 [order.md](domains/purchase/order.md)의 "착수 전 정할 것"에 있다.
 
 ### Payment — 9~11단계 ⬜
