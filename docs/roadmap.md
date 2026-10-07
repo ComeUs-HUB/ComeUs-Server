@@ -24,7 +24,7 @@
 재고를 차감하는 것은 Order이고 Cart는 읽기만 하므로 Cart는 그 결정 없이 착수할 수 있다
 ([domains/purchase/order.md](domains/purchase/order.md)).
 
-**현재 규모**: main 76개 파일 · 테스트 26개 클래스 344개 케이스.
+**현재 규모**: main 79개 파일 · 테스트 27개 클래스 351개 케이스.
 케이스 수는 `./gradlew test` 리포트 기준이라 **파라미터라이즈는 실행 횟수로 센다**.
 
 ## Phase 0 — 환경 설정 ✅
@@ -290,7 +290,7 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
       장바구니 락 위치가 Order 설계에 달려 있다([cart.md](domains/purchase/cart.md) "주문에 제공하는 것")
 - [ ] **`SecurityConfig` 배선이 필요한지 판정** — `anyRequest().authenticated()`가 이미
       `/api/cart/**`를 막고 있다. 명시 배선이 불필요하면 Javadoc의 RBAC 표에만 행을 더한다
-- [ ] **요청 수량 상한 N을 정한다** — 3단계 DTO에 `@Max(N)`을 걸고 위반은 `C001`이다.
+- [x] **요청 수량 상한 N을 정한다** — **99**로 둔다(`CartItemAddRequest.MAX_QUANTITY`). 3단계 DTO에 `@Max(N)`을 걸고 위반은 `C001`이다.
       재고 초과는 그 뒤 `CT002`가 본다. 엔티티는 이미 합산을 `long`으로 계산해
       `int` 오버플로로 재고 검사를 우회하는 경로를 막아 뒀다
 - [ ] **`V4` 번호 충돌 메모 정리** — 아래 미결 사항의 LOCAL 로그인 항목이 `V4__add_password.sql`을
