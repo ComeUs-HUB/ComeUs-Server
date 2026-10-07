@@ -67,10 +67,17 @@ public class ProductService {
      * @throws BusinessException 없거나 숨긴 상품이면 P001(404)
      */
     public ProductDetailResponse getDetail(Long id) {
-        Product product = productRepository.findByIdAndStatusNot(id, ProductStatus.HIDDEN)
-                .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        return ProductDetailResponse.from(getVisibleProduct(id));
+    }
 
-        return ProductDetailResponse.from(product);
+    /**
+     * [Phase 4 · 2단계] 노출 상품 엔티티 조회. 장바구니 담기가 쓴다.
+     *
+     * @throws BusinessException 없거나 숨긴 상품이면 P001(404)
+     */
+    public Product getVisibleProduct(Long id) {
+        return productRepository.findByIdAndStatusNot(id, ProductStatus.HIDDEN)
+                .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
     }
 
     /**
