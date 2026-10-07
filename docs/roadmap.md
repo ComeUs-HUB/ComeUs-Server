@@ -24,7 +24,7 @@
 재고를 차감하는 것은 Order이고 Cart는 읽기만 하므로 Cart는 그 결정 없이 착수할 수 있다
 ([domains/purchase/order.md](domains/purchase/order.md)).
 
-**현재 규모**: main 76개 파일 · 테스트 26개 클래스 343개 케이스.
+**현재 규모**: main 76개 파일 · 테스트 26개 클래스 344개 케이스.
 케이스 수는 `./gradlew test` 리포트 기준이라 **파라미터라이즈는 실행 횟수로 센다**.
 
 ## Phase 0 — 환경 설정 ✅
@@ -295,8 +295,10 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
       `int` 오버플로로 재고 검사를 우회하는 경로를 막아 뒀다
 - [ ] **`V4` 번호 충돌 메모 정리** — 아래 미결 사항의 LOCAL 로그인 항목이 `V4__add_password.sql`을
       적어 두고 있다. Cart가 `V4`를 가져가므로 그 메모를 고친다
-- [ ] **장바구니 락을 MySQL에서 확인한다** — H2는 gap lock을 재현하지 않아 "없는 행은 잠그지 않는다"가
-      `./gradlew test`로 검증되지 않는다. 동시 첫 담기가 교착(500)이 아니라 `C005`(409)로 끝나는지 본다
+- [ ] **장바구니 락을 MySQL에서 확인한다** — H2는 기본 격리 수준이 READ COMMITTED이고 gap lock도 재현하지 않아
+      `./gradlew test`로 검증되지 않는다([ADR 0020](decisions/purchase/0020-cart-writes-use-read-committed.md)).
+      같은 회원의 동시 담기 2건이 **합산 4**로 끝나는지(Lost Update 없음), 동시 첫 담기가 교착(500)이 아니라
+      `C005`(409)로 끝나는지 본다
 
 ### Order — 4~8단계 ⬜
 
