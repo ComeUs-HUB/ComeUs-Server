@@ -80,6 +80,15 @@ public class UserService {
     }
 
     /**
+     * [Phase 4 · 2단계] 활성 회원 엔티티 조회. 장바구니 생성이 쓴다.
+     *
+     * @throws BusinessException 회원이 없으면 A001(401), 탈퇴했으면 A008(403)
+     */
+    public User getUser(Long userId) {
+        return getActiveUser(userId);
+    }
+
+    /**
      * 카카오 로그인 시 회원을 찾거나 만든다. <b>{@code AuthService}가 호출하는 진입점</b>이다.
      *
      * <p>세 갈래로 갈린다.

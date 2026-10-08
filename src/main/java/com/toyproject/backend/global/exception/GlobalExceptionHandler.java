@@ -1,12 +1,15 @@
 package com.toyproject.backend.global.exception;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.toyproject.backend.global.response.ApiResponse;
 import com.toyproject.backend.global.response.ErrorResponse;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -67,6 +70,20 @@ public class GlobalExceptionHandler {
         return respond(CommonErrorCode.INVALID_INPUT_VALUE, errors);
     }
 
+    /**
+     * 요청 본문을 객체로 바꾸지 못할 때 — 깨진 JSON, {@code Integer} 범위 초과, 숫자 자리의 문자열.
+     * {@code @Valid}보다 앞 단계라 {@link #handleValidationException}이 잡지 못한다. 필드를 알면 {@code errors}에 담는다.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMessageNotReadableException(HttpMessageNotReadableException e) {
+        log.warn("HttpMessageNotReadableException: {}", e.getMostSpecificCause().getClass().getSimpleName());
+        String field = unreadableField(e);
+        List<ErrorResponse.FieldError> errors = (field == null)
+                ? null
+                : List.of(new ErrorResponse.FieldError(field, "형식이 올바르지 않습니다.", null));
+        return respond(CommonErrorCode.INVALID_INPUT_VALUE, errors);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolationException(DataIntegrityViolationException e) {
         log.warn("DataIntegrityViolationException: {}", e.getMessage());
@@ -76,6 +93,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodNotSupportedException(HttpRequestMethodNotSupportedException e) {
         return respond(CommonErrorCode.METHOD_NOT_ALLOWED, null);
+    }
+
+    /** 본문의 Content-Type을 받지 않을 때(없음·{@code text/plain} 등). 없으면 fallback으로 떨어져 500이 된다. */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMediaTypeNotSupportedException(HttpMediaTypeNotSupportedException e) {
+        log.warn("HttpMediaTypeNotSupportedException: contentType={}", e.getContentType());
+        return respond(CommonErrorCode.UNSUPPORTED_MEDIA_TYPE, null);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
@@ -92,6 +116,14 @@ public class GlobalExceptionHandler {
     private ResponseEntity<ApiResponse<Void>> respond(ErrorCode errorCode, List<ErrorResponse.FieldError> errors) {
         ErrorResponse error = new ErrorResponse(errorCode.getCode(), errorCode.getMessage(), errors);
         return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.error(error));
+    }
+
+    /** Jackson이 경로를 남긴 경우의 필드명. 깨진 JSON처럼 필드 이전에 실패하면 {@code null}이다. */
+    private String unreadableField(HttpMessageNotReadableException e) {
+        if (!(e.getCause() instanceof JsonMappingException mapping) || mapping.getPath().isEmpty()) {
+            return null;
+        }
+        return mapping.getPath().get(mapping.getPath().size() - 1).getFieldName();
     }
 
     private String safeToString(Object value) {

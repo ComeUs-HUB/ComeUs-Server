@@ -125,8 +125,10 @@ Spring Data `Pageable`을 컨트롤러 파라미터로 바인딩한다(`page`, `
 | `BusinessException` | `ex.getErrorCode()` | `log.warn` |
 | `MethodArgumentNotValidException` | `CommonErrorCode.INVALID_INPUT_VALUE` | `@Valid` 바디 검증. `errors` 조립 |
 | `ConstraintViolationException` | `CommonErrorCode.INVALID_INPUT_VALUE` | `@PathVariable`/`@RequestParam` 제약 위반 |
+| `HttpMessageNotReadableException` | `CommonErrorCode.INVALID_INPUT_VALUE` | 본문을 객체로 못 바꿈(깨진 JSON·정수 범위 초과·타입 불일치). `@Valid`보다 앞이라 위 둘이 잡지 못한다. 필드를 알면 `errors` |
 | `DataIntegrityViolationException` | `CommonErrorCode.RESOURCE_CONFLICT` | DB 유니크 제약 위반 |
 | `HttpRequestMethodNotSupportedException` | `CommonErrorCode.METHOD_NOT_ALLOWED` | |
+| `HttpMediaTypeNotSupportedException` | `CommonErrorCode.UNSUPPORTED_MEDIA_TYPE` | 본문의 Content-Type 불일치(없음·`text/plain` 등). 405와 같은 기준으로 415를 따로 둔다 |
 | `NoResourceFoundException` | `CommonErrorCode.RESOURCE_NOT_FOUND` | |
 | `Exception` (fallback) | `CommonErrorCode.INTERNAL_SERVER_ERROR` | **`log.error` 필수** |
 

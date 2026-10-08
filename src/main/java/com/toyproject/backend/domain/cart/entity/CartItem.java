@@ -1,6 +1,7 @@
 package com.toyproject.backend.domain.cart.entity;
 
 import com.toyproject.backend.domain.product.entity.Product;
+import com.toyproject.backend.domain.product.entity.ProductStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -11,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -26,7 +28,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * package-private이라 재고 검사를 우회해 수량을 바꿀 수 없다.
  */
 @Entity
-@Table(name = "cart_items")
+// 장바구니당 상품 1행. V4에만 두면 H2(@DataJpaTest)에서 재현되지 않아 @Table에도 선언한다(User와 같다)
+@Table(
+        name = "cart_items",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_cart_items_cart_id_product_id", columnNames = {"cart_id", "product_id"})
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)
@@ -60,6 +67,11 @@ public class CartItem {
     /** {@link Cart}만 호출한다. */
     static CartItem of(Cart cart, Product product, int quantity) {
         return new CartItem(cart, product, quantity);
+    }
+
+    /** [Phase 4 · 2단계] 지금 이 수량으로 주문이 통과하는지. 판매 중이고 재고 이하여야 한다. */
+    public boolean isPurchasable() {
+        return product.getStatus() == ProductStatus.ON_SALE && quantity <= product.getStockQuantity();
     }
 
     /** 재고 검사를 끝낸 {@link Cart}만 호출한다. */

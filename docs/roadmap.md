@@ -4,7 +4,7 @@
 계약은 [architecture.md](architecture.md)·[domains/](domains/)·[conventions/](conventions/)가,
 결정 근거는 [decisions/](decisions/)가 소유한다.
 
-> 기준: 2026-10-06 · 브랜치 `feature/phase4-cart`
+> 기준: 2026-10-08 · 브랜치 `feature/phase4-cart`
 
 ## 요약
 
@@ -19,12 +19,12 @@
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
-**Phase 4 Cart 1단계(엔티티)가 끝났다.** 다음은 Cart 2단계 Repository + `CartService`다.
+**Phase 4 Cart(1~3단계)가 끝났다.** MySQL 동시성 확인은 남아 있다(아래 Cart 체크리스트). 다음은 Order다.
 **동시성 제어 방식은 Order 착수 전까지 ADR로 정한다** — 되돌리기 비용이 큰 결정이지만
 재고를 차감하는 것은 Order이고 Cart는 읽기만 하므로 Cart는 그 결정 없이 착수할 수 있다
 ([domains/purchase/order.md](domains/purchase/order.md)).
 
-**현재 규모**: main 72개 파일 · 테스트 24개 클래스 332개 케이스.
+**현재 규모**: main 79개 파일 · 테스트 27개 클래스 353개 케이스.
 케이스 수는 `./gradlew test` 리포트 기준이라 **파라미터라이즈는 실행 횟수로 센다**.
 
 ## Phase 0 — 환경 설정 ✅
@@ -268,7 +268,7 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
 하므로([ADR 0016](decisions/purchase/0016-stock-reserved-at-order-not-cart.md)) Cart는 그 결정 없이
 착수할 수 있다. Order 착수 전까지 정하고 ADR로 남긴다.
 
-### Cart — 1~3단계 ⬜
+### Cart — 1~3단계 ✅
 
 브랜치 `feature/phase4-cart`(master `1af5eaf`에서 분기).
 Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같다.
@@ -276,25 +276,59 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 | 단계 | 내용 | 검증 | |
 |---|---|---|---|
 | 1 | 엔티티(`Cart`·`CartItem`) + `V4__create_carts.sql` | `CartTest` · `CartPersistenceTest` | ✅ |
-| 2 | Repository + `CartService` | `CartServiceTest` | ⬜ |
-| 3 | 컨트롤러 + DTO + `SecurityConfig` 점검 | `CartControllerTest` + MySQL 실기동 | ⬜ |
+| 2 | Repository + `CartService` | `CartServiceTest` · `CartRepositoryTest` | ✅ |
+| 3 | 컨트롤러 + DTO + `SecurityConfig` 점검 | `CartControllerTest` + MySQL 실기동 | ✅ |
 
 착수하며 확인할 것:
 
-- [ ] **`UserService`에 `User` 엔티티를 반환하는 메서드를 더한다** — `Cart`가 `User`를 참조하는데
+- [x] **`UserService`에 `User` 엔티티를 반환하는 메서드를 더한다** — `Cart`가 `User`를 참조하는데
       공개 메서드 넷이 전부 DTO를 반환한다. `CategoryService.getCategory()`가 같은 자리다.
       `cart → user`·`order → user`가 함께 쓴다([architecture.md](architecture.md))
-- [ ] **`SecurityConfig` 배선이 필요한지 판정** — `anyRequest().authenticated()`가 이미
-      `/api/cart/**`를 막고 있다. 명시 배선이 불필요하면 Javadoc의 RBAC 표에만 행을 더한다
-- [ ] **요청 수량 상한 N을 정한다** — 3단계 DTO에 `@Max(N)`을 걸고 위반은 `C001`이다.
+- [x] **`CartItemRepository`는 두지 않는다** — 모든 쓰기가 `Cart`를 거치고 조회는
+      `CartRepository.findByUserId` 하나로 끝난다(ADR 0019가 2단계 판정으로 남긴 항목)
+- [x] **주문용 메서드(선택 항목 조회·삭제)는 Order 단계에서 더한다** — 반환 형태·트랜잭션 참여·
+      장바구니 락 위치가 Order 설계에 달려 있다([cart.md](domains/purchase/cart.md) "주문에 제공하는 것")
+- [x] **`SecurityConfig` 배선이 필요한지 판정** — 불필요하다. `anyRequest().authenticated()`가
+      `/api/cart/**`를 막고, 공개 경로는 `/**` 없이 정확한 경로만 연다. Javadoc의 RBAC 표에 행만 더했다
+- [x] **요청 수량 상한 N을 정한다** — **99**로 둔다(`CartItemAddRequest.MAX_QUANTITY`). 3단계 DTO에 `@Max(N)`을 걸고 위반은 `C001`이다.
       재고 초과는 그 뒤 `CT002`가 본다. 엔티티는 이미 합산을 `long`으로 계산해
       `int` 오버플로로 재고 검사를 우회하는 경로를 막아 뒀다
-- [ ] **`V4` 번호 충돌 메모 정리** — 아래 미결 사항의 LOCAL 로그인 항목이 `V4__add_password.sql`을
-      적어 두고 있다. Cart가 `V4`를 가져가므로 그 메모를 고친다
+- [x] **`V4` 번호 충돌 메모 정리** — 아래 미결 사항의 LOCAL 로그인 항목에서 번호를 고정하지 않고
+      "착수 시점의 다음 번호"로 바꿨다. 번호를 박아 두면 다음 도메인이 가져갈 때마다 같은 충돌이 난다
+- [ ] **장바구니 락을 MySQL에서 확인한다** — H2는 기본 격리 수준이 READ COMMITTED이고 gap lock도 재현하지 않아
+      `./gradlew test`로 검증되지 않는다([ADR 0020](decisions/purchase/0020-cart-writes-use-read-committed.md)).
+      같은 회원의 동시 담기 2건이 **합산 4**로 끝나는지(Lost Update 없음), 동시 첫 담기가 교착(500)이 아니라
+      `C005`(409)로 끝나는지 본다. **2026-10-08 실기동에서는 하지 않았다** — 아래 기록 참고
+
+### Cart MySQL 실기동 (2026-10-08)
+
+테스트는 H2 `create-drop`이라 `V4__create_carts.sql`을 실행하지 않고, 격리 수준·락도 H2와 MySQL이 다르다.
+아래는 실기동으로만 확인되는 것들이다. 테스트 데이터는 확인 후 삭제했다.
+
+- [x] `V4` 최초 적용 — `v3 → v4`, `flyway_schema_history`에 `success=1`
+- [x] Hibernate `validate` 통과 — `Cart`·`CartItem` 매핑과 V4 스키마 일치
+- [x] uk 두 개(`uk_carts_user_id`, `uk_cart_items_cart_id_product_id`)가 V4대로 생성됐다.
+      `cart_id`는 uk의 앞 컬럼이 FK 인덱스를 겸하고, `product_id`는 InnoDB가 `KEY fk_cart_items_product`를 자동 생성했다
+- [x] 락 쿼리(`where user_id = ?`)가 유니크 인덱스를 타 **레코드 락**이 된다 — ADR 0020이 전제한 그대로
+- [x] API 기본 동작 24개 — 담기(새 장바구니·합산·새 항목), 수량 교체, 항목 삭제·비우기,
+      `C001`(0·100·**정수 범위 초과**)·`CT002`·`P001`·`CT001`(타인 항목, 장바구니 없는 회원 포함)·401
+- [x] `orphanRemoval`이 MySQL에서 실제 `DELETE`로 반영된다 — 항목 삭제·비우기 후 `cart_items` 행 수 확인
+- [x] `purchasable`이 담은 뒤의 재고 부족(5 → 1)과 품절(0)에서 `false`가 되고 항목은 남는다
+- [x] **쓰기 요청이 실제로 READ COMMITTED로 실행된다** — general log에 `SET SESSION TRANSACTION ISOLATION LEVEL
+      READ COMMITTED` → 트랜잭션 → `REPEATABLE READ` 복원이 찍힌다. 비용은 쓰기 요청당 3문장이다
+- [x] 요청당 쿼리 수(인증 필터의 회원 조회 1회 포함) — 조회 2 · 담기 6 · 수량 변경 5 · 항목 삭제 5 · 비우기 4 + N(N ≤ 50)
+- [ ] **동시성 확인은 하지 않았다** — 위 "장바구니 락을 MySQL에서 확인한다" 항목이 그대로 남아 있다
+- [ ] `existsByUserId`가 `carts left join users`로 실행된다. `carts.user_id`만 보면 되므로 `@Query`로 조인을 없앨 수 있다
 
 ### Order — 4~8단계 ⬜
 
-착수 전 **동시성 제어 ADR**이 필요하다. 그 밖에 정할 것은
+착수 전 **동시성 제어 ADR**이 필요하다. 이 ADR은 함께 정한다 —
+**주문 트랜잭션에서 장바구니 루트 락을 어디서 잡고 상품 락과 어떤 순서로 잡는지**, 그리고
+**주문 생성·결제의 멱등성 키** 도입 여부(장바구니에는 비용 대비 이득이 작아 두지 않았다).
+**주문 트랜잭션도 READ COMMITTED여야 한다** — `CartService` 쓰기를 기본 격리 수준(REPEATABLE READ) 트랜잭션 안에서
+부르면 Spring이 격리 수준을 조용히 무시해 Lost Update가 되살아난다([ADR 0020](decisions/purchase/0020-cart-writes-use-read-committed.md)).
+`REQUIRES_NEW`는 쓸 수 없다(재고 차감과 항목 삭제가 한 트랜잭션이어야 한다). 무시되지 않게 막는 장치
+(`validateExistingTransaction` 또는 진입 시 격리 수준 가드)도 이 ADR에서 정한다. 그 밖에 정할 것은
 [order.md](domains/purchase/order.md)의 "착수 전 정할 것"에 있다.
 
 ### Payment — 9~11단계 ⬜
@@ -337,7 +371,8 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 - [ ] **Refresh Token Rotation + 재사용 탐지** — 함께 도입해야 한다.
       [ADR 0004](decisions/auth/0004-no-refresh-token-rotation.md)
 - [ ] **만료 `refresh_tokens` row 정리 배치** — `expiresAt` 검사로 거절되므로 기능상 무해
-- [ ] **LOCAL 로그인** — `V4__add_password.sql`(V2는 카테고리가, V3는 상품이 가져갔다) + `PasswordEncoder` + `Provider.LOCAL` +
+- [ ] **LOCAL 로그인** — `V{n}__add_password.sql`(n은 착수 시점의 다음 번호. V2~V4는 카테고리·상품·장바구니가 가져갔고,
+      ADR 0001의 `V2__add_password.sql`은 그 전에 쓴 번호다) + `PasswordEncoder` + `Provider.LOCAL` +
       `AuthErrorCode`에 `INVALID_CREDENTIALS` 재추가.
       [ADR 0001](decisions/auth/0001-kakao-only-oauth.md)
 - [ ] **재고 기반 수량 셀렉터 상한** — 상품 상세 응답에 구매 가능 최대 수량을 노출하면 FE가
