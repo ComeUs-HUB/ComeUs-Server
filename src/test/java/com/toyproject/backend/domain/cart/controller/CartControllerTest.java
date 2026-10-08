@@ -142,6 +142,28 @@ class CartControllerTest {
     }
 
     @Test
+    @DisplayName("본문을 객체로 바꾸지 못하면 500이 아니라 C001이다 — 정수 범위 초과·문자열 수량·깨진 JSON")
+    void unreadableBodyIsC001() throws Exception {
+        for (String quantity : new String[]{"99999999999", "\"abc\""}) {
+            postRaw("{\"productId\":" + tee.getId() + ",\"quantity\":" + quantity + "}")
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("C001"))
+                    .andExpect(jsonPath("$.error.errors[0].field").value("quantity"));
+        }
+        postRaw("{broken")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("C001"))
+                .andExpect(jsonPath("$.error.errors").doesNotExist());
+    }
+
+    private ResultActions postRaw(String body) throws Exception {
+        return mockMvc.perform(post(ITEMS_URI)
+                .header(HttpHeaders.AUTHORIZATION, bearer)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
+    }
+
+    @Test
     @DisplayName("상한 이내여도 재고를 넘으면 CT002(409)다")
     void quantityWithinCapButOverStockIsCt002() throws Exception {
         add(bearer, shirt.getId(), 6)
