@@ -293,8 +293,8 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 - [x] **요청 수량 상한 N을 정한다** — **99**로 둔다(`CartItemAddRequest.MAX_QUANTITY`). 3단계 DTO에 `@Max(N)`을 걸고 위반은 `C001`이다.
       재고 초과는 그 뒤 `CT002`가 본다. 엔티티는 이미 합산을 `long`으로 계산해
       `int` 오버플로로 재고 검사를 우회하는 경로를 막아 뒀다
-- [ ] **`V4` 번호 충돌 메모 정리** — 아래 미결 사항의 LOCAL 로그인 항목이 `V4__add_password.sql`을
-      적어 두고 있다. Cart가 `V4`를 가져가므로 그 메모를 고친다
+- [x] **`V4` 번호 충돌 메모 정리** — 아래 미결 사항의 LOCAL 로그인 항목에서 번호를 고정하지 않고
+      "착수 시점의 다음 번호"로 바꿨다. 번호를 박아 두면 다음 도메인이 가져갈 때마다 같은 충돌이 난다
 - [ ] **장바구니 락을 MySQL에서 확인한다** — H2는 기본 격리 수준이 READ COMMITTED이고 gap lock도 재현하지 않아
       `./gradlew test`로 검증되지 않는다([ADR 0020](decisions/purchase/0020-cart-writes-use-read-committed.md)).
       같은 회원의 동시 담기 2건이 **합산 4**로 끝나는지(Lost Update 없음), 동시 첫 담기가 교착(500)이 아니라
@@ -351,7 +351,8 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 - [ ] **Refresh Token Rotation + 재사용 탐지** — 함께 도입해야 한다.
       [ADR 0004](decisions/auth/0004-no-refresh-token-rotation.md)
 - [ ] **만료 `refresh_tokens` row 정리 배치** — `expiresAt` 검사로 거절되므로 기능상 무해
-- [ ] **LOCAL 로그인** — `V4__add_password.sql`(V2는 카테고리가, V3는 상품이 가져갔다) + `PasswordEncoder` + `Provider.LOCAL` +
+- [ ] **LOCAL 로그인** — `V{n}__add_password.sql`(n은 착수 시점의 다음 번호. V2~V4는 카테고리·상품·장바구니가 가져갔고,
+      ADR 0001의 `V2__add_password.sql`은 그 전에 쓴 번호다) + `PasswordEncoder` + `Provider.LOCAL` +
       `AuthErrorCode`에 `INVALID_CREDENTIALS` 재추가.
       [ADR 0001](decisions/auth/0001-kakao-only-oauth.md)
 - [ ] **재고 기반 수량 셀렉터 상한** — 상품 상세 응답에 구매 가능 최대 수량을 노출하면 FE가
