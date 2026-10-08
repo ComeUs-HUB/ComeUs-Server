@@ -156,6 +156,20 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.error.errors").doesNotExist());
     }
 
+    @Test
+    @DisplayName("본문이 JSON이 아니면 500이 아니라 415(C006)다 — Content-Type 없음·text/plain")
+    void nonJsonContentTypeIsC006() throws Exception {
+        String body = "{\"productId\":" + tee.getId() + ",\"quantity\":1}";
+
+        mockMvc.perform(post(ITEMS_URI).header(HttpHeaders.AUTHORIZATION, bearer).content(body))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.error.code").value("C006"));
+        mockMvc.perform(post(ITEMS_URI).header(HttpHeaders.AUTHORIZATION, bearer)
+                        .contentType(MediaType.TEXT_PLAIN).content(body))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.error.code").value("C006"));
+    }
+
     private ResultActions postRaw(String body) throws Exception {
         return mockMvc.perform(post(ITEMS_URI)
                 .header(HttpHeaders.AUTHORIZATION, bearer)
