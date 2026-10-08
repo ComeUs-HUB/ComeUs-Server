@@ -4,7 +4,7 @@
 계약은 [architecture.md](architecture.md)·[domains/](domains/)·[conventions/](conventions/)가,
 결정 근거는 [decisions/](decisions/)가 소유한다.
 
-> 기준: 2026-10-07 · 브랜치 `feature/phase4-cart`
+> 기준: 2026-10-08 · 브랜치 `feature/phase4-cart`
 
 ## 요약
 
@@ -19,7 +19,7 @@
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
-**Phase 4 Cart 2단계(Repository + `CartService`)가 끝났다.** 다음은 Cart 3단계 컨트롤러 + DTO다.
+**Phase 4 Cart(1~3단계)가 끝났다.** MySQL 동시성 확인은 남아 있다(아래 Cart 체크리스트). 다음은 Order다.
 **동시성 제어 방식은 Order 착수 전까지 ADR로 정한다** — 되돌리기 비용이 큰 결정이지만
 재고를 차감하는 것은 Order이고 Cart는 읽기만 하므로 Cart는 그 결정 없이 착수할 수 있다
 ([domains/purchase/order.md](domains/purchase/order.md)).
@@ -268,7 +268,7 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
 하므로([ADR 0016](decisions/purchase/0016-stock-reserved-at-order-not-cart.md)) Cart는 그 결정 없이
 착수할 수 있다. Order 착수 전까지 정하고 ADR로 남긴다.
 
-### Cart — 1~3단계 ⬜
+### Cart — 1~3단계 ✅
 
 브랜치 `feature/phase4-cart`(master `1af5eaf`에서 분기).
 Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같다.
@@ -277,7 +277,7 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 |---|---|---|---|
 | 1 | 엔티티(`Cart`·`CartItem`) + `V4__create_carts.sql` | `CartTest` · `CartPersistenceTest` | ✅ |
 | 2 | Repository + `CartService` | `CartServiceTest` · `CartRepositoryTest` | ✅ |
-| 3 | 컨트롤러 + DTO + `SecurityConfig` 점검 | `CartControllerTest` + MySQL 실기동 | ⬜ |
+| 3 | 컨트롤러 + DTO + `SecurityConfig` 점검 | `CartControllerTest` + MySQL 실기동 | ✅ |
 
 착수하며 확인할 것:
 
@@ -298,7 +298,27 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 - [ ] **장바구니 락을 MySQL에서 확인한다** — H2는 기본 격리 수준이 READ COMMITTED이고 gap lock도 재현하지 않아
       `./gradlew test`로 검증되지 않는다([ADR 0020](decisions/purchase/0020-cart-writes-use-read-committed.md)).
       같은 회원의 동시 담기 2건이 **합산 4**로 끝나는지(Lost Update 없음), 동시 첫 담기가 교착(500)이 아니라
-      `C005`(409)로 끝나는지 본다
+      `C005`(409)로 끝나는지 본다. **2026-10-08 실기동에서는 하지 않았다** — 아래 기록 참고
+
+### Cart MySQL 실기동 (2026-10-08)
+
+테스트는 H2 `create-drop`이라 `V4__create_carts.sql`을 실행하지 않고, 격리 수준·락도 H2와 MySQL이 다르다.
+아래는 실기동으로만 확인되는 것들이다. 테스트 데이터는 확인 후 삭제했다.
+
+- [x] `V4` 최초 적용 — `v3 → v4`, `flyway_schema_history`에 `success=1`
+- [x] Hibernate `validate` 통과 — `Cart`·`CartItem` 매핑과 V4 스키마 일치
+- [x] uk 두 개(`uk_carts_user_id`, `uk_cart_items_cart_id_product_id`)가 V4대로 생성됐다.
+      `cart_id`는 uk의 앞 컬럼이 FK 인덱스를 겸하고, `product_id`는 InnoDB가 `KEY fk_cart_items_product`를 자동 생성했다
+- [x] 락 쿼리(`where user_id = ?`)가 유니크 인덱스를 타 **레코드 락**이 된다 — ADR 0020이 전제한 그대로
+- [x] API 기본 동작 24개 — 담기(새 장바구니·합산·새 항목), 수량 교체, 항목 삭제·비우기,
+      `C001`(0·100·**정수 범위 초과**)·`CT002`·`P001`·`CT001`(타인 항목, 장바구니 없는 회원 포함)·401
+- [x] `orphanRemoval`이 MySQL에서 실제 `DELETE`로 반영된다 — 항목 삭제·비우기 후 `cart_items` 행 수 확인
+- [x] `purchasable`이 담은 뒤의 재고 부족(5 → 1)과 품절(0)에서 `false`가 되고 항목은 남는다
+- [x] **쓰기 요청이 실제로 READ COMMITTED로 실행된다** — general log에 `SET SESSION TRANSACTION ISOLATION LEVEL
+      READ COMMITTED` → 트랜잭션 → `REPEATABLE READ` 복원이 찍힌다. 비용은 쓰기 요청당 3문장이다
+- [x] 요청당 쿼리 수(인증 필터의 회원 조회 1회 포함) — 조회 2 · 담기 6 · 수량 변경 5 · 항목 삭제 5 · 비우기 4 + N(N ≤ 50)
+- [ ] **동시성 확인은 하지 않았다** — 위 "장바구니 락을 MySQL에서 확인한다" 항목이 그대로 남아 있다
+- [ ] `existsByUserId`가 `carts left join users`로 실행된다. `carts.user_id`만 보면 되므로 `@Query`로 조인을 없앨 수 있다
 
 ### Order — 4~8단계 ⬜
 
