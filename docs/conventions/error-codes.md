@@ -35,6 +35,7 @@ public interface ErrorCode {          // global/exception/ErrorCode.java
 | C003 | `INTERNAL_SERVER_ERROR` | 500 | 서버 내부 오류 |
 | C004 | `METHOD_NOT_ALLOWED` | 405 | 허용되지 않은 HTTP 메서드 |
 | C005 | `RESOURCE_CONFLICT` | 409 | 현재 리소스 상태와 충돌 |
+| C006 | `UNSUPPORTED_MEDIA_TYPE` | 415 | 지원하지 않는 Content-Type |
 
 ## `AuthErrorCode` — `domain.auth.exception`
 

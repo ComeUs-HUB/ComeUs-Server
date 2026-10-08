@@ -24,7 +24,7 @@
 재고를 차감하는 것은 Order이고 Cart는 읽기만 하므로 Cart는 그 결정 없이 착수할 수 있다
 ([domains/purchase/order.md](domains/purchase/order.md)).
 
-**현재 규모**: main 79개 파일 · 테스트 27개 클래스 352개 케이스.
+**현재 규모**: main 79개 파일 · 테스트 27개 클래스 353개 케이스.
 케이스 수는 `./gradlew test` 리포트 기준이라 **파라미터라이즈는 실행 횟수로 센다**.
 
 ## Phase 0 — 환경 설정 ✅
