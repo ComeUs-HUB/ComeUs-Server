@@ -44,6 +44,7 @@ import java.util.List;
  *   <tr><td>{@code /api/products} POST·PUT·DELETE</td><td>{@code hasRole("ADMIN")}</td>
  *       <td>카테고리와 같은 배선을 그대로 쓴다</td></tr>
  *   <tr><td>{@code /api/users/me} (GET/PUT/DELETE)</td><td>authenticated</td><td>{@code anyRequest()}에 포함된다</td></tr>
+ *   <tr><td>{@code /api/cart}·{@code /api/cart/items/**}</td><td>authenticated</td><td>{@code anyRequest()}에 포함된다(Phase 4)</td></tr>
  *   <tr><td>그 외</td><td>{@code anyRequest().authenticated()}</td><td>남은 공개 조회 API는 phase6에서 최종 점검</td></tr>
  * </table>
  *

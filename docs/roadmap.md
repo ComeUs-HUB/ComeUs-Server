@@ -288,8 +288,8 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
       `CartRepository.findByUserId` 하나로 끝난다(ADR 0019가 2단계 판정으로 남긴 항목)
 - [x] **주문용 메서드(선택 항목 조회·삭제)는 Order 단계에서 더한다** — 반환 형태·트랜잭션 참여·
       장바구니 락 위치가 Order 설계에 달려 있다([cart.md](domains/purchase/cart.md) "주문에 제공하는 것")
-- [ ] **`SecurityConfig` 배선이 필요한지 판정** — `anyRequest().authenticated()`가 이미
-      `/api/cart/**`를 막고 있다. 명시 배선이 불필요하면 Javadoc의 RBAC 표에만 행을 더한다
+- [x] **`SecurityConfig` 배선이 필요한지 판정** — 불필요하다. `anyRequest().authenticated()`가
+      `/api/cart/**`를 막고, 공개 경로는 `/**` 없이 정확한 경로만 연다. Javadoc의 RBAC 표에 행만 더했다
 - [x] **요청 수량 상한 N을 정한다** — **99**로 둔다(`CartItemAddRequest.MAX_QUANTITY`). 3단계 DTO에 `@Max(N)`을 걸고 위반은 `C001`이다.
       재고 초과는 그 뒤 `CT002`가 본다. 엔티티는 이미 합산을 `long`으로 계산해
       `int` 오버플로로 재고 검사를 우회하는 경로를 막아 뒀다
