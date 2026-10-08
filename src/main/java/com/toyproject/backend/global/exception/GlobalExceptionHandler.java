@@ -9,6 +9,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -92,6 +93,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodNotSupportedException(HttpRequestMethodNotSupportedException e) {
         return respond(CommonErrorCode.METHOD_NOT_ALLOWED, null);
+    }
+
+    /** 본문의 Content-Type을 받지 않을 때(없음·{@code text/plain} 등). 없으면 fallback으로 떨어져 500이 된다. */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMediaTypeNotSupportedException(HttpMediaTypeNotSupportedException e) {
+        log.warn("HttpMediaTypeNotSupportedException: contentType={}", e.getContentType());
+        return respond(CommonErrorCode.UNSUPPORTED_MEDIA_TYPE, null);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
