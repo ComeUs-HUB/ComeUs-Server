@@ -218,9 +218,11 @@ class CartControllerTest {
     }
 
     @Test
-    @DisplayName("토큰이 없으면 401이다")
+    @DisplayName("토큰이 없으면 조회·쓰기 모두 401이다 — 명시 배선 없이 anyRequest().authenticated()가 막는다")
     void unauthenticatedIs401() throws Exception {
         mockMvc.perform(get(CART_URI))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(delete(CART_URI))
                 .andExpect(status().isUnauthorized());
     }
 }
