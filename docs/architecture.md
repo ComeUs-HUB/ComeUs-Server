@@ -4,6 +4,7 @@
 
 도메인별 스펙은 [domains/](domains/), 응답·에러 규약은 [conventions/](conventions/),
 결정 근거는 [decisions/](decisions/), 진행 현황은 [roadmap.md](roadmap.md)에 있다.
+그림 요약은 [diagrams/](diagrams/README.md) — [시스템 구성도](diagrams/global/system-overview.md)·[요청 처리 파이프라인](diagrams/global/request-pipeline.md)부터 보면 된다.
 
 ## 개요
 
