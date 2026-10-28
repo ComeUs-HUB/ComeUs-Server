@@ -4,6 +4,8 @@
 > 조회와 ADMIN CRUD까지 코드에 있다.
 
 카테고리는 [category.md](category.md)가, 공통 배선은 [README.md](README.md)가 소유한다.
+목록 조회 흐름 그림: [seq-product-list.md](../../diagrams/catalog/seq-product-list.md).
+
 ## 엔티티
 
 id, name, description, price, stockQuantity, category,
