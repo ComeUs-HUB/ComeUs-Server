@@ -1,0 +1,34 @@
+flowchart TD
+    Req([HTTP 요청]) --> Filter
+
+    subgraph SEC["Spring Security"]
+        Filter{"JwtAuthenticationFilter<br/>Bearer 토큰?"}
+        Filter -- 없음 --> Anon[익명으로 진행]
+        Filter -- 있음 --> Parse["JwtProvider.parseClaims<br/>→ CustomUserDetailsService<br/>(매 요청 DB에서 회원·role 조회)"]
+        Parse -- 성공 --> Authed[SecurityContext에 인증 저장]
+        Parse -- "실패: A003·A004·A008·A001<br/>컨텍스트 비우고 코드만 기록" --> Anon
+
+        Anon --> Authz
+        Authed --> Authz
+        Authz{"SecurityConfig 인가<br/>permitAll · authenticated · ADMIN"}
+        Authz -- "익명인데 인증 필요" --> EP["JwtAuthenticationEntryPoint<br/>기록된 코드로 응답, 없으면 A001<br/>(401, 탈퇴 A008만 403)"]
+        Authz -- "인증됐지만 권한 부족" --> AD["JwtAccessDeniedHandler<br/>403 A002"]
+    end
+
+    Authz -- 통과 --> Ctrl
+
+    subgraph MVC["Spring MVC"]
+        Ctrl["Controller<br/>바인딩 · @Valid"]
+        Ctrl --> Svc["Service<br/>도메인 규칙 · 트랜잭션"]
+        Svc --> Ok["ApiResponse.success(data)<br/>목록은 PageResponse"]
+    end
+
+    Ctrl -- "① 입력 오류 400 · 405 · 415<br/>검증 · 타입 불일치 · 본문 파싱 · 메서드 · Content-Type" --> GEH
+    Svc -- "② 비즈니스 예외<br/>BusinessException(ErrorCode) · DB 제약 위반 C005" --> GEH
+    Svc -- "③ 예상 못 한 예외 500 C003" --> GEH
+
+    GEH["GlobalExceptionHandler<br/>→ ErrorResponse"]
+    GEH --> ErrRes(["ApiResponse.error"])
+    Ok --> Res([200 · 201 응답])
+    EP --> ErrRes
+    AD --> ErrRes

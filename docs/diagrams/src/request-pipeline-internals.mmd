@@ -1,0 +1,59 @@
+flowchart TD
+    Req([HTTP 요청]) --> TC
+
+    TC["내장 Tomcat — 스프링 밖<br/>바이트를 HttpServletRequest로 만들고<br/>스레드 풀에서 스레드 하나를 배정한다"]
+    TC --> S1
+
+    subgraph SERVLET["서블릿 필터 체인 — Spring Boot가 등록 (order 순)"]
+        direction TB
+        S1["CharacterEncodingFilter"]
+        S2["FormContentFilter"]
+        S3["RequestContextFilter"]
+        S4["DelegatingFilterProxy<br/>springSecurityFilterChain<br/>서블릿 체인에서 스프링 빈으로 건너가는 지점"]
+        S1 --> S2 --> S3 --> S4
+    end
+
+    S4 --> FCP["FilterChainProxy<br/>any request → 아래 체인"]
+
+    subgraph SEC["SecurityFilterChain — SecurityConfig.securityFilterChain()"]
+        direction TB
+        F12x["1 DisableEncodeUrl · 2 WebAsyncManagerIntegration"]:::inert
+        F3["3 SecurityContextHolderFilter<br/>빈 컨텍스트를 깔고, 요청이 끝나면 비운다"]
+        F4["4 HeaderWriterFilter<br/>보안 헤더"]
+        F5{"5 CorsFilter"}
+        F6{"6 JwtAuthenticationFilter<br/>★ 이 프로젝트의 코드가 처음 실행된다"}
+        F78["7 RequestCacheAware · 8 SecurityContextHolderAwareRequest"]:::inert
+        F9["9 AnonymousAuthenticationFilter<br/>인증이 비어 있으면 익명 토큰을 채운다"]
+        F10["10 SessionManagementFilter"]:::inert
+        F11["11 ExceptionTranslationFilter<br/>아래를 try · catch로 감싼다"]
+        F12{"12 AuthorizationFilter<br/>authorizeHttpRequests 판정"}
+
+        F12x --> F3 --> F4 --> F5
+        F5 -- 본 요청 --> F6
+        F6 --> F78 --> F9 --> F10 --> F11 --> F12
+    end
+
+    FCP --> F12x
+    F5 -- "preflight OPTIONS<br/>여기서 끝난다" --> Pre([204])
+    F12 -- 통과 --> DS
+    F12 -- AccessDeniedException --> F11
+    F11 -- "익명이었다면" --> EP["JwtAuthenticationEntryPoint<br/>401 — 탈퇴 A008만 403"]
+    F11 -- "인증됐지만 권한 부족" --> AD["JwtAccessDeniedHandler<br/>403 A002"]
+
+    subgraph MVC["Spring MVC — DispatcherServlet 안"]
+        direction TB
+        DS["DispatcherServlet<br/>HandlerMapping으로 핸들러를 찾는다"]
+        DS --> Ctrl["Controller<br/>바인딩 · @Valid"]
+        Ctrl --> Svc["Service<br/>트랜잭션 · 도메인 규칙"]
+        Svc --> Ok["ApiResponse.success"]
+        Ctrl -- "입력 오류" --> GEH["GlobalExceptionHandler<br/>@RestControllerAdvice"]
+        Svc -- "BusinessException · 예상 못 한 예외" --> GEH
+    end
+
+    Ok --> Res([응답])
+    GEH --> Res
+    EP --> Res
+    AD --> Res
+    Res -. "같은 스레드로 필터를 역순으로 되감는다" .-> TC
+
+    classDef inert color:#888,stroke-dasharray: 3 3
