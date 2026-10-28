@@ -2,6 +2,7 @@
 
 카카오 소셜 로그인, JWT 발급·검증, 회원 프로필과 생명주기를 담당한다.
 **왜 이렇게 정했는가**는 [decisions/](../decisions/)에 있다. 이 문서는 *무엇이 계약인가*만 적는다.
+로그인 흐름 그림: [seq-auth-login.md](../diagrams/auth/seq-auth-login.md).
 
 ## 도메인 경계
 
