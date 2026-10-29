@@ -237,9 +237,29 @@ task 알파벳(`[7단계 · I·K]`, `[6단계 · J]`, `[4단계 · G]`)은 **폐
 모두 저장소 루트에서 실행한다.
 
 ```bash
-# 클래스 Javadoc이 8줄을 넘는 파일
-awk '/^\/\*\*/{n=NR} /^ \*\//{if(NR-n>8) print FILENAME": "(NR-n)"줄"}' \
-  $(find src/main/java -name "*.java")
+# 클래스 Javadoc 본문이 5줄을 넘는 파일
+# 블록 전체 길이로 재면 @param이 많은 record가 거짓 양성이 된다 — 요약 문단과 태그를 빼고 센다
+python3 - << 'EOF'
+import re
+from pathlib import Path
+for f in sorted(Path("src/main/java").rglob("*.java")):
+    m = re.search(r"^/\*\*\n((?: \*.*\n)*?) \*/\n", f.read_text(encoding="utf-8"), re.M)
+    if not m:
+        continue
+    ls = [l[2:].lstrip() if len(l) > 2 else "" for l in m.group(1).splitlines()]
+    ls = ls[:next((i for i, l in enumerate(ls) if l.startswith("@")), len(ls))]
+    paras, cur = [], []
+    for l in ls:
+        if l:
+            cur.append(l)
+        elif cur:
+            paras.append(cur); cur = []
+    if cur:
+        paras.append(cur)
+    body = sum(len(p) for p in paras[1:])
+    if body > 5:
+        print(f"{f}: 본문 {body}줄")
+EOF
 
 # HTML 치장 (<p>는 허용)
 grep -rnoE '<(b|br|ul|ol|li|table|tr|th|td|pre)>' src/main/java --include="*.java"
