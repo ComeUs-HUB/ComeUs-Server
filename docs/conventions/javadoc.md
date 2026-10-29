@@ -143,8 +143,9 @@
  * [Phase 2 · 6단계] JWT subject(userId)로 회원을 조회해 {@link UserPrincipal}로 변환한다.
  *
  * <p>매 요청 DB를 조회한다. claim만 믿으면 탈퇴 회원이 토큰 만료까지 통과하므로 캐싱하지 않는다.
- * <p>미존재와 탈퇴를 다른 예외로 던진다. 합치면 필터가 A001(401)과 A008(403)을 가르지 못한다
- * ([ADR 0007](../decisions/platform/0007-single-entrypoint-for-401-403.md)).
+ * <p>미존재와 탈퇴를 다른 예외로 던진다. 합치면 필터가 A001(401)과 A008(403)을 가르지 못한다.
+ * <p>그 구분과 {@code UserRepository} 직접 주입 근거는 ADR 0021.
+ * <p>{@code docs/decisions/platform/0021-user-repository-in-security.md}
  */
 @Service
 @RequiredArgsConstructor
@@ -179,8 +180,8 @@ public class CustomUserDetailsService implements UserDetailsService {
 같은 이유로 남겼다.
 
 `UserPrincipal.isEnabled()`에 탈퇴 판정을 맡기지 않은 이유와 `UserRepository` 직접 주입 근거는
-**아직 ADR이 없다** — 이 축소를 적용할 때 ADR을 먼저 쓰고 링크만 남긴다. 주석에 남겨 둔 채로는
-어차피 읽히지 않는다.
+[ADR 0021](../decisions/platform/0021-user-repository-in-security.md)로 옮겼다.
+그 자리에 있던 "결정 필요" 15줄과 삭제된 문서의 행 번호 참조 3개가 함께 사라졌다.
 
 ## 태그
 
@@ -199,9 +200,12 @@ public class CustomUserDetailsService implements UserDetailsService {
 
 ADR은 **그 파일에서 처음 언급할 때 경로까지** 적고, 같은 파일에서 다시 나오면 번호만 쓴다.
 번호만으로는 `decisions/` 아래 네 디렉터리를 뒤져야 찾는다.
+Javadoc에 마크다운 링크(`[ADR 0016](...)`)를 쓰지 않는다 — 렌더링되지 않고 문자 그대로 나온다.
+경로는 `{@code}`로 감싸 **자기 줄에** 둔다. 줄폭 80자에 그렇게만 들어간다.
 
 ```java
- * <p>... 재고를 점유하지 않는다([ADR 0016](../decisions/purchase/0016-stock-reserved-at-order-not-cart.md)).
+ * <p>... 재고를 점유하지 않는다 — ADR 0016.
+ * <p>{@code docs/decisions/purchase/0016-stock-reserved-at-order-not-cart.md}
  * <p>... 같은 이유로 수량 변경도 점유하지 않는다(ADR 0016).
 ```
 
@@ -248,8 +252,15 @@ grep -rnoE '<(b|br|ul|ol|li|table|tr|th|td|pre)>' src/main/java --include="*.jav
 grep -rn "⚠️" src/main/java --include="*.java"
 
 # 80자를 넘는 Javadoc 줄
-awk 'length($0)>80 && /^[ \t]*\*/ {print FILENAME":"FNR}' \
-  $(find src/main/java -name "*.java")
+# awk의 length()는 macOS에서 바이트를 세므로 한글에서 거짓 양성이 난다 — 글자 수로 센다
+python3 - << 'EOF'
+import re
+from pathlib import Path
+for f in sorted(Path("src/main/java").rglob("*.java")):
+    for i, l in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+        if re.match(r"^[ \t]*\*", l) and len(l) > 80:
+            print(f"{f}:{i}  {len(l)}자")
+EOF
 
 # 주석이 코드의 2배를 넘는 파일
 for f in $(find src/main/java -name "*.java"); do
