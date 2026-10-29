@@ -145,7 +145,6 @@
  * <p>매 요청 DB를 조회한다. claim만 믿으면 탈퇴 회원이 토큰 만료까지 통과하므로 캐싱하지 않는다.
  * <p>미존재와 탈퇴를 다른 예외로 던진다. 합치면 필터가 A001(401)과 A008(403)을 가르지 못한다.
  * <p>그 구분과 {@code UserRepository} 직접 주입 근거는 ADR 0021.
- * <p>{@code docs/decisions/platform/0021-user-repository-in-security.md}
  */
 @Service
 @RequiredArgsConstructor
@@ -198,15 +197,12 @@ public class CustomUserDetailsService implements UserDetailsService {
 
 ### 문서 참조 형식
 
-ADR은 **그 파일에서 처음 언급할 때 경로까지** 적고, 같은 파일에서 다시 나오면 번호만 쓴다.
-번호만으로는 `decisions/` 아래 네 디렉터리를 뒤져야 찾는다.
+ADR은 **번호만** 쓴다. 번호에서 경로를 찾는 일은 [decisions/README.md](../decisions/README.md)의
+색인 표가 한다 — 주석에 경로를 적으면 ADR 파일명이 바뀔 때 같이 낡고, 줄폭 80자도 넘긴다.
 Javadoc에 마크다운 링크(`[ADR 0016](...)`)를 쓰지 않는다 — 렌더링되지 않고 문자 그대로 나온다.
-경로는 `{@code}`로 감싸 **자기 줄에** 둔다. 줄폭 80자에 그렇게만 들어간다.
 
 ```java
- * <p>... 재고를 점유하지 않는다 — ADR 0016.
- * <p>{@code docs/decisions/purchase/0016-stock-reserved-at-order-not-cart.md}
- * <p>... 같은 이유로 수량 변경도 점유하지 않는다(ADR 0016).
+ * <p>... 재고를 점유하지 않는다(ADR 0016).
 ```
 
 계약 문서는 `{@code docs/domains/purchase/cart.md}` 처럼 **경로를 그대로** 쓴다.
