@@ -22,30 +22,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.function.Supplier;
 
 /**
- * [4단계 · G] 카카오 API 클라이언트
+ * [Phase 2 · 4단계] 카카오 REST API와 통신하는 유일한 경계.
+ * 바깥 계층은 카카오의 존재를 모른다.
  *
- * <p><b>역할</b><br>
- * 카카오 REST API와 통신하는 <b>유일한 경계</b>. 이 클래스 바깥에서는 카카오의 존재를 모른다.
- *
- * <p><b>에러 변환 — 이 클래스의 핵심 책임</b><br>
- * 카카오 호출 실패는 전부 여기서 {@code BusinessException}으로 변환한다.
- * {@code RestClientException}이 서비스·컨트롤러로 새어 나가면 상위 계층이 HTTP 세부사항을 알게 된다.
- *
- * <table border="1">
- *   <caption>상태별 변환</caption>
- *   <tr><th>상황</th><th>ErrorCode</th><th>판단</th></tr>
- *   <tr><td>4xx</td><td>{@code KAKAO_AUTH_FAILED}(A005, 400)</td><td>우리 요청이 잘못됨</td></tr>
- *   <tr><td>5xx</td><td>{@code KAKAO_API_ERROR}(A006, 502)</td><td>카카오 장애</td></tr>
- *   <tr><td>타임아웃·연결 실패</td><td>{@code KAKAO_API_ERROR}(A006, 502)</td><td>카카오 장애로 취급</td></tr>
- * </table>
- *
- * <p><b>주의</b>
- * <ul>
- *   <li>진단을 위해 카카오 <b>응답</b> body는 로그로 남기지만,
- *       요청에 실은 {@code client_secret}·{@code adminKey}는 <b>절대 로그에 넣지 않는다</b>.</li>
- *   <li>{@code unlink}는 여기서 평소처럼 예외를 던진다. best-effort로 삼키는 판단은
- *       {@code AuthService}가 한다(카카오 장애로 탈퇴가 막히면 안 된다).</li>
- * </ul>
+ * <p>호출 실패를 전부 {@code BusinessException}으로 바꾸는 것이 이 클래스의 핵심 책임이다.
+ * 4xx는 A005(우리 요청이 잘못됨), 5xx·통신 실패는 A006(카카오 장애)으로 간다.
+ * <p>응답 body는 진단을 위해 로그로 남기되 {@code clientSecret}·{@code adminKey}는 넣지 않는다.
  */
 @Slf4j
 @Component
@@ -64,19 +46,12 @@ public class KakaoOAuthClient {
     }
 
     /**
-     * 인가 코드를 카카오 토큰으로 교환한다. <b>콜백 처리의 첫 단계</b>다.
+     * 인가 코드를 카카오 토큰으로 교환한다. 콜백 처리의 첫 단계다.
      *
-     * <p>{@code POST tokenUri}, {@code application/x-www-form-urlencoded}.
+     * <p>form의 {@code redirect_uri}는 인가 요청 때 보낸 값과 정확히 같아야 한다 — 양쪽 모두
+     * {@code properties.redirectUri()}를 쓰므로 구조적으로 어긋날 수 없다(ADR 0002).
+     * <p>인가 코드는 1회용이라 재사용하면 A005다. 콜백에서 뒤로가기를 누르면 생기는 정상 경로다.
      *
-     * <p>⚠️ form의 {@code redirect_uri}는 인가 요청({@code /kakao/authorize}) 때 보낸 값과
-     * <b>정확히 같아야</b> 카카오가 대조를 통과시킨다. 양쪽 모두 {@code properties.redirectUri()}를
-     * 쓰므로 구조적으로 어긋날 수 없다.
-     *
-     * <p>인가 코드는 <b>1회용</b>이라 재사용하면 카카오가 4xx로 거부한다(A005).
-     * 사용자가 콜백 URL에서 뒤로가기를 눌렀을 때 발생하는 정상적인 실패 경로다.
-     *
-     * @param code 카카오가 콜백 쿼리로 넘긴 인가 코드
-     * @return 카카오 토큰 묶음. 실제로 쓰는 것은 {@code accessToken}뿐이다
      * @throws BusinessException 4xx면 A005, 5xx·통신 실패면 A006
      */
     public KakaoTokenResponse requestToken(String code) {
@@ -100,15 +75,10 @@ public class KakaoOAuthClient {
     }
 
     /**
-     * 카카오 사용자 정보를 조회한다. <b>회원 생성·조회의 원천 데이터</b>를 가져온다.
+     * 카카오 사용자 정보를 조회한다. 회원 생성·조회의 원천 데이터다.
      *
-     * <p>{@code GET userInfoUri}, 헤더 {@code Authorization: Bearer {카카오 액세스 토큰}}.
+     * <p>이메일·닉네임은 동의 항목이라 없을 수 있다. 반환 DTO의 헬퍼가 null을 흡수한다.
      *
-     * <p>응답의 이메일·닉네임은 동의 항목이라 없을 수 있다. 호출부는 반환 DTO의
-     * {@code resolveEmail()}·{@code resolveNickname()} 헬퍼로 꺼내 null 처리를 위임한다.
-     *
-     * @param kakaoAccessToken {@link #requestToken}이 받아온 카카오 액세스 토큰
-     * @return 사용자 정보. {@code id}는 항상 있고 나머지는 동의 여부에 따라 없을 수 있다
      * @throws BusinessException 4xx(토큰 만료·무효)면 A005, 5xx·통신 실패면 A006
      */
     public KakaoUserInfoResponse fetchUserInfo(String kakaoAccessToken) {
@@ -124,18 +94,11 @@ public class KakaoOAuthClient {
     }
 
     /**
-     * 카카오 계정과 우리 서비스의 연결을 끊는다. <b>회원 탈퇴 시 마지막 단계</b>다.
+     * 카카오 계정과의 연결을 끊는다. 탈퇴의 마지막 단계다.
      *
-     * <p>{@code POST unlinkUri}, 헤더 {@code Authorization: KakaoAK {adminKey}},
-     * form {@code target_id_type=user_id}, {@code target_id={providerId}}.
+     * <p>Admin Key로 호출해 사용자 토큰이 필요 없다 — 탈퇴 시점엔 이미 카카오 토큰이 없다.
+     * <p>실패 시 그대로 던진다. best-effort로 삼키는 판단은 {@code AuthService}가 한다.
      *
-     * <p>Admin Key로 호출하므로 사용자 토큰이 필요 없다 — <b>탈퇴 시점엔 이미 카카오 토큰이 없다</b>
-     * (로그인 직후 버리고 저장하지 않는다).
-     *
-     * <p>⚠️ 여기서는 실패 시 <b>예외를 던진다.</b> 삼키는 판단은 {@code AuthService.unlinkKakao}가 한다
-     * — 카카오 장애로 탈퇴가 막히면 안 되므로 호출부가 best-effort로 다룬다.
-     *
-     * @param providerId 카카오 고유 사용자 id({@code User.providerId})
      * @throws BusinessException 4xx면 A005, 5xx·통신 실패면 A006
      */
     public void unlink(String providerId) {
@@ -157,14 +120,11 @@ public class KakaoOAuthClient {
     }
 
     /**
-     * 카카오 호출을 감싸 <b>통신 계층 예외를 A006으로 흡수</b>한다.
+     * 통신 계층 예외를 A006으로 흡수한다.
      *
-     * <p>상태 코드 기반 실패는 {@link #fail}이 {@code BusinessException}으로 이미 변환하므로
-     * 여기 걸리지 않고 그대로 전파된다({@code BusinessException}은 {@code RestClientException}이 아니다).
-     * 이 catch가 잡는 것은 <b>타임아웃·연결 불가·응답 역직렬화 실패</b>다.
-     *
-     * @param operation 로그에 남길 작업 이름
-     * @param call      실제 호출
+     * <p>상태 코드 기반 실패는 {@link #fail}이 이미 바꿔 놓아 여기 걸리지 않는다
+     * ({@code BusinessException}은 {@code RestClientException}이 아니다).
+     * 이 catch가 잡는 것은 타임아웃·연결 불가·역직렬화 실패다.
      */
     private <T> T execute(String operation, Supplier<T> call) {
         try {
@@ -176,13 +136,12 @@ public class KakaoOAuthClient {
     }
 
     /**
-     * 카카오가 내려준 에러 응답을 로그로 남기고 {@code BusinessException}으로 바꾼다.
+     * 에러 응답을 로그로 남기고 {@code BusinessException}으로 바꾼다.
      *
-     * <p>카카오는 실패 사유를 body의 {@code error}/{@code error_description}(또는 {@code code})으로 주는데,
-     * 이걸 남기지 않으면 {@code KOE006}(Redirect URI 미등록) 같은 설정 실수를 추적할 수 없다.
-     * 응답 body에는 우리 비밀값이 들어 있지 않다.
+     * <p>카카오는 실패 사유를 body로 준다 — 남기지 않으면 {@code KOE006}(Redirect URI 미등록)
+     * 같은 설정 실수를 추적할 수 없다. 응답 body에는 우리 비밀값이 없다.
      *
-     * @throws BusinessException 항상 던진다 (반환하지 않는다)
+     * @throws BusinessException 항상 던진다
      */
     private void fail(ClientHttpResponse response, String operation, AuthErrorCode errorCode) throws IOException {
         String body = new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8);
