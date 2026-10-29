@@ -1,6 +1,7 @@
 package com.toyproject.backend.global.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 
@@ -10,7 +11,7 @@ import java.util.List;
  *
  * <p>{@code @Validated}를 붙이지 않고 compact 생성자가 {@code null}을 흡수한다 —
  * {@code app.*}가 통째로 없어도 {@code SecurityConfig} 기동 중 NPE가 나지 않는다.
- * <p>누락 시 동작을 값의 성격으로 가르는 근거는 ADR 0022.
+ * <p>{@code frontend.base-url}만 fail-fast다. 가르는 근거는 ADR 0022.
  */
 @ConfigurationProperties(prefix = "app")
 public record AppProperties(
@@ -24,11 +25,16 @@ public record AppProperties(
         frontend = (frontend != null) ? frontend : new Frontend(null);
         cors = (cors != null) ? cors : new Cors(null);
         cookie = (cookie != null) ? cookie : new Cookie(null);
+
+        // 없으면 FE 복귀 URL이 "null/oauth/complete"가 되어 조용히 오동작한다(ADR 0022)
+        if (!StringUtils.hasText(frontend.baseUrl())) {
+            throw new IllegalArgumentException("app.frontend.base-url은 반드시 설정해야 합니다.");
+        }
     }
 
     /**
      * @param baseUrl FE 복귀 주소. {@code {baseUrl}/oauth/complete}로 조립된다.
-     *                누락 검증이 없어 {@code null}이면 오동작한다 — ADR 0022의 미결 항목
+     *                비어 있으면 기동에서 거부한다(ADR 0022)
      */
     public record Frontend(String baseUrl) {
     }
