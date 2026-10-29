@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>요청 하나가 거치는 네 겹</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400&family=Noto+Sans+TC:wght@400;500;600&family=Noto+Serif+TC:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-paper-2: #ececec;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-soft:    #7a8399;
+      --color-accent:  #eb6c36;
+      --font-sans:     'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', 'Noto Serif KR', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+
+    .frame { max-width: 1320px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+
+    svg { width: 100%; min-width: 1280px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+
+    /* diagram text roles */
+    #request-pipeline-internals-root .zone-label {
+      font-family: var(--font-sans); font-size: 12px; font-weight: 500; fill: var(--color-soft);
+    }
+    #request-pipeline-internals-root .n-name {
+      font-family: var(--font-sans); font-size: 12px; font-weight: 600; fill: var(--color-ink);
+    }
+    #request-pipeline-internals-root .n-note {
+      font-family: var(--font-sans); font-size: 12px; font-weight: 400; fill: var(--color-muted);
+    }
+    #request-pipeline-internals-root .n-sub {
+      font-family: var(--font-mono); font-size: 9px; font-weight: 400; fill: var(--color-soft);
+    }
+    #request-pipeline-internals-root .n-dim { fill: var(--color-soft); }
+    #request-pipeline-internals-root .a-label {
+      font-family: var(--font-sans); font-size: 12px; font-weight: 500; fill: var(--color-muted);
+    }
+    #request-pipeline-internals-root .lg-text {
+      font-family: var(--font-sans); font-size: 12px; font-weight: 500; fill: var(--color-muted);
+    }
+    #request-pipeline-internals-root .lg-key {
+      font-family: var(--font-mono); font-size: 8px; font-weight: 500; fill: var(--color-muted);
+      letter-spacing: 0.14em;
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Flowchart · Spring filter chain</p>
+    <h1>요청 하나가 거치는 네 겹 — 우리 코드는 여섯 번째 필터에서 시작한다</h1>
+
+    <div class="diagram-container">
+      <svg id="request-pipeline-internals-root" viewBox="0 0 1280 1280" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="request-pipeline-internals-title request-pipeline-internals-desc">
+        <title id="request-pipeline-internals-title">요청 처리 파이프라인 — 스프링 내부 상세</title>
+        <desc id="request-pipeline-internals-desc">HTTP 요청이 내장 Tomcat과 Spring Boot의 서블릿 필터를 지나 보안 필터 체인 12개를 순서대로 통과하고 DispatcherServlet에 닿는 경로를 보여준다. 프로젝트 코드인 JwtAuthenticationFilter는 보안 체인의 여섯 번째이며, CorsFilter는 preflight 요청을 그 앞에서 204로 끝내고, 인가 거절은 ExceptionTranslationFilter가 잡아 MVC 밖에서 401·403을 만든다.</desc>
+        <defs>
+          <marker id="request-pipeline-internals-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="request-pipeline-internals-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+          <marker id="request-pipeline-internals-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+        <!-- ================= ZONES (painted first) ================= -->
+        <rect x="40" y="88" width="1200" height="168" rx="8" fill="#ececec" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
+        <text class="zone-label" x="56" y="110">① 서블릿 컨테이너 — 스프링 밖</text>
+
+        <rect x="40" y="296" width="640" height="888" rx="8" fill="#ececec" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
+        <text class="zone-label" x="56" y="318">② 보안 필터 체인 — SecurityConfig.securityFilterChain()</text>
+
+        <rect x="720" y="664" width="520" height="456" rx="8" fill="#ececec" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
+        <text class="zone-label" x="736" y="688">③ Spring MVC — DispatcherServlet 안</text>
+
+        <!-- ================= ARROWS (before boxes) ================= -->
+        <!-- zone 1 chain -->
+        <line x1="192" y1="180" x2="228" y2="180" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+        <line x1="520" y1="180" x2="556" y2="180" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+        <line x1="880" y1="180" x2="916" y2="180" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+
+        <!-- bridge into the security chain -->
+        <path d="M1064,220 L1064,264 Q1064,272 1056,272 L284,272 Q276,272 276,280 L276,332"
+              fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+
+        <!-- security chain verticals -->
+        <line x1="276" y1="392" x2="276" y2="412" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+        <line x1="276" y1="480" x2="276" y2="500" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+        <line x1="276" y1="552" x2="276" y2="572" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+        <line x1="276" y1="656" x2="276" y2="676" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+        <line x1="276" y1="768" x2="276" y2="788" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+        <line x1="276" y1="856" x2="276" y2="876" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+        <line x1="276" y1="944" x2="276" y2="964" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+        <line x1="276" y1="1016" x2="276" y2="1036" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+
+        <!-- cors short-circuit, and the two authorization refusals -->
+        <line x1="480" y1="616" x2="508" y2="616" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+        <line x1="480" y1="1048" x2="508" y2="1048" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+        <line x1="480" y1="1128" x2="508" y2="1128" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+
+        <!-- authorized request leaves the chain for MVC -->
+        <path d="M276,1152 L276,1164 Q276,1172 284,1172 L688,1172 Q696,1172 696,1164 L696,748 Q696,740 704,740 L748,740"
+              fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+
+        <!-- MVC internals -->
+        <line x1="980" y1="768" x2="980" y2="852" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+        <line x1="860" y1="920" x2="860" y2="1004" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+        <line x1="1100" y1="920" x2="1100" y2="1004" stroke="#4f5d75" stroke-width="1" marker-end="url(#request-pipeline-internals-arrow)"/>
+
+        <!-- ================= ARROW LABELS (masked, with gap) ================= -->
+        <rect x="290" y="659" width="64" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="a-label" x="296" y="671">본 요청</text>
+
+        <rect x="700" y="714" width="48" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="a-label" x="706" y="726">통과</text>
+
+        <rect x="866" y="932" width="48" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="a-label" x="872" y="944">성공</text>
+
+        <rect x="1106" y="932" width="48" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="a-label" x="1112" y="944">에러</text>
+
+        <!-- ================= ZONE 1 NODES ================= -->
+        <!-- HTTP request -->
+        <rect x="64" y="156" width="128" height="48" rx="20" fill="#f5f5f5"/>
+        <rect x="64" y="156" width="128" height="48" rx="20" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <text class="n-name" x="128" y="185" text-anchor="middle">HTTP 요청</text>
+
+        <!-- Tomcat -->
+        <rect x="232" y="140" width="288" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="232" y="140" width="288" height="80" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text class="n-name" x="376" y="172" text-anchor="middle">내장 Tomcat</text>
+        <text class="n-note" x="376" y="192" text-anchor="middle">요청 객체를 만들고 스레드 1개를 배정</text>
+        <text class="n-sub" x="376" y="208" text-anchor="middle">servlet container</text>
+
+        <!-- Boot's own servlet filters -->
+        <rect x="560" y="140" width="320" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="560" y="140" width="320" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="n-name" x="720" y="172" text-anchor="middle">Boot 기본 필터 3개</text>
+        <text class="n-note" x="720" y="192" text-anchor="middle">order 순서대로</text>
+        <text class="n-sub" x="720" y="208" text-anchor="middle">CharacterEncoding · FormContent · RequestContext</text>
+
+        <!-- the bridge -->
+        <rect x="920" y="140" width="288" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="920" y="140" width="288" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="n-name" x="1064" y="172" text-anchor="middle">DelegatingFilterProxy</text>
+        <text class="n-note" x="1064" y="192" text-anchor="middle">서블릿 체인 → 스프링 빈 경계</text>
+        <text class="n-sub" x="1064" y="208" text-anchor="middle">springSecurityFilterChain → FilterChainProxy</text>
+
+        <!-- ================= ZONE 2 NODES ================= -->
+        <!-- 1 · 2 inert -->
+        <rect x="72" y="336" width="408" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="72" y="336" width="408" height="56" rx="6" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+        <text class="n-name n-dim" x="276" y="360" text-anchor="middle">1 · 2  DisableEncodeUrl · WebAsyncManagerIntegration</text>
+        <text class="n-note" x="276" y="378" text-anchor="middle">이 설정에선 하는 일이 없다</text>
+
+        <!-- 3 -->
+        <rect x="72" y="416" width="408" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="72" y="416" width="408" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="n-name" x="276" y="442" text-anchor="middle">3  SecurityContextHolder</text>
+        <text class="n-note" x="276" y="462" text-anchor="middle">빈 컨텍스트를 깔고, 요청이 끝나면 비운다</text>
+
+        <!-- 4 -->
+        <rect x="72" y="504" width="408" height="48" rx="6" fill="#f5f5f5"/>
+        <rect x="72" y="504" width="408" height="48" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="n-name" x="276" y="533" text-anchor="middle">4  HeaderWriter</text>
+
+        <!-- 5 CorsFilter — decision -->
+        <polygon points="276,576 480,616 276,656 72,616" fill="#f5f5f5"/>
+        <polygon points="276,576 480,616 276,656 72,616" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="n-name" x="276" y="612" text-anchor="middle">5  Cors</text>
+        <text class="n-note" x="276" y="632" text-anchor="middle">preflight는 여기서 끝</text>
+
+        <!-- 204 terminal -->
+        <rect x="508" y="596" width="112" height="40" rx="20" fill="#f5f5f5"/>
+        <rect x="508" y="596" width="112" height="40" rx="20" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <text class="n-name" x="564" y="621" text-anchor="middle">204</text>
+
+        <!-- 6 JwtAuthenticationFilter — focal -->
+        <rect x="72" y="680" width="408" height="88" rx="6" fill="#f5f5f5"/>
+        <rect x="72" y="680" width="408" height="88" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
+        <text class="n-name" x="276" y="708" text-anchor="middle">6  JwtAuthentication</text>
+        <text class="n-note" x="276" y="730" text-anchor="middle">★ 우리 코드가 처음 실행된다</text>
+        <text class="n-sub" x="276" y="750" text-anchor="middle">global/security/JwtAuthenticationFilter.java</text>
+
+        <!-- 7 · 8 inert -->
+        <rect x="72" y="792" width="408" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="72" y="792" width="408" height="64" rx="6" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+        <text class="n-name n-dim" x="276" y="818" text-anchor="middle">7 · 8  RequestCacheAware ·</text>
+        <text class="n-name n-dim" x="276" y="836" text-anchor="middle">SecurityContextHolderAwareRequest</text>
+
+        <!-- 9 -->
+        <rect x="72" y="880" width="408" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="72" y="880" width="408" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="n-name" x="276" y="906" text-anchor="middle">9  AnonymousAuthentication</text>
+        <text class="n-note" x="276" y="926" text-anchor="middle">인증이 비어 있으면 익명으로 채운다</text>
+
+        <!-- 10 inert -->
+        <rect x="72" y="968" width="408" height="48" rx="6" fill="#f5f5f5"/>
+        <rect x="72" y="968" width="408" height="48" rx="6" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+        <text class="n-name n-dim" x="276" y="997" text-anchor="middle">10  SessionManagement</text>
+
+        <!-- 11 frame containing 12 -->
+        <rect x="72" y="1040" width="408" height="120" rx="8" fill="#f5f5f5"/>
+        <rect x="72" y="1040" width="408" height="120" rx="8" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="n-name" x="88" y="1064">11  ExceptionTranslation</text>
+        <text class="n-sub" x="464" y="1064" text-anchor="end">try · catch</text>
+
+        <polygon points="276,1080 456,1116 276,1152 96,1116" fill="#ffffff"/>
+        <polygon points="276,1080 456,1116 276,1152 96,1116" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <text class="n-name" x="276" y="1112" text-anchor="middle">12  Authorization</text>
+        <text class="n-sub" x="276" y="1130" text-anchor="middle">authorizeHttpRequests</text>
+
+        <!-- entry point / access denied -->
+        <rect x="508" y="1016" width="152" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="508" y="1016" width="152" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="n-name" x="584" y="1038" text-anchor="middle">JwtAuthentication</text>
+        <text class="n-name" x="584" y="1054" text-anchor="middle">EntryPoint</text>
+        <text class="n-note" x="584" y="1072" text-anchor="middle">익명이면 401</text>
+
+        <rect x="508" y="1096" width="152" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="508" y="1096" width="152" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="n-name" x="584" y="1118" text-anchor="middle">JwtAccessDenied</text>
+        <text class="n-name" x="584" y="1134" text-anchor="middle">Handler</text>
+        <text class="n-note" x="584" y="1152" text-anchor="middle">권한 부족 403</text>
+
+        <!-- ================= ZONE 3 NODES ================= -->
+        <rect x="752" y="712" width="456" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="752" y="712" width="456" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="n-name" x="980" y="736" text-anchor="middle">DispatcherServlet</text>
+        <text class="n-sub" x="980" y="754" text-anchor="middle">HandlerMapping → handler</text>
+
+        <rect x="752" y="856" width="456" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="752" y="856" width="456" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="n-name" x="980" y="882" text-anchor="middle">Controller · Service</text>
+        <text class="n-note" x="980" y="902" text-anchor="middle">바인딩 · @Valid · 트랜잭션 · 도메인 규칙</text>
+
+        <rect x="752" y="1008" width="216" height="48" rx="20" fill="#f5f5f5"/>
+        <rect x="752" y="1008" width="216" height="48" rx="20" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <text class="n-name" x="860" y="1037" text-anchor="middle">ApiResponse.success</text>
+
+        <rect x="992" y="1008" width="216" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="992" y="1008" width="216" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="n-name" x="1100" y="1034" text-anchor="middle">GlobalExceptionHandler</text>
+        <text class="n-sub" x="1100" y="1054" text-anchor="middle">@RestControllerAdvice</text>
+
+        <!-- ================= LEGEND ================= -->
+        <line x1="40" y1="1208" x2="1240" y2="1208" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+
+        <rect x="40" y="1220" width="20" height="14" rx="4" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
+        <text class="lg-text" x="68" y="1231">우리 코드가 처음 실행되는 지점</text>
+
+        <rect x="300" y="1220" width="20" height="14" rx="4" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+        <text class="lg-text" x="328" y="1231">이 설정에선 하는 일 없음</text>
+
+        <polygon points="520,1218 536,1227 520,1236 504,1227" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="lg-text" x="546" y="1231">판정 · 분기</text>
+
+        <rect x="660" y="1220" width="20" height="14" rx="7" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <text class="lg-text" x="688" y="1231">요청 · 응답 종료</text>
+
+        <text class="lg-key" x="840" y="1231">FILTER SUFFIX OMITTED · ORDER 1–12 AS MEASURED ON SPRING BOOT 3.5.0</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

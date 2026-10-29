@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OAuth · JWT 패키지 구조</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #eb6c36;
+      --font-sans:     'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', 'Noto Serif KR', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1320px; width: 100%; min-width: 0; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 1280px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · Package</p>
+    <h1>OAuth · JWT 로그인 — 패키지 구조</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="pkg-auth-ov-title pkg-auth-ov-desc">
+        <title id="pkg-auth-ov-title">OAuth · JWT 로그인 패키지 구조</title>
+        <desc id="pkg-auth-ov-desc">global 패키지의 설정과 Spring Security 어댑터, domain/auth의 controller · service · client · token · repository, 그리고 domain/user 사이의 의존 방향을 보여준다. 서비스 계층은 auth에서 user로만 흐르고, 역방향은 회원 탈퇴 하나뿐이다.</desc>
+        <defs>
+          <marker id="pkg-auth-ov-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="pkg-auth-ov-arrow-ink" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2d3142"/></marker>
+          <marker id="pkg-auth-ov-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+          <marker id="pkg-auth-ov-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+        <!-- ============ zones (bg) ============ -->
+        <rect x="40" y="64" width="320" height="280" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="48" y="68" width="56" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="56" y="77" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" letter-spacing="0.14em">GLOBAL</text>
+
+        <rect x="400" y="64" width="512" height="376" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="408" y="68" width="88" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="416" y="77" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" letter-spacing="0.14em">DOMAIN/AUTH</text>
+
+        <!-- ============ arrows (before boxes) ============ -->
+        <!-- E1 config -> security -->
+        <line x1="200" y1="160" x2="200" y2="224" stroke="#4f5d75" stroke-width="1" marker-end="url(#pkg-auth-ov-arrow)"/>
+        <!-- E2 security -> token  (bottom channel y=448, hops over client->kakao at x=504) -->
+        <path d="M 168,320 V 440 Q 168,448 176,448 H 496 a 8,8 0 0,1 16,0 H 648 Q 656,448 656,440 V 416"
+              fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#pkg-auth-ov-arrow)"/>
+        <!-- E3 security -> domain/user (bottom channel y=472, hops at x=504) -->
+        <path d="M 232,320 V 464 Q 232,472 240,472 H 496 a 8,8 0 0,1 16,0 H 1088 Q 1096,472 1096,464 V 352"
+              fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#pkg-auth-ov-arrow)"/>
+        <!-- E4 controller -> service -->
+        <line x1="656" y1="160" x2="656" y2="224" stroke="#4f5d75" stroke-width="1" marker-end="url(#pkg-auth-ov-arrow)"/>
+        <!-- E5/E6/E7 service -> client / token / repository -->
+        <line x1="504" y1="288" x2="504" y2="352" stroke="#4f5d75" stroke-width="1" marker-end="url(#pkg-auth-ov-arrow)"/>
+        <line x1="656" y1="288" x2="656" y2="352" stroke="#4f5d75" stroke-width="1" marker-end="url(#pkg-auth-ov-arrow)"/>
+        <line x1="808" y1="288" x2="808" y2="352" stroke="#4f5d75" stroke-width="1" marker-end="url(#pkg-auth-ov-arrow)"/>
+        <!-- E8 auth/service => domain/user  (rule 1) -->
+        <line x1="872" y1="248" x2="952" y2="248" stroke="#2d3142" stroke-width="1.2" marker-end="url(#pkg-auth-ov-arrow-ink)"/>
+        <!-- E9 domain/user => auth/service  (rule 2, the exception) -->
+        <line x1="952" y1="272" x2="872" y2="272" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#pkg-auth-ov-arrow-accent)"/>
+        <!-- E10 client -> kakao -->
+        <line x1="504" y1="416" x2="504" y2="520" stroke="#2e5aa8" stroke-width="1" marker-end="url(#pkg-auth-ov-arrow-link)"/>
+
+        <!-- arrow labels (mask + text, 6-10px gap, Korean register: 12px sans 500) -->
+        <rect x="880" y="226" width="64" height="16" rx="2" fill="#f5f5f5"/>
+        <text x="912" y="238" fill="#2d3142" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', sans-serif" text-anchor="middle">① 단방향</text>
+        <rect x="880" y="280" width="64" height="16" rx="2" fill="#f5f5f5"/>
+        <text x="912" y="292" fill="#eb6c36" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', sans-serif" text-anchor="middle">② 탈퇴만</text>
+
+        <!-- ============ nodes ============ -->
+        <!-- global/config -->
+        <rect x="72" y="96" width="256" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="72" y="96" width="256" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="200" y="124" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">config</text>
+        <text x="200" y="142" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">SecurityConfig · AppProperties</text>
+
+        <!-- global/security -->
+        <rect x="72" y="224" width="256" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="72" y="224" width="256" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="200" y="250" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">security</text>
+        <text x="200" y="270" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">JwtAuthenticationFilter</text>
+        <text x="200" y="286" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">CustomUserDetailsService · UserPrincipal</text>
+        <text x="200" y="302" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">EntryPoint · AccessDeniedHandler</text>
+
+        <!-- auth/controller -->
+        <rect x="440" y="96" width="432" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="440" y="96" width="432" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="656" y="124" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">controller</text>
+        <text x="656" y="142" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">AuthController</text>
+
+        <!-- auth/service (focal) -->
+        <rect x="440" y="224" width="432" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="440" y="224" width="432" height="64" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
+        <text x="656" y="252" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">service</text>
+        <text x="656" y="270" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">AuthService</text>
+
+        <!-- auth/client -->
+        <rect x="440" y="352" width="128" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="440" y="352" width="128" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="504" y="380" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">client</text>
+        <text x="504" y="398" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">KakaoOAuthClient</text>
+
+        <!-- auth/token -->
+        <rect x="592" y="352" width="128" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="592" y="352" width="128" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="656" y="376" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">token</text>
+        <text x="656" y="393" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">JwtProvider</text>
+        <text x="656" y="406" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">SecureTokenGenerator</text>
+
+        <!-- auth/repository (store) -->
+        <rect x="744" y="352" width="128" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="744" y="352" width="128" height="64" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <text x="808" y="380" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">repository</text>
+        <text x="808" y="398" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">RefreshToken</text>
+
+        <!-- domain/user -->
+        <rect x="952" y="224" width="288" height="128" rx="6" fill="#f5f5f5"/>
+        <rect x="952" y="224" width="288" height="128" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="1096" y="258" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">domain/user</text>
+        <text x="1096" y="286" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">UserController</text>
+        <text x="1096" y="304" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">UserService</text>
+        <text x="1096" y="322" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">UserRepository · User</text>
+
+        <!-- kakao (external) -->
+        <rect x="440" y="520" width="184" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="440" y="520" width="184" height="64" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="532" y="548" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans KR', sans-serif" text-anchor="middle">카카오 REST API</text>
+        <text x="532" y="566" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">kauth · kapi</text>
+
+        <!-- ============ legend strip (bottom 60px) ============ -->
+        <line x1="40" y1="660" x2="1240" y2="660" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
+
+        <rect x="40" y="678" width="16" height="12" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
+        <text x="64" y="688" fill="#4f5d75" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', sans-serif">초점 · AuthService</text>
+
+        <line x1="232" y1="684" x2="264" y2="684" stroke="#2d3142" stroke-width="1.2" marker-end="url(#pkg-auth-ov-arrow-ink)"/>
+        <text x="272" y="688" fill="#4f5d75" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', sans-serif">① 서비스 계층은 auth → user 단방향</text>
+
+        <line x1="528" y1="684" x2="560" y2="684" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#pkg-auth-ov-arrow-accent)"/>
+        <text x="568" y="688" fill="#4f5d75" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', sans-serif">② 탈퇴만 역방향 (UserController 소유)</text>
+
+        <line x1="880" y1="684" x2="912" y2="684" stroke="#2e5aa8" stroke-width="1" marker-end="url(#pkg-auth-ov-arrow-link)"/>
+        <text x="920" y="688" fill="#4f5d75" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', sans-serif">외부 호출</text>
+
+        <rect x="1016" y="678" width="16" height="12" rx="2" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text x="1040" y="688" fill="#4f5d75" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', sans-serif">패키지 경계</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>
