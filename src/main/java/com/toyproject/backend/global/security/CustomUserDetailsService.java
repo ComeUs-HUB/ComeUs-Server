@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>매 요청 DB를 조회한다. claim만 믿으면 탈퇴 회원이 토큰 만료까지 통과하므로 캐싱하지 않는다.
  * <p>미존재와 탈퇴를 다른 예외로 던진다. 합치면 필터가 A001(401)과 A008(403)을 가르지 못한다.
  * <p>그 구분과 {@code UserRepository} 직접 주입 근거는 ADR 0021.
- * <p>{@code docs/decisions/platform/0021-user-repository-in-security.md}
  */
 @Service
 @RequiredArgsConstructor
