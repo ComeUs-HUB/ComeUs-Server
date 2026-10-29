@@ -67,5 +67,3 @@ sequenceDiagram
 - `oauth_state`는 `Lax`여야 한다. 카카오 → API 서버 이동이 cross-site 네비게이션이라 `Strict`이면 쿠키가 실리지 않는다
 - `refresh_token`은 `Strict`라 CSRF 토큰 없이도 안전하고, 그 대가로 **FE·BE가 같은 상위 도메인에 있어야** 한다([deployment.md](../../deployment.md))
 - 재발급은 access token만 새로 만든다. refresh token은 돌려쓰지 않는다(rotation 미적용, ADR 0004)
-  OAuth 로그인 다이어그램에서 꼭 Oauth_state 을 사용해서 FE 로 리다이렉트 해야했나?
-  FE -> BE 로 GET /kakao/authorize 요청만 받고 code는 FE 를 거치지 않고 바로 BE 로 받는것은 안되나?
