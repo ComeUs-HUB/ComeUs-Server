@@ -20,7 +20,7 @@ import java.util.Optional;
  *
  * <p>쓰기는 READ COMMITTED에서 장바구니 행을 잠가 같은 회원의 요청을 직렬화한다(ADR 0020).
  * 행이 없으면 잠그지 않고, 동시 첫 담기는 C005(409)로 끝난다.
- * ⚠️ 외부 트랜잭션 안에서 부르면 격리 수준이 무시된다 — 호출자도 READ COMMITTED여야 한다.
+ * 외부 트랜잭션 안에서 부르면 격리 수준이 무시된다 — 호출자도 READ COMMITTED여야 한다.
  * 회원·상품은 각 서비스를 거친다 — 두 Repository는 자기 패키지 밖으로 나가지 않는다.
  */
 @Service

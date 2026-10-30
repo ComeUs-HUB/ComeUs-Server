@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 /**
  * [Phase 3 · 7단계] {@code GET /api/products}의 쿼리 파라미터.
  *
- * <p>{@code categoryId}가 <b>단수</b>인 것이 {@link ProductSearchCondition}과 갈리는 지점이다 —
+ * <p>{@code categoryId}가 단수인 것이 {@link ProductSearchCondition}과 갈리는 지점이다 —
  * 서비스가 하위 소분류까지 펼친 뒤 Condition을 만든다.
  *
  * <p>모든 필드가 optional이다. 가격 상·하한이 뒤집혀도 막지 않는다 — 빈 결과가 될 뿐 오류가 아니다.

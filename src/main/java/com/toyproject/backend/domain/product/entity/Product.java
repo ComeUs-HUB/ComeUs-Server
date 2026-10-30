@@ -36,14 +36,11 @@ import java.util.List;
 /**
  * [Phase 3 · 5단계] 상품 엔티티.
  *
- * <p>Setter를 두지 않고, <b>재고를 바꾸는 메서드가 {@code status}까지 확정한다</b> —
- * 판정이 {@link #applyStockStatus()} 하나에 모여 있어 재고 0인 {@code ON_SALE}이 생길 수 없다.
- *
- * <p>⚠️ {@link #increaseStock(int)}은 {@code HIDDEN}을 <b>풀지 않고</b>
- * {@link #updateInfo}는 <b>푼다.</b> 의도된 비대칭이며 이 클래스에서 가장 틀리기 쉬운 지점이다
- * (ADR 0013).
- *
- * <p>삭제는 {@link #hide()}로 상태만 바꾸고 행은 남긴다. 계약은 {@code docs/domains/catalog/product.md}.
+ * <p>Setter를 두지 않고 재고를 바꾸는 메서드가 {@code status}까지 확정한다 — 판정이
+ * {@link #applyStockStatus()} 하나에 모여 재고 0인 {@code ON_SALE}이 생길 수 없다.
+ * <p>{@link #increaseStock(int)}은 {@code HIDDEN}을 풀지 않고 {@link #updateInfo}는
+ * 푼다. 의도된 비대칭이며 가장 틀리기 쉬운 지점이다(ADR 0013).
+ * <p>삭제는 {@link #hide()}로 상태만 바꾼다. 계약은 {@code docs/domains/catalog/product.md}.
  */
 @Entity
 @Table(name = "products")
@@ -148,7 +145,7 @@ public class Product {
     /**
      * 상품 수정. 부분 수정이 아니라 전체 교체다.
      *
-     * <p>{@code HIDDEN}을 <b>푼다</b> — ADMIN이 삭제를 되돌리는 통로이며
+     * <p>{@code HIDDEN}을 푼다 — ADMIN이 삭제를 되돌리는 통로이며
      * {@link #increaseStock(int)}과 갈리는 지점이다.
      */
     public void updateInfo(Category category, String name, String description,
@@ -204,7 +201,7 @@ public class Product {
     }
 
     /**
-     * 재고로부터 {@code status}를 다시 계산한다. <b>{@code HIDDEN}을 검사하지 않는다</b> —
+     * 재고로부터 {@code status}를 다시 계산한다. {@code HIDDEN}을 검사하지 않는다 —
      * 숨김을 지킬지 풀지는 호출부가 정하고, 그 차이가 호출부 한 줄에 드러난다.
      */
     private void applyStockStatus() {

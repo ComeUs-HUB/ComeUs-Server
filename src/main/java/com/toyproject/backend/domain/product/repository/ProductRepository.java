@@ -14,7 +14,7 @@ import java.util.Optional;
  * 조건 조합마다 메서드를 늘리지 않는다 — 조합이 2ⁿ으로 늘어나기 때문이며 그래서
  * {@link ProductSpecifications}가 따로 있다(ADR 0011).
  *
- * <p>⚠️ 상속받은 {@code delete}·{@code deleteById}를 쓰지 않는다. 상품은 soft delete라
+ * <p>상속받은 {@code delete}·{@code deleteById}를 쓰지 않는다. 상품은 soft delete라
  * 행을 지우면 주문 이력이 깨진다 — 삭제는 {@code Product.hide()}뿐이다.
  */
 public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpecificationExecutor<Product> {
@@ -29,7 +29,7 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
     boolean existsByCategoryId(Long categoryId);
 
     /**
-     * 특정 상태를 제외하고 id로 조회한다. <b>공개 상세 조회 전용</b>이다.
+     * 특정 상태를 제외하고 id로 조회한다. 공개 상세 조회 전용이다.
      *
      * <p>수정·삭제는 {@code findById}로 {@code HIDDEN}까지 읽어야 ADMIN이 되살릴 수 있으므로
      * 두 경로를 합치지 않는다(ADR 0013).

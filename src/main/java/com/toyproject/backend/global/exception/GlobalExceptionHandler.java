@@ -19,6 +19,12 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
 
+/**
+ * [Phase 1] 예외를 공통 {@code ApiResponse} 포맷으로 바꾸는 단일 지점.
+ *
+ * <p>처리 대상 7종과 에러 코드 대응은 {@code docs/conventions/api-response.md}.
+ * <p>필터 단계의 401·403은 여기 오지 않는다 — {@code JwtAuthenticationEntryPoint}가 맡는다.
+ */
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
@@ -49,18 +55,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 경로 변수·쿼리 파라미터의 타입이 맞지 않을 때. {@code PUT /api/categories/abc}처럼
-     * {@code Long} 자리에 문자열이 온 경우다.
+     * 경로 변수·쿼리 파라미터의 타입 불일치. {@code PUT /api/categories/abc} 같은 경우다.
      *
-     * <p><b>추가 이유</b>: 이 핸들러가 없으면 {@code Exception} fallback으로 떨어져
-     * <b>C003(500)</b>이 나간다. 클라이언트 입력 오류가 서버 장애로 보고되고 {@code log.error}까지
-     * 남는다. Phase 3에서 {@code /api/categories/{id}}가 <b>이 프로젝트 최초의 경로 변수</b>로
-     * 들어오면서 실제 도달 경로가 생겼다 — 그전까지는 {@code /api/users/me}처럼 경로 변수가 없어
-     * 드러나지 않았다.
-     *
-     * <p>⚠️ {@code e.getMessage()}를 그대로 쓰지 않는다. {@code "Failed to convert value of type
-     * 'java.lang.String' to required type 'java.lang.Long'"}처럼 <b>내부 타입명이 응답에 노출</b>된다.
-     * 필요한 정보는 "어느 파라미터의 어떤 값이 거절됐는가"뿐이고, 그건 {@code errors}가 담는다.
+     * <p>없으면 fallback으로 떨어져 C003(500)이 된다 — 입력 오류가 서버 장애로 보고된다.
+     * <p>{@code e.getMessage()}를 쓰지 않는다. 내부 타입명이 응답에 노출된다.
      */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<Void>> handleTypeMismatchException(MethodArgumentTypeMismatchException e) {
@@ -72,7 +70,8 @@ public class GlobalExceptionHandler {
 
     /**
      * 요청 본문을 객체로 바꾸지 못할 때 — 깨진 JSON, {@code Integer} 범위 초과, 숫자 자리의 문자열.
-     * {@code @Valid}보다 앞 단계라 {@link #handleValidationException}이 잡지 못한다. 필드를 알면 {@code errors}에 담는다.
+     * {@code @Valid}보다 앞 단계라 {@link #handleValidationException}이 잡지 못한다.
+     * 필드를 알면 {@code errors}에 담는다.
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleMessageNotReadableException(HttpMessageNotReadableException e) {

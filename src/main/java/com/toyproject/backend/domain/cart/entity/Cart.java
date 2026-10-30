@@ -30,8 +30,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * [Phase 4 · 1단계] 장바구니 엔티티. 회원 1명당 하나이며 첫 담기에서 만든다.
  *
- * <p>동일 상품은 한 항목으로 <b>합산</b>하고 재고 검사는 합산 후 수량으로 한다 —
- * 1개씩 나눠 담아 재고를 넘기는 경로가 없다. 이 검사는 재고를 <b>점유하지 않는다</b>(ADR 0016).
+ * <p>동일 상품은 한 항목으로 합산하고 재고 검사는 합산 후 수량으로 한다 —
+ * 1개씩 나눠 담아 재고를 넘기는 경로가 없다. 이 검사는 재고를 점유하지 않는다(ADR 0016).
  *
  * <p>계약은 {@code docs/domains/purchase/cart.md}.
  */

@@ -13,9 +13,9 @@ import java.util.List;
 /**
  * [Phase 3 · 8단계] {@code PUT /api/products/{id}}의 요청 바디.
  *
- * <p><b>부분 수정이 아니라 전체 교체다</b>({@code CategoryUpdateRequest}와 같은 규약).
+ * <p>부분 수정이 아니라 전체 교체다({@code CategoryUpdateRequest}와 같은 규약).
  *
- * <p>이 요청은 {@code HIDDEN}을 <b>푼다</b> — ADMIN이 soft delete를 되돌리는 유일한 통로다(ADR 0013).
+ * <p>이 요청은 {@code HIDDEN}을 푼다 — ADMIN이 soft delete를 되돌리는 유일한 통로다(ADR 0013).
  *
  * @param description 없어도 된다
  * @param imageUrls   전체 교체다. 생략하면 기존 이미지가 모두 사라진다

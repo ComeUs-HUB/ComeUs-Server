@@ -7,6 +7,8 @@
 
 - **한 번 쓴 ADR은 고치지 않는다.** 오타 수정 외에는 본문을 바꾸지 않는다.
 - 결정이 뒤집히면 기존 파일의 `상태:`를 `대체됨 → ADR NNNN`으로만 바꾸고, **새 ADR을 추가**한다.
+- 뒤집히지 않고 **일부만 바뀌거나 미결 항목이 해소되면** `상태:`를 `채택 (NNNN이 보강)`으로 바꾸고
+  역시 새 ADR을 추가한다. 본문은 그대로 둔다 — 그때의 판단이 기록이고, 후속은 상태 줄이 가리킨다.
 - 번호는 이어붙이기만 한다. 재사용·재정렬하지 않는다. **번호는 디렉터리와 무관하게 전역으로 이어진다.**
 - 다른 문서는 결정 근거를 복사하지 않고 여기로 링크한다.
 - 파일은 [domains/](../domains/)와 같은 이름의 디렉터리에 둔다 — `auth/`, `catalog/`, `purchase/`, `review/`.
@@ -65,5 +67,8 @@
 | [0007](platform/0007-single-entrypoint-for-401-403.md) | 401·403을 `JwtAuthenticationEntryPoint` 하나가 전담 | 대체됨 → 0010 |
 | [0008](platform/0008-flyway-owns-schema.md) | 스키마 소유자는 Flyway (`ddl-auto: validate`) | 채택 |
 | [0010](platform/0010-access-denied-handler-for-authorization.md) | 인가 실패(403)는 `JwtAccessDeniedHandler`가 맡는다 | 채택 |
+| [0021](platform/0021-user-repository-in-security.md) | `global/security`는 `UserRepository`를 직접 주입한다 | 채택 |
+| [0022](platform/0022-config-validation-split.md) | 설정 누락은 서명 키만 기동에서 막는다 | 채택 (0023이 보강) |
+| [0023](platform/0023-fail-fast-when-no-safe-default.md) | 안전한 기본값을 정할 수 없는 설정은 기동에서 막는다 | 채택 |
 
 `review/`는 Phase 5에서 첫 ADR이 생길 때 만든다.

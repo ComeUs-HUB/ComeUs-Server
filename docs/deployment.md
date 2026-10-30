@@ -61,9 +61,27 @@ Dockerfile과 docker-compose.yml이 부재하고, `.github/workflows`에는 코�
   기동 자체가 실패하게 만든다
 - actuator는 필요한 것만 최소 노출 (`health`, `info` 정도)
 
+### 누락하면 기동이 실패하는 값
+
+안전한 기본값을 정할 수 없는 값이라 코드가 거부한다
+([ADR 0023](decisions/platform/0023-fail-fast-when-no-safe-default.md)).
+
+| 설정 | 거부하는 곳 | 비어 있으면 |
+|---|---|---|
+| `jwt.secret` (`JWT_SECRET`) | `JwtProvider` 생성자 | `WeakKeyException` — 32바이트 미만도 거부 |
+| `app.frontend.base-url` | `AppProperties` 생성자 | `IllegalArgumentException` |
+
+나머지(`app.cors.allowed-origins`, `app.cookie.secure`)는 비어 있으면 **안전한 쪽 기본값**으로
+흡수되고 기동은 된다 — 각각 "모든 cross-origin 차단", `Secure=true`다.
+
+⚠️ `application-prod.yml`에는 현재 `app.cookie.secure`만 있다. 배포 전에 위 두 값과
+`kakao.*`(client-id·client-secret·admin-key·redirect-uri), `app.cors.allowed-origins`를
+프로파일 파일이나 환경변수로 채워야 한다.
+
 확인할 것:
 - [ ] prod 프로파일에서 SQL 로그 미출력
 - [ ] 필수 환경변수 누락 시 기동 실패
+- [ ] `app.frontend.base-url`·`kakao.*`·`app.cors.allowed-origins`가 prod에 채워져 있음
 - [ ] actuator 헬스체크 엔드포인트 노출
 
 ## CI/CD
@@ -92,7 +110,8 @@ Dockerfile과 docker-compose.yml이 부재하고, `.github/workflows`에는 코�
 `proxy_redirect` 중 하나를 반드시 설정해야 했다
 ([conventions/api-response.md](conventions/api-response.md)).
 반대로 카카오 로그인의 302는 절대 URL이 필요한데, 그 값은 요청에서 추론하지 않고
-`app.frontend.base-url`·`kakao.redirect-uri` 설정에서 읽는다 — prod 값이 틀리면 로그인이 깨진다
+`app.frontend.base-url`·`kakao.redirect-uri` 설정에서 읽는다 — prod 값이 틀리면 로그인이 깨지고,
+`app.frontend.base-url`은 **아예 없으면 기동이 실패한다**(위 "누락하면 기동이 실패하는 값")
 
 확인할 것:
 - [ ] 헬스체크가 HTTPS로 정상 응답

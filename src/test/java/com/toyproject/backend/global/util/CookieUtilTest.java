@@ -28,8 +28,11 @@ class CookieUtilTest {
     private static final String REFRESH_TOKEN_PATH = "/api/auth";
     private static final String OAUTH_STATE_PATH = "/api/auth/kakao/callback";
 
+    /** {@code app.frontend.base-url}은 필수다(ADR 0022). 쿠키와 무관해 더미를 넣는다. */
+    private static final AppProperties.Frontend FRONTEND = new AppProperties.Frontend("http://localhost:3000");
+
     /** 운영 기본값. {@code app.cookie}가 통째로 없을 때와 같은 상태다. */
-    private final CookieUtil cookieUtil = new CookieUtil(new AppProperties(null, null, null));
+    private final CookieUtil cookieUtil = new CookieUtil(new AppProperties(FRONTEND, null, null));
 
     @Test
     @DisplayName("네 쿠키 모두 HttpOnly이고 Domain은 설정하지 않는다")
@@ -130,7 +133,7 @@ class CookieUtilTest {
         @Test
         @DisplayName("app.cookie 블록만 있고 secure가 없어도 켜진다 — Boolean 래퍼를 쓰는 이유")
         void defaultsToEnabledWhenOnlySectionPresent() {
-            CookieUtil util = new CookieUtil(new AppProperties(null, null, new AppProperties.Cookie(null)));
+            CookieUtil util = new CookieUtil(new AppProperties(FRONTEND, null, new AppProperties.Cookie(null)));
 
             assertThat(util.refreshTokenCookie(RAW_TOKEN, REFRESH_MAX_AGE).isSecure())
                     .as("primitive boolean이면 여기서 조용히 false가 된다")
@@ -140,7 +143,7 @@ class CookieUtilTest {
         @Test
         @DisplayName("명시적으로 끄면 꺼진다 — 로컬이 평문 HTTP라 Safari가 Secure 쿠키를 거부한다")
         void turnsOffWhenExplicitlyDisabled() {
-            CookieUtil util = new CookieUtil(new AppProperties(null, null, new AppProperties.Cookie(false)));
+            CookieUtil util = new CookieUtil(new AppProperties(FRONTEND, null, new AppProperties.Cookie(false)));
 
             assertThat(util.oauthStateCookie("state-value").isSecure())
                     .as("Safari는 http://localhost에서 Secure 쿠키를 저장하지 않아 콜백이 전부 A009가 된다")

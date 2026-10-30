@@ -73,7 +73,9 @@ Spring Boot 3.5.0 + Java 21 + Gradle(Kotlin DSL) 골격, 의존성, 프로파일
 카카오 OAuth 로그인 왕복(302·쿠키)부터 JWT 인증 필터, 회원 API, 탈퇴 오케스트레이션까지 동작한다.
 계약은 [domains/auth.md](domains/auth.md), 결정 근거는 [decisions/](decisions/)에 있다.
 
-구현 순서는 9단계로 나눴고, 각 클래스 Javadoc 첫 줄에 `[N단계 · G]` 형태로 소속 단계가 표기돼 있다.
+구현 순서는 9단계로 나눴고, 각 클래스 Javadoc 첫 줄에 `[Phase 2 · N단계]`로 소속 단계를 표기한다.
+초기에 쓰던 task 알파벳(`[N단계 · G]`)은 추적되지 않는 식별자라 폐기했다
+([conventions/javadoc.md](conventions/javadoc.md)).
 
 | 단계 | 내용 | 검증 |
 |---|---|---|

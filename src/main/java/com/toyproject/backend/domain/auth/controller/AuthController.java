@@ -31,42 +31,14 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
 /**
- * [8단계 · K] 인증 API
+ * [Phase 2 · 8단계] 로그인 왕복(302·쿠키)과 재발급·로그아웃의 HTTP 계약.
+ * 비즈니스 판단은 {@code AuthService}에 있고 여기서는 무엇을 심고 어디로 보낼지만 정한다.
  *
- * <p><b>역할</b><br>
- * 로그인 왕복(302·쿠키)과 토큰 재발급·로그아웃의 HTTP 계약을 담당한다.
- * 비즈니스 판단은 전부 {@code AuthService}에 있고, 여기서는 <b>무엇을 쿠키로 심고 어디로 보낼지</b>만 정한다.
- *
- * <p><b>API</b>
- * <table border="1">
- *   <tr><th>Method</th><th>URI</th><th>요청</th><th>응답</th></tr>
- *   <tr><td>GET</td><td>{@code /api/auth/kakao/authorize}</td><td>-</td>
- *       <td><b>302</b> → 카카오 + {@code Set-Cookie: oauth_state}</td></tr>
- *   <tr><td>GET</td><td>{@code /api/auth/kakao/callback}</td><td>{@code ?code=&state=}(카카오가 채움)</td>
- *       <td><b>302</b> → FE + {@code Set-Cookie: refresh_token}</td></tr>
- *   <tr><td>POST</td><td>{@code /api/auth/refresh}</td><td>없음(쿠키)</td>
- *       <td>{@code {accessToken, tokenType, accessTokenExpiresIn}} — {@code Set-Cookie} 없음</td></tr>
- *   <tr><td>POST</td><td>{@code /api/auth/logout}</td><td>없음(쿠키)</td>
- *       <td>{@code null} + 쿠키 만료 {@code Set-Cookie}</td></tr>
- * </table>
- *
- * <p><b>설계</b>
- * <ul>
- *   <li><b>{@code /kakao/authorize}·{@code /kakao/callback}은 JSON을 반환하지 않는다. 항상 302다.</b>
- *       브라우저 네비게이션이라 {@code ApiResponse} 포맷이 사용자 화면에 노출되면 안 된다.</li>
- *   <li><b>콜백은 실패해도 예외를 던지지 않는다.</b> {@code {FE}/oauth/complete?error={code}}로 302해
- *       <b>FE가 에러 UI를 소유</b>하게 한다. A005·A006·A009가 이 경로로 전달된다.
- *       반대로 {@code /refresh}·{@code /logout}은 XHR이라 예외를 그대로 던져
- *       {@code GlobalExceptionHandler}가 공통 포맷으로 응답하게 둔다.</li>
- *   <li>쿠키 값은 {@link CookieUtil}에서만 만든다.</li>
- * </ul>
- *
- * <p><b>주의</b>
- * <ul>
- *   <li><b>응답 {@code data}에 {@code refreshToken}을 절대 포함하지 않는다</b> — 오직 {@code Set-Cookie}로만.</li>
- *   <li><b>어떤 응답에도 access token을 URL·쿼리스트링에 싣지 않는다.</b></li>
- *   <li>재발급 응답에는 <b>{@code Set-Cookie}가 없다</b>(rotation 미적용).</li>
- * </ul>
+ * <p>인가·콜백은 JSON이 아니라 항상 302다. 브라우저 네비게이션이라 {@code ApiResponse}가
+ * 주소창에 렌더링되면 안 된다 — 콜백은 실패해도 던지지 않고 {@code ?error=}로 302한다.
+ * {@code /refresh}·{@code /logout}은 XHR이라 그대로 던져 공통 포맷으로 나간다.
+ * <p>{@code refreshToken}은 응답 바디에, access token은 URL에 싣지 않는다.
+ * <p>계약은 {@code docs/domains/auth.md}의 "API".
  */
 @Slf4j
 @RestController
@@ -84,8 +56,7 @@ public class AuthController {
     /**
      * 로그인 시작 — state를 심고 카카오 인가 화면으로 보낸다.
      *
-     * <p>FE는 이 주소로 <b>페이지 이동</b>해야 한다. {@code fetch}로 부르면 302를 따라가 버려
-     * 카카오 로그인 화면이 뜨지 않는다.
+     * <p>FE는 페이지 이동으로 불러야 한다. {@code fetch}는 302를 따라가 로그인 화면이 뜨지 않는다.
      */
     @GetMapping("/kakao/authorize")
     public ResponseEntity<Void> kakaoAuthorize() {
@@ -95,19 +66,10 @@ public class AuthController {
     }
 
     /**
-     * 카카오가 인가 코드를 들고 되돌아오는 착지점. <b>사용자가 아니라 카카오가 호출한다.</b>
+     * 카카오가 인가 코드를 들고 되돌아오는 착지점. 사용자가 아니라 카카오가 호출한다.
      *
-     * <ol>
-     *   <li>카카오가 {@code ?error=}를 실어 보낸 경우(동의 거부 등) → 그대로 FE로 302</li>
-     *   <li>{@code oauth_state} 쿠키와 쿼리 {@code state} 대조 → 불일치·누락이면 A009</li>
-     *   <li><b>{@code oauth_state} 쿠키 즉시 삭제</b>(1회용). 성공·실패 어느 쪽이든 내린다</li>
-     *   <li>{@code authService.kakaoLogin(code)}</li>
-     *   <li>refresh 원문을 {@code refresh_token} 쿠키로 설정</li>
-     *   <li>{@code {app.frontend.base-url}/oauth/complete}로 302. 신규 가입이면 {@code ?isNewUser=true}</li>
-     * </ol>
-     *
-     * <p>모든 파라미터가 {@code required = false}인 이유: 값이 없으면 Spring이 400을 내는데,
-     * 그러면 <b>브라우저 화면에 우리 에러 응답이 그대로 노출된다.</b> 직접 받아서 FE로 302시킨다.
+     * <p>모든 파라미터가 {@code required = false}다 — 없으면 Spring이 400을 내고,
+     * 그 에러 응답이 브라우저 화면에 그대로 노출된다. 직접 받아 FE로 302시킨다.
      */
     @GetMapping("/kakao/callback")
     public ResponseEntity<Void> kakaoCallback(
@@ -156,12 +118,10 @@ public class AuthController {
     }
 
     /**
-     * access token 재발급. FE의 앱 부팅·401 인터셉터가 부르는 <b>최다 호출 엔드포인트</b>다.
+     * access token 재발급. FE의 앱 부팅·401 인터셉터가 부르는 최다 호출 엔드포인트다.
      *
-     * <p>rotation을 하지 않으므로 <b>응답에 {@code Set-Cookie}가 없다.</b> 여러 탭이 동시에 불러도 전부 성공한다.
-     *
-     * <p>쿠키가 없으면 {@code null}이 넘어가고 {@code AuthService}가 A007로 거절한다 —
-     * 미로그인 상태에서의 정상적인 실패 경로이므로 여기서 따로 분기하지 않는다.
+     * <p>rotation을 하지 않아 응답에 {@code Set-Cookie}가 없다(ADR 0004).
+     * <p>쿠키가 없으면 {@code null}이 넘어가 {@code AuthService}가 A007로 거절한다.
      */
     @PostMapping("/refresh")
     public ApiResponse<TokenResponse> refresh(
@@ -173,10 +133,8 @@ public class AuthController {
     /**
      * 로그아웃 — 해당 기기의 토큰만 무효화하고 쿠키를 만료시킨다.
      *
-     * <p>인증이 필요 없다({@code permitAll}). access token이 만료된 상태에서도 로그아웃은 되어야 한다.
-     *
-     * <p>토큰이 이미 없어도 <b>200이다.</b> {@code AuthService.logout}이 멱등하므로 실패로 다룰 이유가 없고,
-     * 쿠키 만료는 어느 쪽이든 내려야 브라우저에서 실제로 지워진다.
+     * <p>인증이 필요 없다. access token이 만료된 상태에서도 로그아웃은 되어야 한다.
+     * <p>토큰이 이미 없어도 200이다 — {@code AuthService.logout}이 멱등하다.
      */
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(
@@ -192,9 +150,8 @@ public class AuthController {
     /**
      * 카카오 인가 URL을 조립한다.
      *
-     * <p>⚠️ <b>{@code UriComponentsBuilder}를 쓰지 않는다.</b> 그쪽의 {@code encode()}는 query 값의
-     * {@code :}·{@code /}를 RFC 3986상 허용 문자로 보고 남겨두는데, 카카오는 등록된 Redirect URI와
-     * <b>문자열로 대조</b>하므로 percent-encoding이 정확히 맞아야 한다. {@code URLEncoder}로 직접 인코딩한다.
+     * <p>{@code UriComponentsBuilder}를 쓰지 않는다 — 그쪽 {@code encode()}는 query 값의
+     * {@code :}·{@code /}를 남겨두는데, 카카오는 등록값과 문자열로 대조한다.
      */
     private String kakaoAuthorizeUri(String state) {
         return kakaoProperties.authorizeUri()
@@ -207,12 +164,9 @@ public class AuthController {
     /**
      * 쿠키의 state와 카카오가 되돌려준 state를 대조한다.
      *
-     * <p>{@code MessageDigest.isEqual}로 <b>상수 시간 비교</b>한다. {@code equals}는 첫 불일치 문자에서
-     * 즉시 반환해 비교 시간이 일치 길이에 비례하므로, 이론상 state를 한 글자씩 맞춰갈 여지를 준다.
-     *
-     * <p>쿠키가 없는 경우가 실무에서 가장 흔한 실패다 — {@code oauth_state}가 {@code Lax}가 아니면
-     * cross-site 네비게이션인 콜백에 쿠키가 실려오지 않아 <b>로그인이 전부 여기서 막힌다.</b>
-     * 그래서 누락과 불일치를 로그에서 구분한다.
+     * <p>{@code MessageDigest.isEqual}로 상수 시간 비교한다. {@code equals}는 첫 불일치에서
+     * 반환해 state를 한 글자씩 맞춰갈 여지를 준다.
+     * <p>쿠키 누락이 실무에서 가장 흔한 실패다({@code SameSite}). 불일치와 로그에서 구분한다.
      */
     private boolean matchesState(String state, String stateCookie) {
         if (!StringUtils.hasText(state) || !StringUtils.hasText(stateCookie)) {
@@ -236,24 +190,11 @@ public class AuthController {
     /**
      * FE 복귀 URL에 파라미터 하나를 붙인다.
      *
-     * <p>⚠️ <b>값을 반드시 인코딩한다.</b> 이 자리에는 카카오가 실어 보낸 {@code ?error=} 값이 그대로 들어오는데,
-     * 콜백은 {@code permitAll}이라 <b>카카오만 호출한다는 보장이 없다</b> — 브라우저에서 누구나 임의 값을 넣을 수 있다.
-     * 인코딩하지 않으면 두 가지가 터진다.
-     * <ul>
-     *   <li>{@code ?error=x%26isNewUser%3Dtrue} → 디코딩된 {@code &}가 구분자로 붙어
-     *       <b>FE 복귀 URL에 {@code isNewUser=true}가 주입</b>된다</li>
-     *   <li>{@code ?error=a%20b} → 공백이 그대로 남아 {@link #redirect}의 {@code URI.create}가
-     *       {@code IllegalArgumentException}을 던진다. 이 호출은 {@code try} 밖이라
-     *       {@code GlobalExceptionHandler}까지 올라가 <b>이 클래스가 금지한 "주소창에 ApiResponse JSON"</b>이 된다</li>
-     * </ul>
-     *
-     * <p><b>{@code build()}는 인코딩하지 않는다.</b> {@code encode()}를 호출해야 한다 —
-     * 여기는 카카오 등록값과 문자열로 대조되는 자리가 아니므로 {@link #kakaoAuthorizeUri}의 주의사항에 해당하지 않는다.
-     *
-     * <p>다만 {@code encode()}만으로는 부족하다. 그쪽은 <b>URI 템플릿</b>을 인코딩하는 모드라
-     * {@code {}}를 변수 자리로 보고 남겨두는데, 중괄호는 URI에 올 수 없는 문자라
-     * {@code ?error={x}}가 여전히 {@code URI.create}에서 터진다.
-     * 값을 <b>URI 변수로 넘겨</b> 확장 시점에 엄격하게 인코딩되도록 한다.
+     * <p>값을 반드시 인코딩한다. 이 자리에는 카카오가 실어 보낸 {@code ?error=} 값이 들어오는데,
+     * 콜백은 {@code permitAll}이라 누구나 임의 값을 넣을 수 있다. 인코딩을 빠뜨리면 디코딩된
+     * {@code &}로 {@code isNewUser=true}가 주입되거나, 공백이 남아 {@code URI.create}가 터진다.
+     * <p>{@code build()}는 인코딩하지 않고 {@code encode()}는 {@code {}}를 변수 자리로 남긴다 —
+     * 값을 URI 변수로 넘겨 확장 시점에 인코딩되게 한다.
      */
     private String frontendUri(String name, String value) {
         return UriComponentsBuilder.fromUriString(frontendCompleteUri())
