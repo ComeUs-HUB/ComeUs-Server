@@ -1,6 +1,6 @@
 # ADR 0022 — 설정 누락은 서명 키만 기동에서 막고, 나머지는 안전한 기본값으로 흡수한다
 
-- 상태: 채택
+- 상태: 채택 ([ADR 0023](0023-fail-fast-when-no-safe-default.md)이 보강 — `base-url` 항목 해소)
 - 일자: 2026-10-29
 - 관련: [architecture.md](../../architecture.md), [ADR 0006](../auth/0006-cookie-samesite-and-path.md)
 
