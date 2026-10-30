@@ -11,10 +11,11 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 /**
- * [Phase 4 · 2단계] 장바구니 Repository. 항목은 {@link Cart}를 거쳐서만 쓰므로 {@code CartItemRepository}는 없다(ADR 0019).
+ * [Phase 4 · 2단계] 장바구니 Repository. 항목은 {@link Cart}를 거쳐서만 쓰므로
+ * {@code CartItemRepository}는 없다(ADR 0019).
  *
- * <p>쓰기 경로는 {@link #existsByUserId} → {@link #lockByUserId} → {@link #findByUserId} 순으로 부른다.
- * 없는 행을 잠그면 gap lock끼리 교착하고, 그래프 조회에 락을 함께 걸면 조인된 {@code products} 행까지 잠긴다.
+ * <p>쓰기 경로는 {@link #existsByUserId} → {@link #lockByUserId} →
+ * {@link #findByUserId} 순으로 부른다.
  */
 public interface CartRepository extends JpaRepository<Cart, Long> {
 

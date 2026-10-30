@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 /**
  * {@code @ConfigurationPropertiesScan} — {@code @ConfigurationProperties} 클래스가
- * {@code global/config}와 {@code domain/auth/config}에 나뉘어 있으므로 base package 전체를 스캔한다.
+ * {@code global/config}와 {@code domain/auth/config}에 나뉘어 있어 전체를 스캔한다.
  * 클래스별 {@code @EnableConfigurationProperties} 등록이 필요 없다.
  */
 @ConfigurationPropertiesScan
