@@ -279,6 +279,7 @@ for f in sorted(Path("src/main/java").rglob("*.java")):
 EOF
 
 # 주석이 코드의 2배를 넘는 파일
+# 선언만 있는 record·enum은 코드가 몇 줄뿐이라 여기 걸린다 — 위 상한을 지켰다면 무시한다
 for f in $(find src/main/java -name "*.java"); do
   c=$(grep -cE '^\s*(/\*\*|\*|\*/|//)' "$f"); t=$(wc -l < "$f"); code=$((t - c))
   [ "$code" -gt 3 ] && [ "$c" -gt $((code * 2)) ] && echo "$f  주석 $c / 코드 $code"

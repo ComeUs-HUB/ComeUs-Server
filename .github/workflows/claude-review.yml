@@ -51,9 +51,12 @@ jobs:
             **먼저 docs/README.md 를 읽고 이 저장소의 규칙을 파악하세요.**
             - 결정 근거는 docs/decisions/ 의 ADR에 있습니다. **이미 ADR로 확정된 사항을 다시
               문제 삼지 말고**, 구현이 그 ADR을 지키는지를 보세요
-            - 주석 규칙은 docs/conventions/javadoc.md (분량 상한이 있습니다),
+            - 주석 규칙은 docs/conventions/javadoc.md,
               응답 포맷은 docs/conventions/api-response.md,
               에러 코드는 docs/conventions/error-codes.md 입니다
+            - **주석에는 분량 상한이 있습니다.** javadoc.md의 "확인" 절 명령을 변경된 파일에
+              돌려 위반을 확인하세요 — HTML 치장·이모지·80자 초과·클래스 Javadoc 본문 5줄
+              초과는 현재 저장소 전체가 0건이므로, 새로 생기면 지적해 주세요
             - API 계약은 docs/domains/ 에 있습니다
 
             다음 항목들을 확인해주세요:
