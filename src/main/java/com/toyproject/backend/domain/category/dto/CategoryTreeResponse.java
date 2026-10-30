@@ -5,18 +5,11 @@ import com.toyproject.backend.domain.category.entity.Category;
 import java.util.List;
 
 /**
- * [Phase 3 · 3단계] 카테고리 트리 응답 DTO
+ * [Phase 3 · 3단계] {@code GET /api/categories}의 응답 바디. 대분류가 소분류를 품는다.
  *
- * <p><b>역할</b><br>
- * {@code GET /api/categories}의 응답 바디. 대분류 배열이고, 각 대분류가 소분류 배열을 품는다.
- *
- * <p><b>2depth 계약이 타입에 드러난다</b><br>
- * 소분류는 {@link #of(Category)}로 만들어 {@code children}이 <b>항상 빈 리스트</b>다.
- * 깊이가 무제한이었다면 이 record는 자기 자신을 재귀적으로 품는 구조가 되고, FE도 재귀 렌더링을
- * 해야 했다. 2depth 고정의 실익이 응답 형태에서 그대로 나타난다.
- *
- * <p>{@code children}을 {@code null}이 아니라 <b>빈 리스트</b>로 두는 이유: 클라이언트가
- * null 검사 없이 순회할 수 있고, JSON에서도 {@code []}로 일관되게 나간다.
+ * <p>2depth 계약이 타입에 드러난다 — 소분류의 {@code children}은 항상 비어 있고,
+ * 깊이가 무제한이었다면 재귀 구조가 되어 FE도 재귀 렌더링을 해야 했다.
+ * <p>{@code children}은 {@code null}이 아니라 빈 리스트다. 클라이언트가 null 검사 없이 순회한다.
  *
  * @param children 대분류면 소분류 목록, 소분류면 빈 리스트
  */
