@@ -228,8 +228,11 @@ user와 auth 양쪽을 건드리는 **유일한 흐름**이다. 순서를 `UserC
   `kakao.client-id`, `client-secret`, `admin-key`, `redirect-uri`,
   `app.frontend.base-url`, `app.cors.allowed-origins`, `app.cookie.secure`
   - `kakao.redirect-uri` — **BE 콜백** (local: `http://localhost:8080/api/auth/kakao/callback`)
-  - `app.frontend.base-url` — 로그인 완료 후 복귀 대상 (local: `http://localhost:3000`)
-  - `app.cookie.secure` — local `false` / prod `true`
+  - `app.frontend.base-url` — 로그인 완료 후 복귀 대상 (local: `http://localhost:3000`).
+    **비어 있으면 기동이 실패한다** — 안전한 기본값을 정할 수 없다
+    ([ADR 0023](../decisions/platform/0023-fail-fast-when-no-safe-default.md))
+  - `app.cookie.secure` — local `false` / prod `true`. 미설정 시 `true`로 흡수된다
+  - `app.cors.allowed-origins` — 미설정 시 빈 목록으로 흡수되어 모든 cross-origin이 차단된다
 
 로컬에서도 성립한다: `localhost:3000`(FE) ↔ `localhost:8080`(BE)은 포트가 달라도 **same-site**라
 `SameSite=Strict`인 `refresh_token`이 정상 전송된다.
