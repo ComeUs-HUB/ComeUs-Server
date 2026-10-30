@@ -11,7 +11,7 @@ import java.util.List;
  *
  * <p>{@code @Validated}를 붙이지 않고 compact 생성자가 {@code null}을 흡수한다 —
  * {@code app.*}가 통째로 없어도 {@code SecurityConfig} 기동 중 NPE가 나지 않는다.
- * <p>{@code frontend.base-url}만 fail-fast다. 가르는 근거는 ADR 0022.
+ * <p>{@code frontend.base-url}만 fail-fast다 — 안전한 기본값을 정할 수 없는 값이다(ADR 0023).
  */
 @ConfigurationProperties(prefix = "app")
 public record AppProperties(
@@ -26,7 +26,7 @@ public record AppProperties(
         cors = (cors != null) ? cors : new Cors(null);
         cookie = (cookie != null) ? cookie : new Cookie(null);
 
-        // 없으면 FE 복귀 URL이 "null/oauth/complete"가 되어 조용히 오동작한다(ADR 0022)
+        // 없으면 FE 복귀 URL이 "null/oauth/complete"가 되어 조용히 오동작한다(ADR 0023)
         if (!StringUtils.hasText(frontend.baseUrl())) {
             throw new IllegalArgumentException("app.frontend.base-url은 반드시 설정해야 합니다.");
         }
@@ -34,7 +34,7 @@ public record AppProperties(
 
     /**
      * @param baseUrl FE 복귀 주소. {@code {baseUrl}/oauth/complete}로 조립된다.
-     *                비어 있으면 기동에서 거부한다(ADR 0022)
+     *                비어 있으면 기동에서 거부한다(ADR 0023)
      */
     public record Frontend(String baseUrl) {
     }
