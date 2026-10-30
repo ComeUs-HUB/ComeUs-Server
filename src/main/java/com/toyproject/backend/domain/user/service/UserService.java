@@ -14,32 +14,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * [7단계 · K] 회원 서비스
+ * [Phase 2 · 7단계] 회원 프로필 조회·수정과 생명주기(가입·탈퇴).
+ * 회원 레코드를 만드는 규칙은 전부 여기에 있고 auth는 카카오에서 받은 값만 넘긴다.
  *
- * <p><b>역할</b><br>
- * 회원 프로필 조회·수정과 회원 생명주기(가입·탈퇴). <b>회원 레코드를 만드는 규칙은 전부 여기에 있다</b> —
- * auth 도메인은 카카오에서 받은 값만 넘기고 생성 규칙은 알지 못한다.
- *
- * <p>7단계에서 auth가 호출하는 경계 메서드({@link #findOrCreateKakaoUser}, {@link #withdraw})를,
- * 9단계에서 프로필 조회·수정({@link #getMyInfo}, {@link #updateMyInfo})을 붙였다.
- * 넷 모두 {@link #getActiveUser(Long)}이나 그에 준하는 조회를 공유한다.
- *
- * <p><b>설계</b>
- * <ul>
- *   <li>{@code userId}는 {@code @AuthenticationPrincipal}에서 받은 값이므로 소유권 검사가 따로 필요 없다
- *       (자기 자신만 다루는 API다).</li>
- *   <li>상태 변경은 엔티티의 도메인 메서드({@code reactivate}, {@code withdraw})에 위임하고
- *       더티 체킹으로 반영한다. 서비스에서 필드를 직접 세팅하거나 {@code save}를 다시 부르지 않는다.</li>
- *   <li><b>{@code UserRepository}는 user 패키지 밖으로 노출하지 않는다.</b>
- *       auth가 회원 데이터에 접근하는 경로는 이 클래스의 공개 메서드뿐이다.</li>
- * </ul>
- *
- * <p><b>{@code AuthErrorCode}를 참조하는 이유</b><br>
- * 의존 방향은 {@code auth → user} 단방향이지만, <b>ErrorCode enum은 공유 어휘이지 동작 의존이 아니다.</b>
- * 경계에서 막는 것은 auth의 <i>컴포넌트</i>({@code AuthService}·{@code RefreshTokenRepository}·
- * {@code KakaoOAuthClient})를 주입하는 일이며, 그런 주입은 여기에 없다.
- * 문서도 A008({@code WITHDRAWN_USER})을 "회원 상태에서 파생되지만 인증 거절 사유로 소비되므로 auth에 둔다"고
- * 이미 정리해 두었다 — A001도 같은 성격이다.
+ * <p>{@code UserRepository}를 패키지 밖으로 노출하지 않는다 — auth가 회원 데이터에 닿는
+ * 경로는 이 클래스의 공개 메서드뿐이다.
+ * <p>상태 변경은 엔티티의 도메인 메서드에 위임하고 더티 체킹으로 반영한다.
+ * <p>{@code AuthErrorCode}를 참조하지만 ErrorCode enum은 공유 어휘이지 동작 의존이 아니다 —
+ * auth의 컴포넌트를 주입하지는 않는다.
  */
 @Slf4j
 @Service
@@ -50,26 +32,20 @@ public class UserService {
     private final UserRepository userRepository;
 
     /**
-     * 내 정보 조회. {@code GET /api/users/me}
+     * 내 정보 조회.
      *
-     * <p>필터가 이미 {@code findById}로 회원을 읽었지만 그 결과({@code UserPrincipal})는
-     * {@code id}·{@code role}·{@code status}만 담고 있어 응답 바디를 만들 수 없다.
-     * 그래서 여기서 엔티티를 <b>다시 읽는다</b> — 요청 1회당 조회가 2회인 것은
-     * "JWT claim만 믿지 않고 매 요청 최신 상태를 확인한다"는 6단계 결정의 비용이다.
+     * <p>필터가 읽은 {@code UserPrincipal}은 응답 바디를 만들 수 없어 엔티티를 다시 읽는다.
+     * 요청당 조회 2회는 매 요청 최신 상태를 확인하는 비용이다(ADR 0021).
      */
     public UserResponse getMyInfo(Long userId) {
         return UserResponse.from(getActiveUser(userId));
     }
 
     /**
-     * 내 정보 수정. {@code PUT /api/users/me}
+     * 내 정보 수정. {@code null}인 필드는 변경하지 않는다.
      *
-     * <p>{@code null}인 필드는 <b>변경하지 않는다.</b> 판단은 서비스가 아니라
-     * {@code User.updateProfile}이 소유하고, 변경은 더티 체킹으로 반영된다 —
-     * 여기서 필드를 직접 세팅하거나 {@code save}를 부르지 않는다.
-     *
-     * <p>수정 후의 엔티티를 그대로 응답으로 바꾼다. 트랜잭션이 아직 열려 있어
-     * 아직 flush되지 않았지만, 우리가 방금 바꾼 값이므로 반환값과 커밋될 값이 같다.
+     * <p>판단은 {@code User.updateProfile}이 소유하고 더티 체킹으로 반영된다.
+     * <p>flush 전이지만 방금 바꾼 값이라 반환값과 커밋될 값이 같다.
      */
     @Transactional
     public UserResponse updateMyInfo(Long userId, UserUpdateRequest request) {
@@ -89,19 +65,12 @@ public class UserService {
     }
 
     /**
-     * 카카오 로그인 시 회원을 찾거나 만든다. <b>{@code AuthService}가 호출하는 진입점</b>이다.
+     * 카카오 로그인 시 회원을 찾거나 만든다. {@code AuthService}의 진입점이다.
      *
-     * <p>세 갈래로 갈린다.
-     * <ol>
-     *   <li>가입 이력 있음 · ACTIVE → 그대로 사용 ({@code isNewUser=false})</li>
-     *   <li>가입 이력 있음 · WITHDRAWN → {@code reactivate()}로 자동 재활성화.
-     *       <b>기존 회원이므로 {@code isNewUser=false}</b></li>
-     *   <li>가입 이력 없음 → 신규 생성 ({@code isNewUser=true})</li>
-     * </ol>
+     * <p>WITHDRAWN이면 재활성화하되 기존 회원이므로 {@code isNewUser=false}다.
      *
-     * @param providerId 카카오 고유 사용자 id
-     * @param email      카카오 이메일. 미동의면 {@code null}
-     * @param nickname   카카오 닉네임. 미동의면 {@code null}
+     * @param email    카카오 이메일. 미동의면 {@code null}
+     * @param nickname 카카오 닉네임. 미동의면 {@code null}
      */
     @Transactional
     public KakaoUserResolution findOrCreateKakaoUser(String providerId, String email, String nickname) {
@@ -111,14 +80,12 @@ public class UserService {
     }
 
     /**
-     * 회원 탈퇴 — <b>소프트 삭제만</b> 수행하고 카카오 {@code unlink}에 필요한 {@code providerId}를 돌려준다.
+     * 회원 탈퇴 — 소프트 삭제만 하고 카카오 {@code unlink}에 쓸 {@code providerId}를 돌려준다.
      *
-     * <p>refresh token 삭제와 카카오 연결 해제는 <b>여기서 하지 않는다.</b> auth 도메인의 책임이고,
-     * 호출 순서는 {@code UserController}가 소유한다. user가 auth를 참조하지 않아야
-     * 의존 방향이 {@code auth → user} 단방향으로 유지된다.
+     * <p>토큰 삭제와 연결 해제는 auth의 책임이고 순서는 {@code UserController}가 소유한다 —
+     * user가 auth를 참조하지 않아야 의존 방향이 단방향으로 유지된다.
      *
-     * @return 카카오 고유 사용자 id
-     * @throws BusinessException 회원이 없으면 A001(401), 이미 탈퇴했으면 A008(403) ({@link #getActiveUser} 참고)
+     * @throws BusinessException 회원이 없으면 A001(401), 이미 탈퇴했으면 A008(403)
      */
     @Transactional
     public String withdraw(Long userId) {
@@ -145,12 +112,9 @@ public class UserService {
     }
 
     /**
-     * 신규 가입에 쓸 이메일을 고른다. <b>중복이어도 가입을 막지 않는다</b> — email만 비우고 진행한다.
+     * 신규 가입에 쓸 이메일을 고른다. 중복이어도 막지 않고 email만 비운다.
      *
-     * <p>⚠️ {@code email}이 {@code null}이면 {@code existsByEmail}을 <b>호출하지 않는다.</b>
-     * 넘기면 SQL이 {@code email = null}이 되어 항상 false를 반환하는, 의미 없는 쿼리가 나간다.
-     *
-     * @return 채택한 이메일. 미동의거나 이미 사용 중이면 {@code null}
+     * <p>{@code null}이면 {@code existsByEmail}을 부르지 않는다 — 항상 false를 내는 쿼리다.
      */
     private String adoptableEmail(String email) {
         if (email == null) {
@@ -162,30 +126,12 @@ public class UserService {
     /**
      * 인증된 요청의 {@code userId}로 활성 회원을 읽는다.
      *
-     * <p><b>여기에 도달하는 실패는 "없는 회원"이 아니라 경합이다.</b> {@code userId}는 항상
-     * {@code @AuthenticationPrincipal}에서 오고, 그 앞에서 {@code CustomUserDetailsService}가
-     * 매 요청 DB를 다시 읽어 미존재와 탈퇴를 이미 걸러낸다. 그러니 이 시점의 실패는
-     * <b>필터 통과 직후에 상태가 바뀐 경우</b>뿐이다 — 탈퇴 요청을 두 번 눌렀을 때가 가장 현실적이다.
+     * <p>여기 도달하는 실패는 "없는 회원"이 아니라 경합이다 — 필터가 이미 걸러냈으므로
+     * 통과 직후 상태가 바뀐 경우뿐이고, 탈퇴 더블 클릭이 가장 현실적이다.
+     * <p>필터와 같은 규칙으로 사유를 구분한다. 둘을 A001로 뭉개면 같은 상태가 어느 계층이
+     * 먼저 알아채느냐에 따라 401/403으로 흔들린다. 근거는 {@code docs/domains/auth.md}.
      *
-     * <p><b>거부 사유를 필터와 동일하게 구분해 던진다.</b>
-     * <table border="1">
-     *   <tr><th>상황</th><th>ErrorCode</th><th>필터에서의 대응</th></tr>
-     *   <tr><td>row 없음</td><td>{@code UNAUTHORIZED}(A001, 401)</td>
-     *       <td>{@code UsernameNotFoundException}</td></tr>
-     *   <tr><td>탈퇴 회원</td><td>{@code WITHDRAWN_USER}(A008, 403)</td>
-     *       <td>{@code DisabledException}</td></tr>
-     * </table>
-     *
-     * <p>⚠️ <b>둘을 A001로 뭉개지 말 것.</b> 같은 회원 상태가 어느 계층이 먼저 알아채느냐에 따라
-     * 401/403으로 갈리면, 탈퇴 더블 클릭에서 응답이 흔들린다. A007이 미존재와 만료를 뭉개는 것은
-     * <b>토큰 존재 여부를 흘리지 않으려는 정보 은닉</b>이 목적이라 사정이 다르다 —
-     * 여기서는 자기 자신의 상태이고 이미 A008로 알려주고 있어 은닉할 대상이 없다.
-     *
-     * <p>미존재를 404가 아니라 401로 내리는 이유: 이 API는 클라이언트가 회원을 <b>지목하지 않는다</b>
-     * (경로에 {@code {userId}}가 없다). "네가 지목한 것이 없다"가 아니라 "세션이 더는 유효하지 않다"이므로,
-     * FE의 401 인터셉터가 그대로 재로그인으로 흡수하게 한다.
-     *
-     * <p>두 분기 모두 정상 운영에서 거의 발생하지 않으므로, 진단을 위해 {@code userId}를 로그로 남긴다.
+     * @throws BusinessException row가 없으면 A001(401), 탈퇴했으면 A008(403)
      */
     private User getActiveUser(Long userId) {
         User user = userRepository.findById(userId)
