@@ -26,12 +26,10 @@ import java.util.List;
 /**
  * [Phase 3 · 7단계] 상품 서비스. 조회 둘과 쓰기 셋을 갖는다.
  *
- * <p>카테고리는 {@code CategoryService}를 경유한다 — {@code CategoryRepository}에
- * "category 패키지 안에서만 주입한다"는 규칙이 걸려 있다. 반대 방향
- * ({@code CategoryService → ProductRepository})은 순환을 끊기 위한 예외이며 대칭이 아니다(ADR 0014).
- *
+ * <p>카테고리는 {@code CategoryService}를 경유한다. 반대 방향
+ * ({@code CategoryService → ProductRepository})은 순환을 끊기 위한 예외다(ADR 0014).
  * <p>{@code HIDDEN}은 읽기 경로에서만 걸린다. 수정·삭제는 {@link #getProduct(Long)}으로
- * 숨김까지 읽는다 — 그것이 되살리는 유일한 통로라 조회 경로와 합치지 않는다(ADR 0013).
+ * 숨김까지 읽는다 — 되살리는 유일한 통로라 조회 경로와 합치지 않는다(ADR 0013).
  */
 @Slf4j
 @Service
@@ -143,7 +141,7 @@ public class ProductService {
     }
 
     /**
-     * 카테고리 하나를 {@code [자기 자신 + 자식들]}로 펼친다. <b>단수가 복수로 바뀌는 지점이다.</b>
+     * 카테고리 하나를 {@code [자기 자신 + 자식들]}로 펼친다. 단수가 복수로 바뀌는 지점이다.
      *
      * <p>{@code categoryId}가 없으면 조회하지 않고 {@code null}을 돌려준다 — 쿼리 한 번을 아끼고,
      * {@code null}은 Specifications에서 "조건 없음"으로 흘러간다.

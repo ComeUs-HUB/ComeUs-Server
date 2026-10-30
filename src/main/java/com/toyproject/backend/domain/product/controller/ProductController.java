@@ -38,7 +38,7 @@ import java.util.Set;
  * 분기하지 않기로 했으므로(ADR 0013) 누가 호출했는지가 동작을 바꾸지 않는다.
  * 권한 판정은 필터체인에서 끝난다.
  *
- * <p>{@code ResponseEntity}는 <b>헤더나 200 이외 상태가 필요할 때만</b> 쓴다
+ * <p>{@code ResponseEntity}는 헤더나 200 이외 상태가 필요할 때만 쓴다
  * (conventions/api-response.md) — 다섯 중 {@code POST} 하나다.
  */
 @Slf4j
@@ -85,9 +85,9 @@ public class ProductController {
     }
 
     /**
-     * 상품 등록. <b>201 + {@code Location}</b>으로 응답한다.
+     * 상품 등록. 201 + {@code Location}으로 응답한다.
      *
-     * <p>{@code Location}은 절대 URL이 아닌 <b>상대 경로</b>다 — 이유는 {@code CategoryController}와 같다.
+     * <p>{@code Location}은 절대 URL이 아닌 상대 경로다 — {@code CategoryController}와 같다.
      */
     @PostMapping
     public ResponseEntity<ApiResponse<ProductDetailResponse>> create(
@@ -100,7 +100,7 @@ public class ProductController {
     }
 
     /**
-     * 상품 수정. 부분 수정이 아니라 <b>전체 교체</b>이며 {@code HIDDEN}을 푼다(ADR 0013).
+     * 상품 수정. 부분 수정이 아니라 전체 교체이며 {@code HIDDEN}을 푼다(ADR 0013).
      */
     @PutMapping("/{id}")
     public ApiResponse<ProductDetailResponse> update(@PathVariable Long id,
@@ -109,7 +109,7 @@ public class ProductController {
     }
 
     /**
-     * 상품 삭제(soft delete). <b>200 + {@code data: null}</b> — 204면 공통 응답 포맷이 깨진다.
+     * 상품 삭제(soft delete). 200 + {@code data: null} — 204면 공통 응답 포맷이 깨진다.
      */
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {

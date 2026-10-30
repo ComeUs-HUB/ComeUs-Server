@@ -11,14 +11,11 @@ import java.util.List;
 /**
  * [Phase 3 · 6단계] 상품 목록 필터 조립.
  *
- * <p>공개 메서드가 {@link #search(ProductSearchCondition)} 하나뿐인 것이 설계다 — 조각을 열면
- * 서비스가 골라 쓰기 시작하고 QueryDSL 전환 범위가 이 파일에서 서비스 전체로 번진다(ADR 0011).
- *
- * <p>조각은 값이 없으면 {@code null}을 돌려주고 Spring Data가 WHERE 절에서 흘려보낸다.
- * 그래서 {@code search()}에 분기가 없다.
- *
- * <p>⚠️ 필드명이 문자열이라 오타가 컴파일에서 걸리지 않는다. 상수로 모았지만 정적 검증은
- * 아니며, {@code ProductRepositoryTest}가 실제 SQL로 덮는다.
+ * <p>공개 메서드가 {@link #search(ProductSearchCondition)} 하나뿐인 것이 설계다 — 조각을
+ * 열면 QueryDSL 전환 범위가 이 파일에서 서비스 전체로 번진다(ADR 0011).
+ * <p>조각은 값이 없으면 {@code null}을 돌려주고 Spring Data가 흘려보내, 분기가 없다.
+ * <p>필드명이 문자열이라 오타가 컴파일에서 걸리지 않는다 — 정적 검증이 아니며
+ * {@code ProductRepositoryTest}가 실제 SQL로 덮는다.
  */
 public final class ProductSpecifications {
 
@@ -32,7 +29,7 @@ public final class ProductSpecifications {
     }
 
     /**
-     * 검색 조건 전체를 하나로 조립한다. <b>유일한 공개 진입점.</b>
+     * 검색 조건 전체를 하나로 조립한다. 유일한 공개 진입점.
      *
      * <p>조건을 하나도 주지 않으면 {@code status <> 'HIDDEN'} 하나만 남는다.
      */
@@ -51,7 +48,7 @@ public final class ProductSpecifications {
     }
 
     /**
-     * 이미 펼쳐진 카테고리 id 목록으로 거른다. <b>여기서 하위를 펼치지 않는다</b> —
+     * 이미 펼쳐진 카테고리 id 목록으로 거른다. 여기서 하위를 펼치지 않는다 —
      * 펼치기는 {@code ProductService}가 {@code CategoryService}를 경유해 한다.
      *
      * <p>{@code root.get().get()}은 FK 컬럼을 그대로 읽어 조인을 만들지 않는다.
