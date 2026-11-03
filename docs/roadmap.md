@@ -324,14 +324,17 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 
 ### Order — 4~8단계 ⬜
 
-착수 전 **동시성 제어 ADR**이 필요하다. 이 ADR은 함께 정한다 —
-**주문 트랜잭션에서 장바구니 루트 락을 어디서 잡고 상품 락과 어떤 순서로 잡는지**, 그리고
-**주문 생성·결제의 멱등성 키** 도입 여부(장바구니에는 비용 대비 이득이 작아 두지 않았다).
-**주문 트랜잭션도 READ COMMITTED여야 한다** — `CartService` 쓰기를 기본 격리 수준(REPEATABLE READ) 트랜잭션 안에서
-부르면 Spring이 격리 수준을 조용히 무시해 Lost Update가 되살아난다([ADR 0020](decisions/purchase/0020-cart-writes-use-read-committed.md)).
-`REQUIRES_NEW`는 쓸 수 없다(재고 차감과 항목 삭제가 한 트랜잭션이어야 한다). 무시되지 않게 막는 장치
-(`validateExistingTransaction` 또는 진입 시 격리 수준 가드)도 이 ADR에서 정한다. 그 밖에 정할 것은
-[order.md](domains/purchase/order.md)의 "착수 전 정할 것"에 있다.
+착수 전 ADR 둘을 작성했다.
+
+- [ADR 0024](decisions/purchase/0024-order-idempotency-key-in-header.md) — 주문 생성의 중복을 헤더 멱등키와
+  `(user_id, idempotency_key)` 복합 유니크로 막는다. 대조는 `OrderService` 트랜잭션 안, `carts` 루트 락 직후다
+- [ADR 0025](decisions/purchase/0025-pessimistic-lock-as-stock-concurrency-baseline.md) — 재고 동시성은
+  비관적 락을 **기준선**으로 시작한다. 락 순서(`carts` → `products`, `id` 오름차순), 주문 트랜잭션의
+  `READ_COMMITTED`, 격리 수준이 조용히 무시되지 않게 막는 장치(`validateExistingTransaction`)를 함께 고정했다.
+  전환은 [측정 계획](performance/order-stock-concurrency.md)의 측정치로만 판단한다
+
+남은 것 — **결제 승인 경계 ADR**(외부 호출을 트랜잭션 밖으로, 상태 CAS 선점, 복구 경로), `PENDING` 주문의
+만료 처리, 상태 전환표. 그 밖에 정할 것은 [order.md](domains/purchase/order.md)의 "착수 전 정할 것"에 있다.
 
 ### Payment — 9~11단계 ⬜
 

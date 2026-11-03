@@ -1,6 +1,6 @@
 # ADR 0016 — 재고 점유는 주문 생성에서 시작하고 장바구니는 점유하지 않는다
 
-- 상태: 채택
+- 상태: 채택 (0025가 보강)
 - 일자: 2026-10-02
 - 관련: [domains/purchase/](../../domains/purchase/README.md), [ADR 0015](../catalog/0015-no-stock-quantity-in-public-response.md)
 
