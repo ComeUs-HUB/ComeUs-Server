@@ -38,15 +38,18 @@ status(PENDING/PAID/SHIPPING/DELIVERED/CANCELLED), shippingAddress, createdAt
   금액은 유지되어야 한다
 - **`CANCELLED`로 가는 모든 전환이 재고를 복구한다.** 점유를 시작한 것이 주문 생성이므로
   결제 전(`PENDING`)이든 후(`PAID`)든, 회원이 취소하든 ADMIN이 바꾸든 같다.
-  결제 실패([payment.md](payment.md))와 환불도 이 규칙에 흡수된다
+  환불과 `PENDING` 만료에 따른 취소도 이 규칙에 흡수된다
+- **결제창 단계의 실패·취소는 주문을 바꾸지 않는다.** 주문은 `PENDING`으로 남아 같은 주문으로 결제를 다시 시도한다
+  ([payment.md](payment.md))
+- 재고 동시성 제어는 [ADR 0025](../../decisions/purchase/0025-pessimistic-lock-as-stock-concurrency-baseline.md),
+  중복 주문 방어는 [ADR 0024](../../decisions/purchase/0024-order-idempotency-key-in-header.md)가 정한다
 - SHIPPING 이후 회원이 직접 취소 불가 → `O002 ORDER_CANCEL_NOT_ALLOWED`
 
 ## 착수 전 정할 것
 
-- **동시성 제어 방식** — 비관적 락(`PESSIMISTIC_WRITE`), 낙관적 락+재시도, 원자적 감소 연산 중 선택.
-  트레이드오프를 비교하고 **ADR로 남긴다**([decisions/](../../decisions/))
 - **`PENDING` 주문의 만료 처리** — 결제되지 않은 주문이 재고를 계속 점유한다. 장바구니 예약을
   배제한 이유(담아두고 사지 않으면 재고가 묶인다)가 범위만 좁혀 그대로 재현된다.
-  자동 취소 배치를 둘지, 사용자·ADMIN 취소에만 맡길지 정한다
+  자동 취소 배치를 둘지, 사용자·ADMIN 취소에만 맡길지 정한다.
+  결제창에서 실패·취소한 주문도 `PENDING`으로 남으므로 이 처리의 대상이다
 - 배송지도 주문 시점 스냅샷이 필요한지
 - 상태 전환표(각 상태에서 허용되는 다음 상태)를 확정

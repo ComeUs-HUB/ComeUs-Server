@@ -385,12 +385,13 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
       **대체 ADR이 필요하다.** 스키마·엔티티·서버 검증은 바뀌지 않고 응답 필드 추가로 끝난다 —
       0015가 "필드를 다시 넣는 것은 추가라 클라이언트를 깨지 않는다"고 적어둔 방향이다.
       ⚠️ 노출해도 조회 시점 값이라 `CT002`·`P002` 거절은 남는다. UX 개선이지 검증 대체가 아니다
-- [ ] **외부 PG 연동** — 포트원 등. 현재 Mock 전제
 - [ ] **Redis 도입** — Refresh Token 저장, 인기 상품 캐싱
 - [ ] **쿠폰 / 포인트 도메인** 추가 여부
 - [ ] **검색 고도화** — Elasticsearch 등
 
 확정된 것:
+- [x] **PG는 토스페이먼츠** — 결제창은 FE가 SDK로 호출하고 백엔드는 승인과 결과 반영을 맡는다.
+      결제창 단계의 실패·취소는 주문을 `PENDING`으로 둔다. [payment.md](domains/purchase/payment.md)
 - [x] 소셜 로그인은 **카카오 전용** — 구글 등 추가는 `Provider` enum 상수 추가로 확장
 - [x] **상품 목록 동적 필터는 JPA Specification** — 복잡해지면 QueryDSL로 리팩터링.
       [ADR 0011](decisions/catalog/0011-jpa-specification-for-product-filter.md)
