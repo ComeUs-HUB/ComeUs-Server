@@ -333,12 +333,18 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
   `READ_COMMITTED`, 격리 수준이 조용히 무시되지 않게 막는 장치(`validateExistingTransaction`)를 함께 고정했다.
   전환은 [측정 계획](performance/order-stock-concurrency.md)의 측정치로만 판단한다
 
-남은 것 — **결제 승인 경계 ADR**(외부 호출을 트랜잭션 밖으로, 상태 CAS 선점, 복구 경로), `PENDING` 주문의
-만료 처리, 상태 전환표. 그 밖에 정할 것은 [order.md](domains/purchase/order.md)의 "착수 전 정할 것"에 있다.
+남은 것 — `PENDING` 주문의 만료 처리, 상태 전환표. 그 밖에 정할 것은 [order.md](domains/purchase/order.md)의 "착수 전 정할 것"에 있다.
 
 ### Payment — 9~11단계 ⬜
 
-계약은 [payment.md](domains/purchase/payment.md).
+계약은 [payment.md](domains/purchase/payment.md), 승인 경계는
+[ADR 0026](decisions/purchase/0026-payment-confirm-outside-transaction.md).
+
+착수 전 확인할 것:
+
+- [ ] **거절 뒤 같은 `orderId`로 재결제되는지** 토스 테스트 환경에서 확인한다. 공식 문서에 허용 여부가 없다
+- [ ] **토스 에러 코드 목록을 판정표와 대조한다** — "이미 처리됨"류 4xx를 결과 불명으로 분류하고, 같은 `paymentKey` 재호출의 응답을 본다
+- [ ] **`open-in-view: false`의 영향을 확인한다** — 컨트롤러·응답 변환에서 지연 로딩이 깨지는 곳이 없는지 본다
 
 ## Phase 5 — 리뷰 ⬜
 
