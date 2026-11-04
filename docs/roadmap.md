@@ -391,7 +391,7 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 
 확정된 것:
 - [x] **PG는 토스페이먼츠** — 결제창은 FE가 SDK로 호출하고 백엔드는 승인과 결과 반영을 맡는다.
-      결제창 단계의 실패·취소는 주문을 `PENDING`으로 둔다. [payment.md](domains/purchase/payment.md)
+      결제창 단계의 실패·취소와 승인 거절은 주문을 `PENDING`으로 둔다. [payment.md](domains/purchase/payment.md)
 - [x] 소셜 로그인은 **카카오 전용** — 구글 등 추가는 `Provider` enum 상수 추가로 확장
 - [x] **상품 목록 동적 필터는 JPA Specification** — 복잡해지면 QueryDSL로 리팩터링.
       [ADR 0011](decisions/catalog/0011-jpa-specification-for-product-filter.md)

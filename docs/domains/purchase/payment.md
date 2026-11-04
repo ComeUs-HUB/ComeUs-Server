@@ -17,13 +17,15 @@ FE  토스 SDK 결제창 호출           orderId = orderNumber, amount, success
 토스 → successUrl (FE 페이지)      ?paymentKey&orderId&amount
 FE  POST /api/payments/confirm    백엔드가 금액을 검증하고 토스 승인 API를 호출한 뒤 결과를 반영한다
 토스 → failUrl (FE 페이지)         백엔드 호출 없음. 주문은 PENDING 그대로
+승인 거절                         주문을 PENDING으로 되돌린다. 사용자는 결제창부터 다시 시도한다
 ```
 
 ## 엔티티
 
-id, order, paymentKey, amount, method(CARD/TRANSFER), status(SUCCESS/FAILED/REFUNDED), paidAt
+id, order, paymentKey, amount, method(CARD/TRANSFER), status(SUCCESS/REFUNDED), paidAt
 
 - `order` — unique. 1 Order : 1 Payment를 DB가 강제한다
+- **승인에 성공한 결제만 저장한다.** 거절을 행으로 남기면 그 주문의 재시도가 `order` unique에 막힌다. 거절은 로그로 남긴다
 - `paymentKey` — 토스가 발급하는 결제 식별자. 조회·취소의 키이므로 저장하고 unique로 둔다
 
 ## API
@@ -49,6 +51,10 @@ id, order, paymentKey, amount, method(CARD/TRANSFER), status(SUCCESS/FAILED/REFU
 - **결제창 단계의 실패·취소(failUrl)는 주문을 바꾸지 않는다.** 주문은 `PENDING`, 재고는 점유된 채로 남고
   사용자는 같은 주문으로 결제를 다시 시도한다. failUrl은 사용자가 결제창을 닫은 경우까지 포함하므로
   즉시 취소하면 재시도할 수 없다. 끝내 결제되지 않은 주문은 [order.md](order.md)의 `PENDING` 만료 처리가 정리한다
+- **승인 거절은 주문을 `PENDING`으로 되돌린다.** 한도 초과·카드사 거절처럼 토스가 거절을 응답한 경우다.
+  재고는 점유된 채로 남고 사용자는 결제창부터 다시 시도한다. 끝내 결제되지 않으면 `PENDING` 만료 처리가 정리한다
+- **결과를 모르는 실패는 되돌리지 않는다.** 타임아웃·응답 유실은 토스에서 승인됐을 수 있으므로 승인 진행 상태로 두고
+  복구 경로가 토스 조회로 판정한다. 이때 `PENDING`으로 되돌리면 재시도가 중복 청구가 될 수 있다
 - PG 호출은 `PaymentGateway` 인터페이스 뒤에 둔다. 구현은 토스이고, 테스트는 Mock 구현을 쓴다
 
 ## 착수 전 정할 것
@@ -57,10 +63,10 @@ id, order, paymentKey, amount, method(CARD/TRANSFER), status(SUCCESS/FAILED/REFU
   한 번만 허용하며, `payments.order_id` unique를 최후 방어선으로 둔다. 승인 후 반영 전에 멈춘 주문을
   복구하는 경로(웹훅·토스 조회 배치)와 함께 **ADR로 남긴다**([decisions/](../../decisions/)).
   승인 진행 상태는 [order.md](order.md)의 상태 전환표에 들어간다
-- **승인 거절 시 주문 처리** — 한도 초과·카드사 거절처럼 결제창은 통과했지만 승인 API가 거절한 경우다.
-  `PENDING` 복귀(다른 카드로 재시도 허용)와 `CANCELLED`(재고 복구) 중 고른다. **`PENDING` 복귀를 고르면
-  `FAILED` 결제 기록과 `payments.order_id` unique가 충돌한다** — 실패를 이 테이블에 남기지 않거나
-  unique 범위를 성공 결제로 좁혀야 한다
+- **같은 `orderId`의 재결제를 토스 테스트 환경에서 확인한다** — 승인 거절 뒤 재시도의 전제인데 공식 문서에 허용 여부가 없다.
+  막혀 있으면 토스 `orderId`를 시도마다 새로 발급하도록 `orderNumber`와 분리해야 한다
+- **거절과 결과 불명을 가르는 기준** — 토스 문서에 구분 안내가 없다. 어떤 응답을 확정 거절로 볼지 정한다
+- **복구 조회의 키** — 승인 호출 전에 `paymentKey`를 저장할지 정한다. orderId 조회는 결제위젯 시크릿 키로 호출할 수 없다
 - **가상계좌 지원 여부** — 지원하면 승인 뒤 입금까지 일 단위로 걸린다. 입금 대기 상태와
   결제 수단별 `PENDING` 만료 정책이 필요하다
 - 승인 진행 중·금액 불일치·승인 거절의 에러 코드 — [error-codes.md](../../conventions/error-codes.md)에 추가한다
