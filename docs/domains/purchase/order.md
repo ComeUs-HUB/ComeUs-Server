@@ -13,6 +13,8 @@ status(PENDING/PAYMENT_IN_PROGRESS/PAID/SHIPPING/DELIVERED/CANCELLED), shippingA
 
 - `orderNumber` — 서버가 발급하고 토스 `orderId`로 쓴다. unique
 - `paymentKey` — 승인을 선점한 시도의 키. 승인 거절로 `PENDING`에 돌아오면 비운다
+- `shippingAddress` — `@Embedded`(recipientName, recipientPhone, address). 전부 필수이고 주문 시점 값을 **스냅샷**한다.
+  회원 정보가 바뀌어도 성립한 주문의 배송지는 그대로다
 
 ## 상태 흐름
 
@@ -23,6 +25,18 @@ PENDING ──승인 선점──▶ PAYMENT_IN_PROGRESS ──승인 성공─�
    │                                                    │
    └───── 취소·만료 ──▶ CANCELLED   ◀──── 취소·환불 ────────┘
 ```
+
+| 현재 상태 | 다음 상태 | 언제 |
+|---|---|---|
+| `PENDING` | `PAYMENT_IN_PROGRESS` | 결제 승인 선점 |
+| `PENDING` | `CANCELLED` | 회원·ADMIN 취소, 만료 |
+| `PAYMENT_IN_PROGRESS` | `PAID` | 승인 성공 |
+| `PAYMENT_IN_PROGRESS` | `PENDING` | 승인 거절 |
+| `PAID` | `SHIPPING` | ADMIN 배송 처리 |
+| `PAID` | `CANCELLED` | 회원·ADMIN의 환불 후 취소 |
+| `SHIPPING` | `DELIVERED` | ADMIN 배송 완료 처리 |
+
+`DELIVERED`와 `CANCELLED`는 최종 상태다. **표에 없는 전이는 모두 거절한다.**
 
 - `PENDING`의 차감이 재고 점유이고 `PAID`가 확정한다. 장바구니는 점유하지 않는다 — [ADR 0016](../../decisions/purchase/0016-stock-reserved-at-order-not-cart.md)
 - **`CANCELLED`로 가는 모든 전환이 재고를 복구한다.** 결제 전이든 후든, 회원이 취소하든 ADMIN이 바꾸든,
@@ -56,9 +70,10 @@ Controller   키 형식, 빈 목록 검증                        → C001
   3. (user_id, 멱등키)로 주문 조회                        → 있으면 그 주문을 반환하고 끝
   4. 선택한 cartItem 조회, 소유자 검증                    → 타인·없는 항목 CT001
   5. products 행 잠금 (id 오름차순)
-  6. 재고 차감 Product.decreaseStock()                    → 부족 P002
-  7. Order(PENDING) 저장, priceAtOrder 스냅샷
-  8. 선택한 cartItem 삭제
+  6. 숨김 상품 확인                                       → HIDDEN P001
+  7. 재고 차감 Product.decreaseStock()                    → 부족·품절 P002
+  8. Order(PENDING) 저장, priceAtOrder·배송지 스냅샷
+  9. 선택한 cartItem 삭제
 커밋
 
 응답   { orderNumber, amount }
@@ -76,22 +91,25 @@ Controller   키 형식, 빈 목록 검증                        → C001
 
 **재고**
 - 동시에 마지막 재고를 두고 경쟁해도 **음수로 내려가면 안 된다** — [ADR 0025](../../decisions/purchase/0025-pessimistic-lock-as-stock-concurrency-baseline.md)
+- 장바구니에 담은 뒤 숨겨진 상품은 주문하지 않는다. `decreaseStock()`은 숨김을 거르지 않으므로 잠금 뒤 상태로 확인한다
 
 **스냅샷**
 - `priceAtOrder`에 주문 시점 가격을 저장한다. 이후 상품 가격이 바뀌어도 성립한 주문의 금액은 유지된다
+- 배송지가 비어 있으면 `C001`이다
 
 **실패 시 장바구니**
-- 6~8번은 한 트랜잭션이다. `P002`로 실패하면 장바구니는 그대로 남는다 — 거절당했는데 장바구니까지 비는 것이 최악이다
+- 7~9번은 한 트랜잭션이다. `P002`로 실패하면 장바구니는 그대로 남는다 — 거절당했는데 장바구니까지 비는 것이 최악이다
 - 주문이 성립하면 **선택한 항목만** 지운다. 선택하지 않은 항목은 남는다
 
 ### GET `/api/orders` — 내 주문 목록
 
 ```
-1. 로그인 회원의 주문 조회
-2. 응답 변환
+1. 로그인 회원의 주문 조회 (페이징)
+2. PageResponse 변환
 ```
 
 자기 주문만 돌려준다. 재고와 장바구니를 건드리지 않는다.
+페이징은 [product.md](../catalog/product.md)와 같다 — 기본 `size=20`, 최대 100, `createdAt` 내림차순.
 
 ### GET `/api/orders/{id}` — 주문 상세
 
@@ -110,9 +128,10 @@ Controller   키 형식, 빈 목록 검증                        → C001
 2. 소유자 검증                       → 타인의 주문 O001
 3. 현재 상태로 분기
    PENDING               CAS → CANCELLED, products 잠금 (id 오름차순), 재고 복구
-   PAYMENT_IN_PROGRESS   거절
+   PAYMENT_IN_PROGRESS   거절 O003
    PAID                  환불 후 CANCELLED, 재고 복구
    SHIPPING, DELIVERED   거절 O002
+   CANCELLED             거절 O004
 ```
 
 회원이 자기 주문을 취소하고 점유했던 재고를 돌려놓는다.
@@ -126,36 +145,53 @@ Controller   키 형식, 빈 목록 검증                        → C001
 
 ```
 1. ADMIN 권한 확인                   → 아니면 A002
-2. 전체 주문 조회
-3. 응답 변환
+2. 전체 주문 조회 (페이징)
+3. PageResponse 변환
 ```
 
-회원 구분 없이 모든 주문을 돌려준다.
+회원 구분 없이 모든 주문을 돌려준다. 페이징은 내 주문 목록과 같다.
 
 ### PUT `/api/admin/orders/{id}/status` — 주문 상태 변경
 
 ```
 1. ADMIN 권한 확인                   → 아니면 A002
 2. id로 주문 조회                    → 없으면 O001
-3. 상태 전환표로 허용 여부 확인
-4. 상태 변경
-5. CANCELLED로 바꿨다면 재고 복구
+3. 상태 전환표로 허용 여부 확인      → 승인 진행 중 취소 O003, 그 밖의 불허 전이 O005
+4. 다음 상태로 분기
+   CANCELLED (PENDING에서)   CAS → CANCELLED, products 잠금 (id 오름차순), 재고 복구
+   CANCELLED (PAID에서)      환불 후 CANCELLED, 재고 복구
+   그 밖의 상태              CAS로 상태 변경
 ```
 
 ADMIN이 배송 처리처럼 주문 상태를 직접 바꾼다.
 
-- 허용되는 전환은 아래 "착수 전 정할 것"의 상태 전환표가 정한다
+- 허용되는 전환은 위 상태 전환표가 정한다. ADMIN은 `SHIPPING`·`DELIVERED` 주문을 취소할 수 없다
 - **결제 승인 중인 주문은 ADMIN도 취소할 수 없다**
-- ADMIN이 `CANCELLED`로 바꿔도 재고를 복구한다
+- ADMIN도 `PENDING`·`PAID` 주문을 `CANCELLED`로 바꿀 수 있고 재고를 복구한다
+- `PAID` 취소의 갱신 순서는 [payment.md](payment.md)의 환불 순서를 따른다
 
-## 착수 전 정할 것
+## `PENDING` 만료 배치
 
-- **`PENDING` 주문의 만료 처리** — 결제되지 않은 주문이 재고를 계속 점유한다. 장바구니 예약을
-  배제한 이유(담아두고 사지 않으면 재고가 묶인다)가 범위만 좁혀 그대로 재현된다.
-  자동 취소 배치를 둘지, 사용자·ADMIN 취소에만 맡길지 정한다.
-  결제창에서 실패·취소하거나 승인이 거절된 주문도 `PENDING`으로 남으므로 이 처리의 대상이다
-- 배송지도 주문 시점 스냅샷이 필요한지
-- 상태 전환표(각 상태에서 허용되는 다음 상태)를 확정
-- 목록 API의 페이지네이션·정렬
-- 승인 진행 중 취소 거절과 이미 취소된 주문의 재취소를 어떤 코드로 응답할지 — `O002` 메시지는 배송 중만 덮는다
-- 주문 시점에 숨김(`HIDDEN`)·판매 중지된 상품을 어떻게 처리할지
+API가 아니라 스케줄 작업이다.
+
+```
+1. updatedAt이 15분 넘게 지난 PENDING 주문 조회
+2. 주문마다 트랜잭션
+   CAS PENDING → CANCELLED        → 0건이면 건너뜀 (그사이 승인 선점·취소)
+   products 잠금 (id 오름차순), 재고 복구
+```
+
+결제되지 않은 주문이 재고를 계속 점유하지 않도록 **15분** 뒤 자동으로 취소한다.
+토스 승인 유효 시간 10분에 여유를 더한 값으로, 결제창에서 정상 진행 중인 주문이 만료되지 않게 한다.
+기준은 마지막으로 `PENDING`이 된 시각이다. 승인이 거절되면 그 시점부터 다시 15분을 준다.
+결제창에서 실패·취소하거나 승인이 거절된 주문도 `PENDING`이므로 대상이다.
+
+## 에러 코드
+
+구현 때 `OrderErrorCode`와 [error-codes.md](../../conventions/error-codes.md)에 추가한다.
+
+| 코드 | 상수 | HTTP | 언제 |
+|---|---|---|---|
+| O003 | `ORDER_PAYMENT_IN_PROGRESS` | 409 | 결제 승인 중인 주문의 취소 |
+| O004 | `ORDER_ALREADY_CANCELLED` | 409 | 이미 취소된 주문의 재취소 |
+| O005 | `INVALID_ORDER_STATUS_TRANSITION` | 409 | 상태 전환표에 없는 ADMIN 변경 |

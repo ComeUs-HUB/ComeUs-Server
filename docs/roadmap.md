@@ -333,7 +333,7 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
   `READ_COMMITTED`, 격리 수준이 조용히 무시되지 않게 막는 장치(`validateExistingTransaction`)를 함께 고정했다.
   전환은 [측정 계획](performance/order-stock-concurrency.md)의 측정치로만 판단한다
 
-남은 것 — `PENDING` 주문의 만료 처리, 상태 전환표. 그 밖에 정할 것은 [order.md](domains/purchase/order.md)의 "착수 전 정할 것"에 있다.
+상태 전환표, `PENDING` 만료, 배송지 스냅샷 등 주문 계약은 [order.md](domains/purchase/order.md)에 확정했다.
 
 ### Payment — 9~11단계 ⬜
 

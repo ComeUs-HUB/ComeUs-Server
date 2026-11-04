@@ -53,7 +53,7 @@ PG 호출은 `PaymentGateway` 인터페이스 뒤에 둔다. 구현은 토스이
 
 선점 트랜잭션
   1. orderNumber로 주문 조회, 소유자 검증            → 없거나 타인의 주문 O001
-  2. amount == Order.totalAmount 확인                → 다르면 거절, 토스 호출 없음
+  2. amount == Order.totalAmount 확인                → 다르면 PAY004, 토스 호출 없음
   3. CAS PENDING → PAYMENT_IN_PROGRESS + paymentKey 저장
      └ 0건이면 현재 상태로 분기 (아래 "중복 요청")
 커밋
@@ -77,17 +77,17 @@ FE가 successUrl에서 받은 값으로 호출한다. 토스 승인을 한 번�
 
 | 현재 상태 | 응답 |
 |---|---|
-| `PAYMENT_IN_PROGRESS` | 승인 진행 중 |
+| `PAYMENT_IN_PROGRESS` | `PAY003` 승인 진행 중 |
 | `PAID` + 같은 `paymentKey` | 기존 결제 반환 — 응답을 잃은 FE의 재시도다 |
 | `PAID` + 다른 `paymentKey` | `PAY002 PAYMENT_ALREADY_EXISTS` |
-| 그 밖의 상태 | 승인 불가 |
+| 그 밖의 상태 | `PAY005` 승인 불가 |
 
 **승인 거절**
-- 한도 초과·카드사 거절처럼 토스가 거절을 응답한 경우다
+- 한도 초과·카드사 거절처럼 토스가 거절을 응답한 경우다 → `PAY006`
 - 재고는 점유된 채로 남고 사용자는 **결제창부터** 다시 시도한다. 끝내 결제되지 않으면 `PENDING` 만료 처리가 정리한다
 
 **결과 불명**
-- 타임아웃·응답 유실은 토스에서 승인됐을 수 있으므로 되돌리지 않는다. 사용자에게는 승인 진행 중으로 응답한다
+- 타임아웃·응답 유실은 토스에서 승인됐을 수 있으므로 되돌리지 않는다. 사용자에게는 `PAY003` 승인 진행 중으로 응답한다
 
 ### GET `/api/payments/{orderId}` — 결제 정보 조회
 
@@ -126,12 +126,22 @@ API가 아니라 스케줄 작업이다.
 서버 장애 등으로 결과가 반영되지 못한 주문을 토스 기준으로 바로잡는다. 판정 시간은 요청 최대 수명보다 길게 잡는다 —
 [ADR 0026](../../decisions/purchase/0026-payment-confirm-outside-transaction.md).
 
+## 에러 코드
+
+구현 때 `PaymentErrorCode`와 [error-codes.md](../../conventions/error-codes.md)에 추가한다.
+
+| 코드 | 상수 | HTTP | 언제 |
+|---|---|---|---|
+| PAY003 | `PAYMENT_IN_PROGRESS` | 409 | 승인 진행 중, 결과 불명 |
+| PAY004 | `PAYMENT_AMOUNT_MISMATCH` | 400 | 요청 금액이 주문 금액과 다름 |
+| PAY005 | `PAYMENT_NOT_ALLOWED` | 409 | 승인할 수 없는 주문 상태 |
+| PAY006 | `PAYMENT_REJECTED` | 402 | 토스의 승인 거절 |
+
 ## 착수 전 정할 것
 
 - **같은 `orderId`의 재결제를 토스 테스트 환경에서 확인한다** — 승인 거절 뒤 재시도의 전제인데 공식 문서에 허용 여부가 없다.
   막혀 있으면 토스 `orderId`를 시도마다 새로 발급하도록 `orderNumber`와 분리해야 한다
 - **가상계좌 지원 여부** — 지원하면 승인 뒤 입금까지 일 단위로 걸린다. 입금 대기 상태와
   결제 수단별 `PENDING` 만료 정책이 필요하다
-- 승인 진행 중·금액 불일치·승인 불가·승인 거절의 에러 코드 — [error-codes.md](../../conventions/error-codes.md)에 추가한다
 - 환불 시 토스 취소 호출과 결제 상태·주문 상태·재고 갱신의 **순서**, 토스 취소 실패 처리를 명확히 정의
 - 환불 API와 `PAID` 주문의 취소 API(`POST /api/orders/{id}/cancel`)의 관계, 환불 가능한 주문 상태
