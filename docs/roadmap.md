@@ -324,7 +324,19 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 
 ### Order — 4~8단계 ⬜
 
-착수 전 ADR 둘을 작성했다.
+구현 순서는 5단계로 나눴다.
+
+| 단계 | 내용 | 검증 | |
+|---|---|---|---|
+| 4 | 엔티티(`Order`·`OrderItem`·`ShippingAddress`) + `V5__create_orders.sql` + `open-in-view: false` | `OrderTest` · `OrderPersistenceTest` | ✅ |
+| 5 | Repository + `OrderService.create()` + 장바구니·상품 쪽 주문용 메서드 | 서비스·Repository 테스트 | ⬜ |
+| 6 | 내 주문 조회 + `PENDING` 취소와 재고 복구 | 서비스 테스트 | ⬜ |
+| 7 | 컨트롤러 + DTO + ADMIN API + `O003`~`O005` | 컨트롤러 테스트 | ⬜ |
+| 8 | `PENDING` 만료 배치 | 배치 테스트 | ⬜ |
+
+`PAID` 취소는 환불이 필요해 Payment로 넘긴다. MySQL 동시성 확인과 기준선 측정은 구현 뒤에 따로 한다.
+
+착수 전 ADR 셋을 작성했다.
 
 - [ADR 0024](decisions/purchase/0024-order-idempotency-key-in-header.md) — 주문 생성의 중복을 헤더 멱등키와
   `(user_id, idempotency_key)` 복합 유니크로 막는다. 대조는 `OrderService` 트랜잭션 안, `carts` 루트 락 직후다
@@ -332,6 +344,8 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
   비관적 락을 **기준선**으로 시작한다. 락 순서(`carts` → `products`, `id` 오름차순), 주문 트랜잭션의
   `READ_COMMITTED`, 격리 수준이 조용히 무시되지 않게 막는 장치(`validateExistingTransaction`)를 함께 고정했다.
   전환은 [측정 계획](performance/order-stock-concurrency.md)의 측정치로만 판단한다
+- [ADR 0026](decisions/purchase/0026-payment-confirm-outside-transaction.md) — 결제 승인은 트랜잭션 밖에서 호출하고
+  주문 상태 선점으로 한 번만 진입시킨다. `open-in-view: false`도 여기서 정했다. 끈 상태의 영향은 코드 확인과 전체 테스트로 봤고 MySQL에서는 호출해 보지 않았다
 
 상태 전환표, `PENDING` 만료, 배송지 스냅샷 등 주문 계약은 [order.md](domains/purchase/order.md)에 확정했다.
 

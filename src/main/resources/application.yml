@@ -14,6 +14,8 @@ spring:
   # datasource는 프로필별 파일에만 둔다 (application-local.yml / application-prod.yml).
   # 둘 다 .gitignore 대상이라 접속 정보가 저장소에 들어가지 않는다.
   jpa:
+    # 켜 두면 결제 승인 호출 중에도 커넥션을 쥘 수 있다(ADR 0026).
+    open-in-view: false
     hibernate:
       # 스키마 소유자는 Flyway다. Hibernate는 매핑이 스키마와 맞는지 검증만 한다.
       # local/prod 모두 validate로 통일 (application-prod.yml도 validate)
