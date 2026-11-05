@@ -4,19 +4,27 @@ import com.toyproject.backend.domain.cart.entity.Cart;
 import com.toyproject.backend.domain.cart.entity.CartItem;
 import com.toyproject.backend.domain.cart.service.CartService;
 import com.toyproject.backend.domain.order.dto.OrderCreateResponse;
+import com.toyproject.backend.domain.order.dto.OrderDetailResponse;
+import com.toyproject.backend.domain.order.dto.OrderSummaryResponse;
 import com.toyproject.backend.domain.order.entity.Order;
+import com.toyproject.backend.domain.order.entity.OrderItem;
+import com.toyproject.backend.domain.order.entity.OrderStatus;
 import com.toyproject.backend.domain.order.entity.ShippingAddress;
+import com.toyproject.backend.domain.order.exception.OrderErrorCode;
 import com.toyproject.backend.domain.order.repository.OrderRepository;
 import com.toyproject.backend.domain.product.entity.Product;
 import com.toyproject.backend.domain.product.service.ProductService;
 import com.toyproject.backend.domain.user.service.UserService;
 import com.toyproject.backend.global.exception.BusinessException;
 import com.toyproject.backend.global.exception.CommonErrorCode;
+import com.toyproject.backend.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,8 +47,8 @@ public class OrderService {
      * @throws BusinessException C001 · CT001 · P001 · P002
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public OrderCreateResponse create(Long userId, String idempotencyKey,
-                                      List<Long> cartItemIds, ShippingAddress shippingAddress) {
+    public OrderCreateResponse createOrder(Long userId, String idempotencyKey,
+                                           List<Long> cartItemIds, ShippingAddress shippingAddress) {
         // 1. 빈 목록을 거른다. 요청 DTO와 별개로 막는다 — 통과하면 항목 없는 0원 주문이 저장된다
         if (cartItemIds.isEmpty()) {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT_VALUE);
@@ -80,5 +88,62 @@ public class OrderService {
 
         // 10. 토스 결제창에 넘길 주문번호와 금액을 응답한다
         return OrderCreateResponse.from(order);
+    }
+
+    /** [Phase 4 · 6단계] 내 주문 목록. 상한과 정렬은 컨트롤러가 정한다. */
+    public PageResponse<OrderSummaryResponse> getMyOrderList(Long userId, Pageable pageable) {
+        return PageResponse.of(orderRepository.findByUserId(userId, pageable).map(OrderSummaryResponse::from));
+    }
+
+    /**
+     * [Phase 4 · 6단계] 내 주문 상세.
+     *
+     * @throws BusinessException 없거나 타인의 주문이면 O001
+     */
+    public OrderDetailResponse getMyOrderDetail(Long userId, Long orderId) {
+        return orderRepository.findWithItemsByIdAndUserId(orderId, userId)
+                .map(OrderDetailResponse::from)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+    }
+
+    /**
+     * [Phase 4 · 6단계] 결제 전 주문을 취소하고 재고를 복구한다. {@code PAID} 취소는 환불과 함께 Payment에서 연다.
+     *
+     * @throws BusinessException O001 · O002 · O003 · O004
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void cancelOrder(Long userId, Long orderId) {
+        if (!orderRepository.existsByIdAndUserId(orderId, userId)) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
+        }
+
+        int cancelled = orderRepository.transitionStatus(
+                orderId, OrderStatus.PENDING, OrderStatus.CANCELLED, LocalDateTime.now());
+        if (cancelled == 0) {
+            throw cancelRejection(orderId);
+        }
+
+        restoreStock(orderId);
+    }
+
+    /** 생성과 같이 상품을 잠근 뒤에 재고를 읽는다. */
+    private void restoreStock(Long orderId) {
+        List<OrderItem> items = getOrder(orderId).getOrderItems();
+        productService.lockProducts(items.stream().map(item -> item.getProduct().getId()).toList());
+        items.forEach(item -> item.getProduct().increaseStock(item.getQuantity()));
+    }
+
+    /** CAS가 0건이면 지금 상태로 거절 사유를 가린다. */
+    private BusinessException cancelRejection(Long orderId) {
+        return new BusinessException(switch (getOrder(orderId).getStatus()) {
+            case PAYMENT_IN_PROGRESS -> OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS;
+            case CANCELLED -> OrderErrorCode.ORDER_ALREADY_CANCELLED;
+            default -> OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED;
+        });
+    }
+
+    private Order getOrder(Long orderId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
     }
 }

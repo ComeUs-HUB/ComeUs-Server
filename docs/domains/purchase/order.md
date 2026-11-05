@@ -1,14 +1,14 @@
 # order — 주문
 
 > 이 문서는 **구현할 계약**이고, 진행 현황은 [roadmap.md](../../roadmap.md)가 소유한다.
-> 엔티티, 스키마, 주문 생성 서비스까지 코드에 있다.
+> 엔티티, 스키마, 주문 생성·조회·`PENDING` 취소 서비스까지 코드에 있다.
 
 [cart.md](cart.md)의 항목을 값으로 복사해 성립하고, 결제는 [payment.md](payment.md)가 잇는다.
 셋에 걸친 엔티티 관계는 [README.md](README.md)가 소유한다.
 
 ## 엔티티
 
-id, user, orderNumber, idempotencyKey, paymentKey, orderItems[ { product, quantity, priceAtOrder } ], totalAmount,
+id, user, orderNumber, idempotencyKey, paymentKey, orderItems[ { product, quantity, productNameAtOrder, priceAtOrder } ], totalAmount,
 status(PENDING/PAYMENT_IN_PROGRESS/PAID/SHIPPING/DELIVERED/CANCELLED), shippingAddress, createdAt, updatedAt
 
 - `orderNumber` — 서버가 발급하고 토스 `orderId`로 쓴다. unique
@@ -72,7 +72,7 @@ Controller   키 형식, 빈 목록 검증                        → C001
   5. products 행 잠금 (id 오름차순)
   6. 숨김 상품 확인                                       → HIDDEN P001
   7. 재고 차감 Product.decreaseStock()                    → 부족·품절 P002
-  8. Order(PENDING) 저장, priceAtOrder·배송지 스냅샷
+  8. Order(PENDING) 저장, 상품명·가격·배송지 스냅샷
   9. 선택한 cartItem 삭제
 커밋
 
@@ -94,7 +94,7 @@ Controller   키 형식, 빈 목록 검증                        → C001
 - 장바구니에 담은 뒤 숨겨진 상품은 주문하지 않는다. `decreaseStock()`은 숨김을 거르지 않으므로 잠금 뒤 상태로 확인한다
 
 **스냅샷**
-- `priceAtOrder`에 주문 시점 가격을 저장한다. 이후 상품 가격이 바뀌어도 성립한 주문의 금액은 유지된다
+- `productNameAtOrder`·`priceAtOrder`에 주문 시점 상품명과 가격을 저장한다. 이후 상품이 바뀌어도 성립한 주문의 기록은 유지된다
 - 배송지가 비어 있으면 `C001`이다
 
 **실패 시 장바구니**
@@ -119,7 +119,7 @@ Controller   키 형식, 빈 목록 검증                        → C001
 3. 주문 항목과 함께 응답 변환
 ```
 
-금액은 `priceAtOrder` 스냅샷으로 보여 준다. 타인의 주문은 존재 여부를 드러내지 않도록 없는 주문과 같은 `O001`로 응답한다.
+상품명과 금액은 주문 시점 스냅샷으로 보여 준다. 타인의 주문은 존재 여부를 드러내지 않도록 없는 주문과 같은 `O001`로 응답한다.
 
 ### POST `/api/orders/{id}/cancel` — 주문 취소
 
@@ -188,7 +188,7 @@ API가 아니라 스케줄 작업이다.
 
 ## 에러 코드
 
-구현 때 `OrderErrorCode`와 [error-codes.md](../../conventions/error-codes.md)에 추가한다.
+값의 주인은 [error-codes.md](../../conventions/error-codes.md)다.
 
 | 코드 | 상수 | HTTP | 언제 |
 |---|---|---|---|

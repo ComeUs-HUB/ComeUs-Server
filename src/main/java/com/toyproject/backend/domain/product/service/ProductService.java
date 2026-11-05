@@ -92,6 +92,12 @@ public class ProductService {
         }
     }
 
+    /** [Phase 4 · 6단계] 재고 복구용 잠금. 숨긴 상품도 복구해야 하므로 거르지 않는다(ADR 0013). */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void lockProducts(Collection<Long> ids) {
+        productRepository.lockAllByIdIn(ids);
+    }
+
     /**
      * 상품 등록. 재고 0이면 {@code SOLD_OUT}으로 시작한다.
      *

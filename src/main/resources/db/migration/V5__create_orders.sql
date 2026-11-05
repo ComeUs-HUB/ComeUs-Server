@@ -42,7 +42,8 @@ CREATE TABLE order_items
     order_id       BIGINT         NOT NULL,
     product_id     BIGINT         NOT NULL,
     quantity       INT            NOT NULL,
-    -- 주문 시점 가격 스냅샷. 이후 상품 가격이 바뀌어도 금액이 유지된다.
+    -- 주문 시점 상품명·가격 스냅샷. 이후 상품이 바뀌어도 기록이 유지된다.
+    product_name_at_order VARCHAR(100) NOT NULL,
     price_at_order DECIMAL(10, 2) NOT NULL,
     PRIMARY KEY (id),
     -- InnoDB가 FK 컬럼 인덱스를 자동으로 만드므로 별도 INDEX를 두지 않는다(V2에서 확인된 전제).

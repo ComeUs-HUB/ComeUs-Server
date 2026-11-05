@@ -116,7 +116,7 @@ com.toyproject.backend
     그 도메인의 **Service에서 받는다**(`ProductService`가 `categoryService.getCategory()`를
     쓰는 것과 같다). Phase 5의 review도 같은 방식으로 `user`·`product`·`order`를 참조한다
     ([domains/purchase/README.md](domains/purchase/README.md))
-  - `order → cart` — **서비스 호출로 생기는 유일한 의존이다.** `OrderService.create()` 하나가
+  - `order → cart` — **서비스 호출로 생기는 유일한 의존이다.** `OrderService.createOrder()` 하나가
     `CartService`를 경유한다. 순환이 없어 `category → product`처럼 Repository로 내릴 이유가 없고,
     주문이 장바구니에서 **읽고 지우는** 둘을 하므로 빈 장바구니 처리 같은 규칙이 `CartService`에
     모여 있어야 한다
