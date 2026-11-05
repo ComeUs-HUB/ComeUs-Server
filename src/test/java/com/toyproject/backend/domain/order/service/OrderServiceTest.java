@@ -5,8 +5,11 @@ import com.toyproject.backend.domain.cart.repository.CartRepository;
 import com.toyproject.backend.domain.category.entity.Category;
 import com.toyproject.backend.domain.category.repository.CategoryRepository;
 import com.toyproject.backend.domain.order.dto.OrderCreateResponse;
+import com.toyproject.backend.domain.order.dto.OrderDetailResponse;
 import com.toyproject.backend.domain.order.entity.Order;
+import com.toyproject.backend.domain.order.entity.OrderStatus;
 import com.toyproject.backend.domain.order.entity.ShippingAddress;
+import com.toyproject.backend.domain.order.exception.OrderErrorCode;
 import com.toyproject.backend.domain.order.repository.OrderRepository;
 import com.toyproject.backend.domain.product.entity.Product;
 import com.toyproject.backend.domain.product.entity.ProductStatus;
@@ -26,11 +29,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -138,7 +143,7 @@ class OrderServiceTest {
         Long userId = buyer();
         List<Long> items = cartOf(userId, tee, shirt);
 
-        OrderCreateResponse response = orderService.create(userId, "key-1", List.of(items.get(0)), ADDRESS);
+        OrderCreateResponse response = orderService.createOrder(userId, "key-1", List.of(items.get(0)), ADDRESS);
 
         assertThat(response.amount()).isEqualByComparingTo("19900.00");
         assertThat(response.orderNumber()).matches("ORD-\\d{8}-[0-9A-F]{12}");
@@ -158,7 +163,7 @@ class OrderServiceTest {
         scarce.decreaseStock(1);
         productRepository.save(scarce);
 
-        assertThatThrownBy(() -> orderService.create(userId, "key-1", items, ADDRESS))
+        assertThatThrownBy(() -> orderService.createOrder(userId, "key-1", items, ADDRESS))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(ProductErrorCode.OUT_OF_STOCK));
 
         assertThat(stockOf(enough)).isEqualTo(5);
@@ -176,7 +181,7 @@ class OrderServiceTest {
         tee.hide();
         productRepository.save(tee);
 
-        assertThatThrownBy(() -> orderService.create(userId, "key-1", items, ADDRESS))
+        assertThatThrownBy(() -> orderService.createOrder(userId, "key-1", items, ADDRESS))
                 .as("decreaseStock은 숨김을 거르지 않으므로 이 확인이 없으면 주문된다")
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND));
 
@@ -189,7 +194,7 @@ class OrderServiceTest {
         Long userId = buyer();
         cartOf(userId, product("19900.00", 5));
 
-        assertThatThrownBy(() -> orderService.create(userId, "key-1", List.of(), ADDRESS))
+        assertThatThrownBy(() -> orderService.createOrder(userId, "key-1", List.of(), ADDRESS))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(CommonErrorCode.INVALID_INPUT_VALUE));
 
         assertThat(orderRepository.count()).isZero();
@@ -203,7 +208,7 @@ class OrderServiceTest {
         for (int i = 0; i < 12; i++) {
             Long userId = buyer();
             List<Long> items = cartOf(userId, tee);
-            tasks.add(() -> orderService.create(userId, UUID.randomUUID().toString(), items, ADDRESS).orderNumber());
+            tasks.add(() -> orderService.createOrder(userId, UUID.randomUUID().toString(), items, ADDRESS).orderNumber());
         }
 
         int succeeded = 0;
@@ -212,7 +217,7 @@ class OrderServiceTest {
             try {
                 future.get();
                 succeeded++;
-            } catch (java.util.concurrent.ExecutionException e) {
+            } catch (ExecutionException e) {
                 assertThat(errorCodeOf(e.getCause())).isEqualTo(ProductErrorCode.OUT_OF_STOCK);
                 outOfStock++;
             }
@@ -230,12 +235,116 @@ class OrderServiceTest {
         Product tee = product("19900.00", 5);
         Long userId = buyer();
         List<Long> items = cartOf(userId, tee);
-        Callable<String> request = () -> orderService.create(userId, "key-1", items, ADDRESS).orderNumber();
+        Callable<String> request = () -> orderService.createOrder(userId, "key-1", items, ADDRESS).orderNumber();
 
         List<Future<String>> futures = runConcurrently(List.of(request, request, request));
 
         assertThat(futures.get(0).get()).isEqualTo(futures.get(1).get()).isEqualTo(futures.get(2).get());
         assertThat(orderRepository.count()).isEqualTo(1);
         assertThat(stockOf(tee)).isEqualTo(4);
+    }
+
+    private Long orderIdOf(String orderNumber) {
+        return orderRepository.findAll().stream()
+                .filter(order -> order.getOrderNumber().equals(orderNumber))
+                .findFirst().orElseThrow().getId();
+    }
+
+    private Order orderOf(Long orderId) {
+        return orderRepository.findById(orderId).orElseThrow();
+    }
+
+    private void forceStatus(Long orderId, OrderStatus from, OrderStatus to) {
+        transactionTemplate.executeWithoutResult(status ->
+                orderRepository.transitionStatus(orderId, from, to, LocalDateTime.now()));
+    }
+
+    @Test
+    @DisplayName("상세는 트랜잭션 밖에서 항목과 주문 시점 상품명·가격을 읽어 준다")
+    void detailReadsItemsWithSnapshotPrice() {
+        Product tee = product("19900.00", 5);
+        Long userId = buyer();
+        String number = orderService.createOrder(userId, "key-1", cartOf(userId, tee), ADDRESS).orderNumber();
+        tee = productRepository.findById(tee.getId()).orElseThrow();
+        tee.updateInfo(category, "이름 변경", "면 100%", new BigDecimal("29900.00"), 4);
+        productRepository.save(tee);
+
+        OrderDetailResponse detail = orderService.getMyOrderDetail(userId, orderIdOf(number));
+
+        assertThat(detail.items()).singleElement().satisfies(item -> {
+            assertThat(item.priceAtOrder()).isEqualByComparingTo("19900.00");
+            assertThat(item.productName()).isEqualTo("기본 반팔티");
+        });
+    }
+
+    @Test
+    @DisplayName("취소하면 모든 항목의 재고가 돌아오고 updatedAt이 갱신된다")
+    void cancelRestoresStock() {
+        Product soldOut = product("19900.00", 1);
+        Product tee = product("49900.00", 5);
+        Long userId = buyer();
+        String number = orderService.createOrder(userId, "key-1", cartOf(userId, soldOut, tee), ADDRESS).orderNumber();
+        Long orderId = orderIdOf(number);
+        LocalDateTime before = orderOf(orderId).getUpdatedAt();
+
+        orderService.cancelOrder(userId, orderId);
+
+        assertThat(orderOf(orderId).getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(orderOf(orderId).getUpdatedAt())
+                .as("벌크 UPDATE는 @LastModifiedDate를 거치지 않는다").isAfter(before);
+        assertThat(stockOf(soldOut)).isEqualTo(1);
+        assertThat(stockOf(tee)).isEqualTo(5);
+        assertThat(productRepository.findById(soldOut.getId()).orElseThrow().getStatus())
+                .isEqualTo(ProductStatus.ON_SALE);
+    }
+
+    @Test
+    @DisplayName("PENDING이 아니면 상태별 코드로 거절하고 재고를 건드리지 않는다")
+    void cancelRejectedByStatus() {
+        Product tee = product("19900.00", 5);
+        Long userId = buyer();
+        String number = orderService.createOrder(userId, "key-1", cartOf(userId, tee), ADDRESS).orderNumber();
+        Long orderId = orderIdOf(number);
+
+        forceStatus(orderId, OrderStatus.PENDING, OrderStatus.PAYMENT_IN_PROGRESS);
+        assertThatThrownBy(() -> orderService.cancelOrder(userId, orderId))
+                .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS));
+
+        forceStatus(orderId, OrderStatus.PAYMENT_IN_PROGRESS, OrderStatus.PAID);
+        assertThatThrownBy(() -> orderService.cancelOrder(userId, orderId))
+                .as("환불 없이 재고만 돌아가면 안 된다")
+                .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
+
+        forceStatus(orderId, OrderStatus.PAID, OrderStatus.CANCELLED);
+        assertThatThrownBy(() -> orderService.cancelOrder(userId, orderId))
+                .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(OrderErrorCode.ORDER_ALREADY_CANCELLED));
+
+        assertThat(stockOf(tee)).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("동시 취소는 재고를 한 번만 복구한다")
+    void concurrentCancelRestoresOnce() throws Exception {
+        Product tee = product("19900.00", 5);
+        Long userId = buyer();
+        String number = orderService.createOrder(userId, "key-1", cartOf(userId, tee), ADDRESS).orderNumber();
+        Long orderId = orderIdOf(number);
+        Callable<Boolean> request = () -> {
+            orderService.cancelOrder(userId, orderId);
+            return true;
+        };
+
+        int succeeded = 0;
+        for (Future<Boolean> future : runConcurrently(List.of(request, request, request))) {
+            try {
+                future.get();
+                succeeded++;
+            } catch (ExecutionException e) {
+                assertThat(errorCodeOf(e.getCause())).isEqualTo(OrderErrorCode.ORDER_ALREADY_CANCELLED);
+            }
+        }
+
+        assertThat(succeeded).isEqualTo(1);
+        assertThat(stockOf(tee)).isEqualTo(5);
     }
 }
