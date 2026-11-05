@@ -21,6 +21,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -40,7 +41,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Transactional
+// 서비스가 READ_COMMITTED라 격리 수준을 맞춘다. 다르면 합류가 거절된다(ADR 0025)
+@Transactional(isolation = Isolation.READ_COMMITTED)
 @DisplayName("장바구니 API (Phase 4 · 3단계)")
 class CartControllerTest {
 
