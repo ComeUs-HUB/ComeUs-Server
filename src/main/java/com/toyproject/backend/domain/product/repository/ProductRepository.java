@@ -2,9 +2,15 @@ package com.toyproject.backend.domain.product.repository;
 
 import com.toyproject.backend.domain.product.entity.Product;
 import com.toyproject.backend.domain.product.entity.ProductStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -35,4 +41,9 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
      * 두 경로를 합치지 않는다(ADR 0013).
      */
     Optional<Product> findByIdAndStatusNot(Long id, ProductStatus status);
+
+    /** [Phase 4 · 5단계] 재고 차감용 잠금. 두 주문이 반대 순서로 잠가 교착하지 않게 id 순으로 잠근다(ADR 0025). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Product p where p.id in :ids order by p.id")
+    List<Product> lockAllByIdIn(@Param("ids") Collection<Long> ids);
 }

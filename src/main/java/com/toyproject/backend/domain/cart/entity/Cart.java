@@ -18,7 +18,9 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import lombok.AccessLevel;
@@ -111,6 +113,20 @@ public class Cart {
     /** @throws BusinessException 항목이 없으면 CT001(404) */
     public void removeItem(Long itemId) {
         this.items.remove(getItem(itemId));
+    }
+
+    /**
+     * [Phase 4 · 5단계] 주문할 항목을 고른다.
+     *
+     * @throws BusinessException 없는 항목이 하나라도 있으면 CT001(404)
+     */
+    public List<CartItem> selectItems(Collection<Long> itemIds) {
+        return new LinkedHashSet<>(itemIds).stream().map(this::getItem).toList();
+    }
+
+    /** [Phase 4 · 5단계] 주문이 성립한 항목만 지운다. 선택하지 않은 항목은 남는다. */
+    public void removeItems(Collection<Long> itemIds) {
+        this.items.removeIf(item -> itemIds.contains(item.getId()));
     }
 
     /** 비어 있어도 실패하지 않는다. */

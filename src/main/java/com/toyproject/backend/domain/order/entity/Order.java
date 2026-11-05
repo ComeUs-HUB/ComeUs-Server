@@ -19,10 +19,14 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -105,9 +109,8 @@ public class Order {
         this.totalAmount = BigDecimal.ZERO;
     }
 
-    public static Order create(User user, String orderNumber, String idempotencyKey,
-                               ShippingAddress shippingAddress) {
-        return new Order(user, orderNumber, idempotencyKey, shippingAddress);
+    public static Order create(User user, String idempotencyKey, ShippingAddress shippingAddress) {
+        return new Order(user, generateOrderNumber(), idempotencyKey, shippingAddress);
     }
 
     /**
@@ -127,5 +130,11 @@ public class Order {
     /** 밖에서 컬렉션을 고치면 총액과 어긋나므로 불변 목록을 돌려준다. */
     public List<OrderItem> getOrderItems() {
         return Collections.unmodifiableList(this.orderItems);
+    }
+
+    /** 토스 {@code orderId} 규칙(6~64자, 영문·숫자·{@code -_=})을 따른다. */
+    private static String generateOrderNumber() {
+        String random = UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase(Locale.ROOT);
+        return "ORD-" + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE) + "-" + random;
     }
 }
