@@ -1,7 +1,7 @@
 # order — 주문
 
 > 이 문서는 **구현할 계약**이고, 진행 현황은 [roadmap.md](../../roadmap.md)가 소유한다.
-> 엔티티, 스키마, 주문 생성·조회·`PENDING` 취소 서비스까지 코드에 있다.
+> 만료 배치와 `PAID` 취소를 뺀 API가 코드에 있다.
 
 [cart.md](cart.md)의 항목을 값으로 복사해 성립하고, 결제는 [payment.md](payment.md)가 잇는다.
 셋에 걸친 엔티티 관계는 [README.md](README.md)가 소유한다.
@@ -76,7 +76,7 @@ Controller   키 형식, 빈 목록 검증                        → C001
   9. 선택한 cartItem 삭제
 커밋
 
-응답   { orderNumber, amount }
+응답   200 { orderNumber, amount }
 ```
 
 장바구니에서 고른 항목을 주문으로 복사하면서 재고를 점유한다. 응답의 두 값으로 FE가 토스 결제창을 연다.
@@ -156,11 +156,11 @@ Controller   키 형식, 빈 목록 검증                        → C001
 ```
 1. ADMIN 권한 확인                   → 아니면 A002
 2. id로 주문 조회                    → 없으면 O001
-3. 상태 전환표로 허용 여부 확인      → 승인 진행 중 취소 O003, 그 밖의 불허 전이 O005
-4. 다음 상태로 분기
-   CANCELLED (PENDING에서)   CAS → CANCELLED, products 잠금 (id 오름차순), 재고 복구
-   CANCELLED (PAID에서)      환불 후 CANCELLED, 재고 복구
-   그 밖의 상태              CAS로 상태 변경
+3. 다음 상태로 분기
+   CANCELLED   회원 취소의 3번과 같다
+   SHIPPING    PAID에서만 CAS로 변경             → 그 밖의 상태 O005
+   DELIVERED   SHIPPING에서만 CAS로 변경         → 그 밖의 상태 O005
+   그 밖의 값  거절 O005
 ```
 
 ADMIN이 배송 처리처럼 주문 상태를 직접 바꾼다.
@@ -194,4 +194,4 @@ API가 아니라 스케줄 작업이다.
 |---|---|---|---|
 | O003 | `ORDER_PAYMENT_IN_PROGRESS` | 409 | 결제 승인 중인 주문의 취소 |
 | O004 | `ORDER_ALREADY_CANCELLED` | 409 | 이미 취소된 주문의 재취소 |
-| O005 | `INVALID_ORDER_STATUS_TRANSITION` | 409 | 상태 전환표에 없는 ADMIN 변경 |
+| O005 | `INVALID_ORDER_STATUS_TRANSITION` | 409 | 배송 전이가 아닌 ADMIN 변경 |

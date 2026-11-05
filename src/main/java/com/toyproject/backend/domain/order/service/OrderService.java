@@ -117,6 +117,39 @@ public class OrderService {
             throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
         }
 
+        cancelPendingOrder(orderId);
+    }
+
+    /** [Phase 4 · 7단계] 전체 주문 목록. 상한과 정렬은 컨트롤러가 정한다. */
+    public PageResponse<OrderSummaryResponse> getOrderList(Pageable pageable) {
+        return PageResponse.of(orderRepository.findAll(pageable).map(OrderSummaryResponse::from));
+    }
+
+    /**
+     * [Phase 4 · 7단계] ADMIN 상태 변경. 취소는 회원과 같은 경로이고 그 밖에는 배송 전이만 연다.
+     *
+     * @throws BusinessException O001 · O002 · O003 · O004 · O005
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void changeOrderStatus(Long orderId, OrderStatus nextStatus) {
+        OrderStatus currentStatus = getOrder(orderId).getStatus();
+
+        if (nextStatus == OrderStatus.CANCELLED) {
+            cancelPendingOrder(orderId);
+            return;
+        }
+        if (!isDeliveryTransition(currentStatus, nextStatus)
+                || orderRepository.transitionStatus(orderId, currentStatus, nextStatus, LocalDateTime.now()) == 0) {
+            throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        }
+    }
+
+    private static boolean isDeliveryTransition(OrderStatus currentStatus, OrderStatus nextStatus) {
+        return (currentStatus == OrderStatus.PAID && nextStatus == OrderStatus.SHIPPING)
+                || (currentStatus == OrderStatus.SHIPPING && nextStatus == OrderStatus.DELIVERED);
+    }
+
+    private void cancelPendingOrder(Long orderId) {
         int cancelled = orderRepository.transitionStatus(
                 orderId, OrderStatus.PENDING, OrderStatus.CANCELLED, LocalDateTime.now());
         if (cancelled == 0) {
