@@ -1,6 +1,6 @@
 # ADR 0024 — 주문 생성의 중복은 헤더 멱등키와 복합 유니크로 막는다
 
-- 상태: 채택 (0026이 보강)
+- 상태: 채택 (0026·0027이 보강)
 - 일자: 2026-11-03
 - 관련: [domains/purchase/order.md](../../domains/purchase/order.md), [ADR 0016](0016-stock-reserved-at-order-not-cart.md), [ADR 0020](0020-cart-writes-use-read-committed.md)
 

@@ -87,7 +87,7 @@ Controller   키 형식, 빈 목록 검증                        → C001
 
 **중복 요청**
 - 같은 멱등키의 재요청은 거절하지 않고 **기존 주문을 반환**하며 재고를 건드리지 않는다
-- 3번을 우회해 uk 위반이 나면 롤백 후 별도 트랜잭션에서 기존 주문을 읽어 반환한다 — [ADR 0024](../../decisions/purchase/0024-order-idempotency-key-in-header.md)
+- 3번을 우회해 uk 위반이 나면 롤백되고 `C005`(409)로 응답한다. 주문은 중복되지 않는다 — [ADR 0027](../../decisions/purchase/0027-idempotency-uk-violation-responds-conflict.md)
 
 **재고**
 - 동시에 마지막 재고를 두고 경쟁해도 **음수로 내려가면 안 된다** — [ADR 0025](../../decisions/purchase/0025-pessimistic-lock-as-stock-concurrency-baseline.md)
