@@ -26,6 +26,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
@@ -63,6 +64,8 @@ class OrderServiceTest {
     @Autowired private CategoryRepository categoryRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private TransactionTemplate transactionTemplate;
+    @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired private OrderExpirationScheduler expirationScheduler;
 
     private Category category;
     private int userSequence;
@@ -346,5 +349,72 @@ class OrderServiceTest {
 
         assertThat(succeeded).isEqualTo(1);
         assertThat(stockOf(tee)).isEqualTo(5);
+    }
+
+    private void ageOrder(Long orderId, int minutes) {
+        jdbcTemplate.update("update orders set updated_at = ? where id = ?",
+                LocalDateTime.now().minusMinutes(minutes), orderId);
+    }
+
+    @Test
+    @DisplayName("15분 지난 PENDING만 취소되어 재고가 돌아오고 승인 중인 주문은 건드리지 않는다")
+    void expiresOnlyOldPendingOrders() {
+        Product tee = product("19900.00", 10);
+        Long oldPending = placeOrder(tee);
+        Long freshPending = placeOrder(tee);
+        Long oldInProgress = placeOrder(tee);
+        ageOrder(oldPending, 16);
+        ageOrder(freshPending, 14);
+        forceStatus(oldInProgress, OrderStatus.PENDING, OrderStatus.PAYMENT_IN_PROGRESS);
+        ageOrder(oldInProgress, 16);
+
+        expirationScheduler.expirePendingOrders();
+
+        assertThat(orderOf(oldPending).getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(orderOf(freshPending).getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(orderOf(oldInProgress).getStatus())
+                .as("토스 승인이 끝났을 수 있어 복구 배치만 판정한다 — ADR 0026").isEqualTo(OrderStatus.PAYMENT_IN_PROGRESS);
+        assertThat(stockOf(tee)).isEqualTo(8);
+    }
+
+    @Test
+    @DisplayName("조회 뒤 승인 거절로 돌아온 주문은 시각이 새로워 취소되지 않는다")
+    void refreshedPendingOrderIsNotExpired() {
+        Product tee = product("19900.00", 10);
+        Long orderId = placeOrder(tee);
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(15);
+        ageOrder(orderId, 16);
+        ageOrder(orderId, 1);
+
+        orderService.expirePendingOrder(orderId, cutoff);
+
+        assertThat(orderOf(orderId).getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(stockOf(tee)).isEqualTo(9);
+    }
+
+    @Test
+    @DisplayName("동시에 돌아도 재고는 한 번만 복구된다")
+    void concurrentExpirationRestoresOnce() throws Exception {
+        Product tee = product("19900.00", 10);
+        Long orderId = placeOrder(tee);
+        ageOrder(orderId, 16);
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(15);
+        Callable<Boolean> expire = () -> {
+            orderService.expirePendingOrder(orderId, cutoff);
+            return true;
+        };
+
+        for (Future<Boolean> future : runConcurrently(List.of(expire, expire, expire))) {
+            future.get();
+        }
+
+        assertThat(stockOf(tee)).isEqualTo(10);
+    }
+
+    private Long placeOrder(Product product) {
+        Long userId = buyer();
+        String number = orderService.createOrder(userId, UUID.randomUUID().toString(), cartOf(userId, product), ADDRESS)
+                .orderNumber();
+        return orderIdOf(number);
     }
 }
