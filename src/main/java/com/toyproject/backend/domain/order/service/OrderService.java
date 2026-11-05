@@ -19,6 +19,7 @@ import com.toyproject.backend.global.exception.BusinessException;
 import com.toyproject.backend.global.exception.CommonErrorCode;
 import com.toyproject.backend.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -35,6 +36,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class OrderService {
+
+    private static final int EXPIRATION_BATCH_SIZE = 100;
 
     private final OrderRepository orderRepository;
     private final CartService cartService;
@@ -141,6 +144,22 @@ public class OrderService {
         if (!isDeliveryTransition(currentStatus, nextStatus)
                 || orderRepository.transitionStatus(orderId, currentStatus, nextStatus, LocalDateTime.now()) == 0) {
             throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        }
+    }
+
+    /** [Phase 4 · 8단계] 한 주기에 처리할 만료 주문. 오래된 순이다. */
+    public List<Long> findExpiredPendingOrderIds(LocalDateTime cutoff) {
+        return orderRepository.findExpiredPendingOrderIds(
+                OrderStatus.PENDING, cutoff, PageRequest.of(0, EXPIRATION_BATCH_SIZE));
+    }
+
+    /** [Phase 4 · 8단계] 만료 주문을 취소하고 재고를 복구한다. CAS가 0건이면 다른 경로가 먼저 처리한 것이다. */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void expirePendingOrder(Long orderId, LocalDateTime cutoff) {
+        int cancelled = orderRepository.cancelExpiredPendingOrder(
+                orderId, OrderStatus.PENDING, OrderStatus.CANCELLED, cutoff, LocalDateTime.now());
+        if (cancelled == 1) {
+            restoreStock(orderId);
         }
     }
 

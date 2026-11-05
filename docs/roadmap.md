@@ -332,7 +332,7 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 | 5 | Repository + `OrderService.createOrder()` + 장바구니·상품 쪽 주문용 메서드 | `OrderServiceTest` | ✅ |
 | 6 | 내 주문 조회 + `PENDING` 취소와 재고 복구 | `OrderServiceTest` | ✅ |
 | 7 | 컨트롤러 + DTO + ADMIN API + `O003`~`O005` | `OrderControllerTest` | ✅ |
-| 8 | `PENDING` 만료 배치 | 배치 테스트 | ⬜ |
+| 8 | `PENDING` 만료 배치 | `OrderServiceTest` | ✅ |
 
 `PAID` 취소는 환불이 필요해 Payment로 넘긴다. MySQL 동시성 확인과 기준선 측정은 구현 뒤에 따로 한다.
 

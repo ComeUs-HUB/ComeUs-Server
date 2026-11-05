@@ -1,7 +1,7 @@
 # order — 주문
 
 > 이 문서는 **구현할 계약**이고, 진행 현황은 [roadmap.md](../../roadmap.md)가 소유한다.
-> 만료 배치와 `PAID` 취소를 뺀 API가 코드에 있다.
+> `PAID` 취소를 뺀 API와 만료 배치가 코드에 있다.
 
 [cart.md](cart.md)의 항목을 값으로 복사해 성립하고, 결제는 [payment.md](payment.md)가 잇는다.
 셋에 걸친 엔티티 관계는 [README.md](README.md)가 소유한다.
@@ -175,9 +175,10 @@ ADMIN이 배송 처리처럼 주문 상태를 직접 바꾼다.
 API가 아니라 스케줄 작업이다.
 
 ```
-1. updatedAt이 15분 넘게 지난 PENDING 주문 조회
+1분마다 실행
+1. updatedAt이 15분 넘게 지난 PENDING 주문 조회 (한 번에 100건, 오래된 순)
 2. 주문마다 트랜잭션
-   CAS PENDING → CANCELLED        → 0건이면 건너뜀 (그사이 승인 선점·취소)
+   CAS PENDING → CANCELLED (updatedAt도 비교)  → 0건이면 건너뜀 (그사이 승인 선점·취소·승인 거절)
    products 잠금 (id 오름차순), 재고 복구
 ```
 

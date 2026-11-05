@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /** [Phase 4 · 5단계] 주문 Repository. */
@@ -45,4 +46,34 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                          @Param("expectedStatus") OrderStatus expectedStatus,
                          @Param("nextStatus") OrderStatus nextStatus,
                          @Param("updatedAt") LocalDateTime updatedAt);
+
+    /** [Phase 4 · 8단계] {@code cutoff} 전부터 결제되지 않은 주문 id. 오래된 순이다. */
+    @Query("""
+            select o.id from Order o
+             where o.status = :pending
+               and o.updatedAt < :cutoff
+             order by o.updatedAt
+            """)
+    List<Long> findExpiredPendingOrderIds(@Param("pending") OrderStatus pending,
+                                          @Param("cutoff") LocalDateTime cutoff,
+                                          Pageable pageable);
+
+    /**
+     * [Phase 4 · 8단계] 만료 주문을 취소한다. 조회 뒤 승인 거절로 돌아온 주문은 시각이 새로워 취소되지 않는다.
+     *
+     * @return 갱신된 행 수. 0이면 그사이 상태나 시각이 달라졌다
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Order o
+               set o.status = :cancelled, o.updatedAt = :updatedAt
+             where o.id = :orderId
+               and o.status = :pending
+               and o.updatedAt < :cutoff
+            """)
+    int cancelExpiredPendingOrder(@Param("orderId") Long orderId,
+                                  @Param("pending") OrderStatus pending,
+                                  @Param("cancelled") OrderStatus cancelled,
+                                  @Param("cutoff") LocalDateTime cutoff,
+                                  @Param("updatedAt") LocalDateTime updatedAt);
 }

@@ -72,7 +72,7 @@ com.toyproject.backend
 │   ├── payment      │
 │   └── review      ─┘
 └── global
-    ├── config       # SecurityConfig, AppProperties, JpaConfig
+    ├── config       # SecurityConfig, AppProperties, JpaConfig, SchedulingConfig
     ├── exception    # ErrorCode(interface), CommonErrorCode,
     │                #   BusinessException, GlobalExceptionHandler
     ├── response     # ApiResponse, ErrorResponse, PageResponse
