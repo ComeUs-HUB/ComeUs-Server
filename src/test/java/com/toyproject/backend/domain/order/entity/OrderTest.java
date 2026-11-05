@@ -25,7 +25,6 @@ class OrderTest {
     private static Order order() {
         return Order.create(
                 User.ofKakao("kakao-1", "buyer@example.com", "구매자"),
-                "ORD-000001",
                 "550e8400-e29b-41d4-a716-446655440000",
                 ShippingAddress.of("구매자", "010-0000-0000", "서울시"));
     }
