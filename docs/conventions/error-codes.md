@@ -77,6 +77,9 @@ public interface ErrorCode {          // global/exception/ErrorCode.java
 | CT003 | `CART_ITEM_LIMIT_EXCEEDED` | 409 | 〃 |
 | O001 | `ORDER_NOT_FOUND` | 404 | `domain.order.exception.OrderErrorCode` |
 | O002 | `ORDER_CANCEL_NOT_ALLOWED` | 409 | 〃 |
+| O003 | `ORDER_PAYMENT_IN_PROGRESS` | 409 | 〃 |
+| O004 | `ORDER_ALREADY_CANCELLED` | 409 | 〃 |
+| O005 | `INVALID_ORDER_STATUS_TRANSITION` | 409 | 〃 |
 | PAY001 | `PAYMENT_NOT_FOUND` | 404 | `domain.payment.exception.PaymentErrorCode` |
 | PAY002 | `PAYMENT_ALREADY_EXISTS` | 409 | 〃 |
 | R001 | `REVIEW_NOT_FOUND` | 404 | `domain.review.exception.ReviewErrorCode` |

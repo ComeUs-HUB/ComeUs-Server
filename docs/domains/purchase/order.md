@@ -1,15 +1,49 @@
 # order — 주문
 
-> 아직 코드가 없다. 이 문서는 **구현할 계약**이고, 진행 현황은 [roadmap.md](../../roadmap.md)가 소유한다.
-> `OrderErrorCode`만 선반영돼 있다.
+> 이 문서는 **구현할 계약**이고, 진행 현황은 [roadmap.md](../../roadmap.md)가 소유한다.
+> `PAID` 취소를 뺀 API와 만료 배치가 코드에 있다.
 
 [cart.md](cart.md)의 항목을 값으로 복사해 성립하고, 결제는 [payment.md](payment.md)가 잇는다.
 셋에 걸친 엔티티 관계는 [README.md](README.md)가 소유한다.
 
 ## 엔티티
 
-id, user, orderItems[ { product, quantity, priceAtOrder } ], totalAmount,
-status(PENDING/PAID/SHIPPING/DELIVERED/CANCELLED), shippingAddress, createdAt
+id, user, orderNumber, idempotencyKey, paymentKey, orderItems[ { product, quantity, productNameAtOrder, priceAtOrder } ], totalAmount,
+status(PENDING/PAYMENT_IN_PROGRESS/PAID/SHIPPING/DELIVERED/CANCELLED), shippingAddress, createdAt, updatedAt
+
+- `orderNumber` — 서버가 발급하고 토스 `orderId`로 쓴다. unique
+- `paymentKey` — 승인을 선점한 시도의 키. 승인 거절로 `PENDING`에 돌아오면 비운다
+- `shippingAddress` — `@Embedded`(recipientName, recipientPhone, address). 전부 필수이고 주문 시점 값을 **스냅샷**한다.
+  회원 정보가 바뀌어도 성립한 주문의 배송지는 그대로다
+
+## 상태 흐름
+
+```
+PENDING ──승인 선점──▶ PAYMENT_IN_PROGRESS ──승인 성공──▶ PAID ──▶ SHIPPING ──▶ DELIVERED
+   ▲                        │                           │
+   └───── 승인 거절 ──────────┘                           │
+   │                                                    │
+   └───── 취소·만료 ──▶ CANCELLED   ◀──── 취소·환불 ────────┘
+```
+
+| 현재 상태 | 다음 상태 | 언제 |
+|---|---|---|
+| `PENDING` | `PAYMENT_IN_PROGRESS` | 결제 승인 선점 |
+| `PENDING` | `CANCELLED` | 회원·ADMIN 취소, 만료 |
+| `PAYMENT_IN_PROGRESS` | `PAID` | 승인 성공 |
+| `PAYMENT_IN_PROGRESS` | `PENDING` | 승인 거절 |
+| `PAID` | `SHIPPING` | ADMIN 배송 처리 |
+| `PAID` | `CANCELLED` | 회원·ADMIN의 환불 후 취소 |
+| `SHIPPING` | `DELIVERED` | ADMIN 배송 완료 처리 |
+
+`DELIVERED`와 `CANCELLED`는 최종 상태다. **표에 없는 전이는 모두 거절한다.**
+
+- `PENDING`의 차감이 재고 점유이고 `PAID`가 확정한다. 장바구니는 점유하지 않는다 — [ADR 0016](../../decisions/purchase/0016-stock-reserved-at-order-not-cart.md)
+- **`CANCELLED`로 가는 모든 전환이 재고를 복구한다.** 결제 전이든 후든, 회원이 취소하든 ADMIN이 바꾸든,
+  환불이든 `PENDING` 만료든 같다
+- 결제가 일으키는 전이는 [payment.md](payment.md)와 [ADR 0026](../../decisions/purchase/0026-payment-confirm-outside-transaction.md)이 정한다.
+  결제창 단계의 실패·취소는 주문을 바꾸지 않고, 승인 거절은 `PENDING`으로 되돌린다.
+  둘 다 재고를 점유한 채 같은 주문으로 결제를 다시 시도한다
 
 ## API
 
@@ -22,31 +56,143 @@ status(PENDING/PAID/SHIPPING/DELIVERED/CANCELLED), shippingAddress, createdAt
 | GET | `/api/admin/orders` | 전체 주문 목록 | ADMIN |
 | PUT | `/api/admin/orders/{id}/status` | 주문 상태 변경 | ADMIN |
 
-## 규칙
+### POST `/api/orders` — 주문 생성
 
-- **입력은 선택한 `cartItemId` 목록이다.** 장바구니 전체가 아니라 사용자가 고른 항목만 주문한다
-  - 주문이 성립하면 **그 항목만** 장바구니에서 지운다. 선택하지 않은 항목은 남는다
-  - 타인의 항목이거나 존재하지 않는 id → `CT001 CART_ITEM_NOT_FOUND`
-  - 빈 목록 → `C001 INVALID_INPUT_VALUE`
-  - **장바구니를 거치지 않는 "바로 구매"는 초기 범위 밖이다** — 입력이 장바구니에 묶인다([ADR 0017](../../decisions/purchase/0017-order-copies-cart-and-cuts-the-link.md))
-- 주문 생성 시 재고 차감. **동시에 마지막 재고를 두고 경쟁해도 음수로 내려가면 안 된다**
-- **재고 점유는 결제 대기에서 일어난다.** 주문 생성(`PENDING`)의 차감이 곧 점유이고,
-  결제 성공이 확정(`PAID`)한다. 장바구니는 점유하지 않는다 — [ADR 0016](../../decisions/purchase/0016-stock-reserved-at-order-not-cart.md)
-- **`cartItem` 삭제와 재고 차감은 한 트랜잭션이다.** 재고 부족(`P002`)으로 주문이 실패하면
-  장바구니는 그대로 남아야 한다 — 거절당했는데 장바구니까지 비는 것이 최악이다
-- 주문 시점 가격을 `priceAtOrder`에 **스냅샷** 저장 — 이후 상품 가격이 바뀌어도 이미 성립한 주문의
-  금액은 유지되어야 한다
-- **`CANCELLED`로 가는 모든 전환이 재고를 복구한다.** 점유를 시작한 것이 주문 생성이므로
-  결제 전(`PENDING`)이든 후(`PAID`)든, 회원이 취소하든 ADMIN이 바꾸든 같다.
-  결제 실패([payment.md](payment.md))와 환불도 이 규칙에 흡수된다
-- SHIPPING 이후 회원이 직접 취소 불가 → `O002 ORDER_CANCEL_NOT_ALLOWED`
+```
+Idempotency-Key: {uuid}
+{ cartItemIds, shippingAddress }
 
-## 착수 전 정할 것
+Controller   키 형식, 빈 목록 검증                        → C001
 
-- **동시성 제어 방식** — 비관적 락(`PESSIMISTIC_WRITE`), 낙관적 락+재시도, 원자적 감소 연산 중 선택.
-  트레이드오프를 비교하고 **ADR로 남긴다**([decisions/](../../decisions/))
-- **`PENDING` 주문의 만료 처리** — 결제되지 않은 주문이 재고를 계속 점유한다. 장바구니 예약을
-  배제한 이유(담아두고 사지 않으면 재고가 묶인다)가 범위만 좁혀 그대로 재현된다.
-  자동 취소 배치를 둘지, 사용자·ADMIN 취소에만 맡길지 정한다
-- 배송지도 주문 시점 스냅샷이 필요한지
-- 상태 전환표(각 상태에서 허용되는 다음 상태)를 확정
+트랜잭션 시작 (READ_COMMITTED)
+  1. 장바구니 존재 확인 (락 없음)                         → 없으면 CT001
+  2. carts 행 잠금
+  3. (user_id, 멱등키)로 주문 조회                        → 있으면 그 주문을 반환하고 끝
+  4. 선택한 cartItem 조회, 소유자 검증                    → 타인·없는 항목 CT001
+  5. products 행 잠금 (id 오름차순)
+  6. 숨김 상품 확인                                       → HIDDEN P001
+  7. 재고 차감 Product.decreaseStock()                    → 부족·품절 P002
+  8. Order(PENDING) 저장, 상품명·가격·배송지 스냅샷
+  9. 선택한 cartItem 삭제
+커밋
+
+응답   200 { orderNumber, amount }
+```
+
+장바구니에서 고른 항목을 주문으로 복사하면서 재고를 점유한다. 응답의 두 값으로 FE가 토스 결제창을 연다.
+
+**입력**
+- 장바구니 전체가 아니라 **선택한 `cartItemId` 목록**이다
+- **장바구니를 거치지 않는 "바로 구매"는 초기 범위 밖이다** — [ADR 0017](../../decisions/purchase/0017-order-copies-cart-and-cuts-the-link.md)
+
+**중복 요청**
+- 같은 멱등키의 재요청은 거절하지 않고 **기존 주문을 반환**하며 재고를 건드리지 않는다
+- 3번을 우회해 uk 위반이 나면 롤백되고 `C005`(409)로 응답한다. 주문은 중복되지 않는다 — [ADR 0027](../../decisions/purchase/0027-idempotency-uk-violation-responds-conflict.md)
+
+**재고**
+- 동시에 마지막 재고를 두고 경쟁해도 **음수로 내려가면 안 된다** — [ADR 0025](../../decisions/purchase/0025-pessimistic-lock-as-stock-concurrency-baseline.md)
+- 장바구니에 담은 뒤 숨겨진 상품은 주문하지 않는다. `decreaseStock()`은 숨김을 거르지 않으므로 잠금 뒤 상태로 확인한다
+
+**스냅샷**
+- `productNameAtOrder`·`priceAtOrder`에 주문 시점 상품명과 가격을 저장한다. 이후 상품이 바뀌어도 성립한 주문의 기록은 유지된다
+- 배송지가 비어 있으면 `C001`이다
+
+**실패 시 장바구니**
+- 7~9번은 한 트랜잭션이다. `P002`로 실패하면 장바구니는 그대로 남는다 — 거절당했는데 장바구니까지 비는 것이 최악이다
+- 주문이 성립하면 **선택한 항목만** 지운다. 선택하지 않은 항목은 남는다
+
+### GET `/api/orders` — 내 주문 목록
+
+```
+1. 로그인 회원의 주문 조회 (페이징)
+2. PageResponse 변환
+```
+
+자기 주문만 돌려준다. 재고와 장바구니를 건드리지 않는다.
+페이징은 [product.md](../catalog/product.md)와 같다 — 기본 `size=20`, 최대 100, `createdAt` 내림차순.
+
+### GET `/api/orders/{id}` — 주문 상세
+
+```
+1. id로 주문 조회                    → 없으면 O001
+2. 소유자 검증                       → 타인의 주문 O001
+3. 주문 항목과 함께 응답 변환
+```
+
+상품명과 금액은 주문 시점 스냅샷으로 보여 준다. 타인의 주문은 존재 여부를 드러내지 않도록 없는 주문과 같은 `O001`로 응답한다.
+
+### POST `/api/orders/{id}/cancel` — 주문 취소
+
+```
+1. id로 주문 조회                    → 없으면 O001
+2. 소유자 검증                       → 타인의 주문 O001
+3. 현재 상태로 분기
+   PENDING               CAS → CANCELLED, products 잠금 (id 오름차순), 재고 복구
+   PAYMENT_IN_PROGRESS   거절 O003
+   PAID                  환불 후 CANCELLED, 재고 복구
+   SHIPPING, DELIVERED   거절 O002
+   CANCELLED             거절 O004
+```
+
+회원이 자기 주문을 취소하고 점유했던 재고를 돌려놓는다.
+
+- **결제 승인 중인 주문은 취소할 수 없다** — 토스 승인과 어긋날 수 있다. [ADR 0026](../../decisions/purchase/0026-payment-confirm-outside-transaction.md)
+- `PENDING` 취소는 CAS로 한다. 그사이 승인이 선점했다면 갱신 0건이므로 취소하지 않는다
+- `SHIPPING` 이후에는 회원이 직접 취소할 수 없다 → `O002 ORDER_CANCEL_NOT_ALLOWED`
+- `PAID` 취소의 갱신 순서는 [payment.md](payment.md)의 환불 순서를 따른다
+
+### GET `/api/admin/orders` — 전체 주문 목록
+
+```
+1. ADMIN 권한 확인                   → 아니면 A002
+2. 전체 주문 조회 (페이징)
+3. PageResponse 변환
+```
+
+회원 구분 없이 모든 주문을 돌려준다. 페이징은 내 주문 목록과 같다.
+
+### PUT `/api/admin/orders/{id}/status` — 주문 상태 변경
+
+```
+1. ADMIN 권한 확인                   → 아니면 A002
+2. id로 주문 조회                    → 없으면 O001
+3. 다음 상태로 분기
+   CANCELLED   회원 취소의 3번과 같다
+   SHIPPING    PAID에서만 CAS로 변경             → 그 밖의 상태 O005
+   DELIVERED   SHIPPING에서만 CAS로 변경         → 그 밖의 상태 O005
+   그 밖의 값  거절 O005
+```
+
+ADMIN이 배송 처리처럼 주문 상태를 직접 바꾼다.
+
+- 허용되는 전환은 위 상태 전환표가 정한다. ADMIN은 `SHIPPING`·`DELIVERED` 주문을 취소할 수 없다
+- **결제 승인 중인 주문은 ADMIN도 취소할 수 없다**
+- ADMIN도 `PENDING`·`PAID` 주문을 `CANCELLED`로 바꿀 수 있고 재고를 복구한다
+- `PAID` 취소의 갱신 순서는 [payment.md](payment.md)의 환불 순서를 따른다
+
+## `PENDING` 만료 배치
+
+API가 아니라 스케줄 작업이다.
+
+```
+1분마다 실행
+1. updatedAt이 15분 넘게 지난 PENDING 주문 조회 (한 번에 100건, 오래된 순)
+2. 주문마다 트랜잭션
+   CAS PENDING → CANCELLED (updatedAt도 비교)  → 0건이면 건너뜀 (그사이 승인 선점·취소·승인 거절)
+   products 잠금 (id 오름차순), 재고 복구
+```
+
+결제되지 않은 주문이 재고를 계속 점유하지 않도록 **15분** 뒤 자동으로 취소한다.
+토스 승인 유효 시간 10분에 여유를 더한 값으로, 결제창에서 정상 진행 중인 주문이 만료되지 않게 한다.
+기준은 마지막으로 `PENDING`이 된 시각이다. 승인이 거절되면 그 시점부터 다시 15분을 준다.
+결제창에서 실패·취소하거나 승인이 거절된 주문도 `PENDING`이므로 대상이다.
+
+## 에러 코드
+
+값의 주인은 [error-codes.md](../../conventions/error-codes.md)다.
+
+| 코드 | 상수 | HTTP | 언제 |
+|---|---|---|---|
+| O003 | `ORDER_PAYMENT_IN_PROGRESS` | 409 | 결제 승인 중인 주문의 취소 |
+| O004 | `ORDER_ALREADY_CANCELLED` | 409 | 이미 취소된 주문의 재취소 |
+| O005 | `INVALID_ORDER_STATUS_TRANSITION` | 409 | 배송 전이가 아닌 ADMIN 변경 |

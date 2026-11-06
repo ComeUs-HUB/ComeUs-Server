@@ -1,6 +1,6 @@
 # ADR 0020 — 장바구니 쓰기는 READ COMMITTED에서 루트 락을 잡는다
 
-- 상태: 채택
+- 상태: 채택 (0025가 보강)
 - 일자: 2026-10-07
 - 관련: [domains/purchase/cart.md](../../domains/purchase/cart.md), [ADR 0019](0019-cart-owns-item-deletion.md), PR #13 리뷰 1번
 

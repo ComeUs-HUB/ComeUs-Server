@@ -218,9 +218,9 @@ class CartServiceTest {
                 .toList();
 
         assertThat(writes)
-                .as("담기·수량 변경·삭제·비우기")
+                .as("담기·수량 변경·삭제·비우기·주문 잠금")
                 .extracting(Method::getName)
-                .containsExactlyInAnyOrder("addItem", "changeQuantity", "removeItem", "clear");
+                .containsExactlyInAnyOrder("addItem", "changeQuantity", "removeItem", "clear", "lockForOrder");
         assertThat(writes)
                 .as("REPEATABLE READ면 락 뒤의 일반 SELECT가 락 이전 스냅샷을 읽어 Lost Update가 난다(ADR 0020)")
                 .allSatisfy(method -> assertThat(method.getAnnotation(Transactional.class).isolation())

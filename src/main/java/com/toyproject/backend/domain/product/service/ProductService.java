@@ -19,8 +19,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -76,6 +78,24 @@ public class ProductService {
     public Product getVisibleProduct(Long id) {
         return productRepository.findByIdAndStatusNot(id, ProductStatus.HIDDEN)
                 .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
+    }
+
+    /**
+     * [Phase 4 · 5단계] 주문할 상품을 잠근다. 잠근 뒤의 상태로 숨김을 판정한다.
+     *
+     * @throws BusinessException 숨긴 상품이 있으면 P001(404)
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void lockVisibleProducts(Collection<Long> ids) {
+        if (productRepository.lockAllByIdIn(ids).stream().anyMatch(Product::isHidden)) {
+            throw new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND);
+        }
+    }
+
+    /** [Phase 4 · 6단계] 재고 복구용 잠금. 숨긴 상품도 복구해야 하므로 거르지 않는다(ADR 0013). */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void lockProducts(Collection<Long> ids) {
+        productRepository.lockAllByIdIn(ids);
     }
 
     /**

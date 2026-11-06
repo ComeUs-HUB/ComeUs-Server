@@ -11,6 +11,9 @@
 | [OAuth · JWT 패키지 구조](auth/package-auth.md) | 로그인에 참여하는 클래스가 어느 패키지에 있고, 의존은 어느 방향으로만 흐르는가 | [auth.md](../domains/auth.md) |
 | [상품 목록 조회](catalog/seq-product-list.md) | 필터·정렬·페이징이 어떻게 SQL이 되고, 이미지 N+1을 어떻게 피하는가 | [product.md](../domains/catalog/product.md) |
 | [장바구니 담기](purchase/seq-cart-add.md) | 동시 담기에서 수량이 사라지지 않고, 첫 담기 경합이 왜 409가 되는가 | [cart.md](../domains/purchase/cart.md) |
+| [주문 생성](purchase/seq-order-create.md) | 동시 주문에서 재고가 초과 판매되지 않고, 같은 요청이 왜 주문을 두 번 만들지 않는가 | [order.md](../domains/purchase/order.md) |
+| [결제 승인](purchase/seq-payment-confirm.md) | 토스 승인을 어떻게 한 번만 호출하고, 서버가 죽어도 어떻게 복구하는가 | [payment.md](../domains/purchase/payment.md) |
+| [주문 상태](purchase/state-order.md) | 주문은 어떤 상태를 거치고, 언제 재고를 점유·복구하는가 | [order.md](../domains/purchase/order.md) |
 | [ERD](images/erd.png) | 테이블과 관계 | `src/main/resources/db/migration` |
 
 ## 폴더 구조

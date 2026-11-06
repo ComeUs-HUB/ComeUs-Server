@@ -9,6 +9,8 @@ spring:
   flyway:
     enabled: false
   jpa:
+    # main을 shadow하므로 여기에도 둔다. 없으면 테스트만 OSIV가 켜져 지연 로딩 오류가 가려진다.
+    open-in-view: false
     hibernate:
       ddl-auto: create-drop
     show-sql: true

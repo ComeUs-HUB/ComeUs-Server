@@ -13,7 +13,8 @@
 flowchart LR
     FE["FE (브라우저)<br/>access token은 메모리<br/>refresh token은 HttpOnly 쿠키"]
     Kakao["카카오<br/>인가 · 토큰 · 사용자 정보 · 연결 해제"]
-    DB[("MySQL<br/>스키마는 Flyway V1~V4")]
+    Toss["토스페이먼츠<br/>결제창 · 승인 · 조회"]:::planned
+    DB[("MySQL<br/>스키마는 Flyway V1~V5")]
 
     subgraph BE["백엔드 (Spring Boot)"]
         direction LR
@@ -30,10 +31,10 @@ flowchart LR
                 Cart[cart]
                 Product[product]
                 Category[category]
+                Order[order]
             end
             subgraph next["계획"]
                 direction LR
-                Order[order]:::planned
                 Payment[payment]:::planned
                 Review[review]:::planned
             end
@@ -44,7 +45,9 @@ flowchart LR
 
     FE -- "REST · Bearer" --> BE
     FE -. "로그인 시 302 왕복" .- Kakao
+    FE -. "결제창" .-> Toss
     Auth -- "REST" --> Kakao
+    Payment -. "승인 · 조회" .-> Toss
     BE -- "JPA" --> DB
     Sec --> User
 
@@ -55,9 +58,10 @@ flowchart LR
     Cart --> User
     Cart --> Product
 
-    Order -.-> Cart
-    Order -.-> Product
-    Order -.-> User
+    Order --> Cart
+    Order --> Product
+    Order --> User
+
     Payment -.-> Order
     Review -.-> Product
     Review -.-> User
@@ -77,4 +81,4 @@ flowchart LR
 - `auth ↔ user`가 양방향인 것은 의도다 — 로그인은 회원을 찾거나 만들고(`auth → user`),
   탈퇴는 토큰 폐기와 카카오 연결 해제까지 끝내야 한다(`user → auth`)
 - `security → user`는 JWT 필터가 **매 요청 DB에서 회원과 role을 읽기** 때문이다. 권한이 토큰 claim에 들어 있지 않다
-- 점선은 Phase 4 Order·Payment, Phase 5 Review, Phase 7 배포다. 참조 방향은 architecture.md에 미리 정해 둔 것이다
+- 점선은 Phase 4 Payment·토스페이먼츠, Phase 5 Review, Phase 7 배포다. 참조 방향은 architecture.md에 미리 정해 둔 것이다

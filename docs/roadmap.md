@@ -19,7 +19,7 @@
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
-**Phase 4 Cart(1~3단계)가 끝났다.** MySQL 동시성 확인은 남아 있다(아래 Cart 체크리스트). 다음은 Order다.
+**Phase 4 Cart(1~3단계)와 Order(4~8단계) 구현이 끝났다.** MySQL 최소 검증을 마쳤다. 다음은 Payment다.
 **동시성 제어 방식은 Order 착수 전까지 ADR로 정한다** — 되돌리기 비용이 큰 결정이지만
 재고를 차감하는 것은 Order이고 Cart는 읽기만 하므로 Cart는 그 결정 없이 착수할 수 있다
 ([domains/purchase/order.md](domains/purchase/order.md)).
@@ -297,10 +297,11 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
       `int` 오버플로로 재고 검사를 우회하는 경로를 막아 뒀다
 - [x] **`V4` 번호 충돌 메모 정리** — 아래 미결 사항의 LOCAL 로그인 항목에서 번호를 고정하지 않고
       "착수 시점의 다음 번호"로 바꿨다. 번호를 박아 두면 다음 도메인이 가져갈 때마다 같은 충돌이 난다
-- [ ] **장바구니 락을 MySQL에서 확인한다** — H2는 기본 격리 수준이 READ COMMITTED이고 gap lock도 재현하지 않아
+- [x] **장바구니 락을 MySQL에서 확인한다** — H2는 기본 격리 수준이 READ COMMITTED이고 gap lock도 재현하지 않아
       `./gradlew test`로 검증되지 않는다([ADR 0020](decisions/purchase/0020-cart-writes-use-read-committed.md)).
-      같은 회원의 동시 담기 2건이 **합산 4**로 끝나는지(Lost Update 없음), 동시 첫 담기가 교착(500)이 아니라
-      `C005`(409)로 끝나는지 본다. **2026-10-08 실기동에서는 하지 않았다** — 아래 기록 참고
+      2026-11-06에 확인했다: 같은 회원의 동시 담기 2건이 **합산 4**로 끝나고, 동시 첫 담기 2건은 교착 없이 1건 성공, 1건 uk 위반으로 끝난다
+- [ ] **동시 첫 담기의 `C005`(409) HTTP 응답을 확인한다** — uk 위반까지만 봤고 응답 변환은 HTTP로 보지 않았다.
+      Cart 단계에서 밀린 항목이고 Order와는 무관하다
 
 ### Cart MySQL 실기동 (2026-10-08)
 
@@ -319,23 +320,68 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 - [x] **쓰기 요청이 실제로 READ COMMITTED로 실행된다** — general log에 `SET SESSION TRANSACTION ISOLATION LEVEL
       READ COMMITTED` → 트랜잭션 → `REPEATABLE READ` 복원이 찍힌다. 비용은 쓰기 요청당 3문장이다
 - [x] 요청당 쿼리 수(인증 필터의 회원 조회 1회 포함) — 조회 2 · 담기 6 · 수량 변경 5 · 항목 삭제 5 · 비우기 4 + N(N ≤ 50)
-- [ ] **동시성 확인은 하지 않았다** — 위 "장바구니 락을 MySQL에서 확인한다" 항목이 그대로 남아 있다
+- [x] **동시성 확인** — 이 실기동에서는 하지 않았다. 2026-11-06에 위 체크리스트 범위까지 확인했다
 - [ ] `existsByUserId`가 `carts left join users`로 실행된다. `carts.user_id`만 보면 되므로 `@Query`로 조인을 없앨 수 있다
 
-### Order — 4~8단계 ⬜
+### Order — 4~8단계 ✅
 
-착수 전 **동시성 제어 ADR**이 필요하다. 이 ADR은 함께 정한다 —
-**주문 트랜잭션에서 장바구니 루트 락을 어디서 잡고 상품 락과 어떤 순서로 잡는지**, 그리고
-**주문 생성·결제의 멱등성 키** 도입 여부(장바구니에는 비용 대비 이득이 작아 두지 않았다).
-**주문 트랜잭션도 READ COMMITTED여야 한다** — `CartService` 쓰기를 기본 격리 수준(REPEATABLE READ) 트랜잭션 안에서
-부르면 Spring이 격리 수준을 조용히 무시해 Lost Update가 되살아난다([ADR 0020](decisions/purchase/0020-cart-writes-use-read-committed.md)).
-`REQUIRES_NEW`는 쓸 수 없다(재고 차감과 항목 삭제가 한 트랜잭션이어야 한다). 무시되지 않게 막는 장치
-(`validateExistingTransaction` 또는 진입 시 격리 수준 가드)도 이 ADR에서 정한다. 그 밖에 정할 것은
-[order.md](domains/purchase/order.md)의 "착수 전 정할 것"에 있다.
+구현 순서는 5단계로 나눴다.
+
+| 단계 | 내용 | 검증 | |
+|---|---|---|---|
+| 4 | 엔티티(`Order`·`OrderItem`·`ShippingAddress`) + `V5__create_orders.sql` + `open-in-view: false` | `OrderTest` · `OrderPersistenceTest` | ✅ |
+| 5 | Repository + `OrderService.createOrder()` + 장바구니·상품 쪽 주문용 메서드 | `OrderServiceTest` | ✅ |
+| 6 | 내 주문 조회 + `PENDING` 취소와 재고 복구 | `OrderServiceTest` | ✅ |
+| 7 | 컨트롤러 + DTO + ADMIN API + `O003`~`O005` | `OrderControllerTest` | ✅ |
+| 8 | `PENDING` 만료 배치 | `OrderServiceTest` | ✅ |
+
+`PAID` 취소는 환불이 필요해 Payment로 넘긴다. 기준선 측정은 구현 뒤에 따로 한다.
+
+착수 전 ADR 셋을 작성했다.
+
+- [ADR 0024](decisions/purchase/0024-order-idempotency-key-in-header.md) — 주문 생성의 중복을 헤더 멱등키와
+  `(user_id, idempotency_key)` 복합 유니크로 막는다. 대조는 `OrderService` 트랜잭션 안, `carts` 루트 락 직후다
+- [ADR 0025](decisions/purchase/0025-pessimistic-lock-as-stock-concurrency-baseline.md) — 재고 동시성은
+  비관적 락을 **기준선**으로 시작한다. 락 순서(`carts` → `products`, `id` 오름차순), 주문 트랜잭션의
+  `READ_COMMITTED`, 격리 수준이 조용히 무시되지 않게 막는 장치(`validateExistingTransaction`)를 함께 고정했다.
+  전환은 [측정 계획](performance/order-stock-concurrency.md)의 측정치로만 판단한다
+- [ADR 0026](decisions/purchase/0026-payment-confirm-outside-transaction.md) — 결제 승인은 트랜잭션 밖에서 호출하고
+  주문 상태 선점으로 한 번만 진입시킨다. `open-in-view: false`도 여기서 정했다. 끈 상태의 영향은 코드 확인과 전체 테스트로 봤고 MySQL에서는 호출해 보지 않았다
+
+상태 전환표, `PENDING` 만료, 배송지 스냅샷 등 주문 계약은 [order.md](domains/purchase/order.md)에 확정했다.
+
+### Order MySQL 최소 검증 (2026-11-06)
+
+MySQL 8.0.41에 별도 검증 DB를 만들어 V1~V5를 적용하고 기본 격리 수준 `REPEATABLE READ`에서 확인했다.
+동시성 시나리오는 임시 테스트로 돌렸고, 임시 테스트와 검증 DB는 확인 후 삭제했다.
+
+- [x] V1~V5 적용, Hibernate `validate` 통과, uk와 `idx_orders_status_updated_at` 생성
+- [x] 재고 10에 동시 주문 200건 — 성공 10, `P002` 190, 재고 0, `SOLD_OUT`
+- [x] 같은 멱등키 동시 5건 — 주문 1건, 재고 1회 차감
+- [x] 같은 상품을 반대 순서로 담은 동시 주문 60건 — 전부 성공, 재고 정확, 교착 없음
+- [x] `createOrder`의 격리 수준 지정을 빼면 `IllegalTransactionStateException`으로 실패한다
+- [x] 주문·장바구니 관련 기존 테스트 31개 통과
+
+Cart 단계에서 밀린 장바구니 락 확인도 이때 함께 했다. 결과는 Cart 체크리스트에 있다.
+
+확인하지 못한 것:
+
+- [ ] **`order by p.id`의 효과** — 빼고 3회 돌려도 교착이 없었다. 순서를 명시하는 안전장치로 두되 교착 방지가 입증된 것은 아니다
+- [ ] **성능 측정** — 로컬 소량 부하라 TPS, p99, 커넥션 풀 포화 지점은 재지 않았다. [측정 계획](performance/order-stock-concurrency.md)
+- [ ] **프로세스 강제 종료 시나리오**
 
 ### Payment — 9~11단계 ⬜
 
-계약은 [payment.md](domains/purchase/payment.md).
+착수 전 정할 것 — 확정 거절을 토스 에러 코드 화이트리스트로 바꾸는 것과 복구 배치의 종결 조건이다. PR #16 리뷰에서 나왔다.
+
+계약은 [payment.md](domains/purchase/payment.md), 승인 경계는
+[ADR 0026](decisions/purchase/0026-payment-confirm-outside-transaction.md).
+
+착수 전 확인할 것:
+
+- [ ] **거절 뒤 같은 `orderId`로 재결제되는지** 토스 테스트 환경에서 확인한다. 공식 문서에 허용 여부가 없다
+- [ ] **토스 에러 코드 목록을 판정표와 대조한다** — "이미 처리됨"류 4xx를 결과 불명으로 분류하고, 같은 `paymentKey` 재호출의 응답을 본다
+- [ ] **`open-in-view: false`의 영향을 확인한다** — 컨트롤러·응답 변환에서 지연 로딩이 깨지는 곳이 없는지 본다
 
 ## Phase 5 — 리뷰 ⬜
 
@@ -382,12 +428,13 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
       **대체 ADR이 필요하다.** 스키마·엔티티·서버 검증은 바뀌지 않고 응답 필드 추가로 끝난다 —
       0015가 "필드를 다시 넣는 것은 추가라 클라이언트를 깨지 않는다"고 적어둔 방향이다.
       ⚠️ 노출해도 조회 시점 값이라 `CT002`·`P002` 거절은 남는다. UX 개선이지 검증 대체가 아니다
-- [ ] **외부 PG 연동** — 포트원 등. 현재 Mock 전제
 - [ ] **Redis 도입** — Refresh Token 저장, 인기 상품 캐싱
 - [ ] **쿠폰 / 포인트 도메인** 추가 여부
 - [ ] **검색 고도화** — Elasticsearch 등
 
 확정된 것:
+- [x] **PG는 토스페이먼츠** — 결제창은 FE가 SDK로 호출하고 백엔드는 승인과 결과 반영을 맡는다.
+      결제창 단계의 실패·취소와 승인 거절은 주문을 `PENDING`으로 둔다. [payment.md](domains/purchase/payment.md)
 - [x] 소셜 로그인은 **카카오 전용** — 구글 등 추가는 `Provider` enum 상수 추가로 확장
 - [x] **상품 목록 동적 필터는 JPA Specification** — 복잡해지면 QueryDSL로 리팩터링.
       [ADR 0011](decisions/catalog/0011-jpa-specification-for-product-filter.md)

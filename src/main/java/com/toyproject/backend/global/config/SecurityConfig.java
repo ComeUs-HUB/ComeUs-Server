@@ -100,6 +100,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, PRODUCTS_PATH).hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.PUT, PRODUCTS_ITEM_PATH).hasRole(Role.ADMIN.name())
                         .requestMatchers(HttpMethod.DELETE, PRODUCTS_ITEM_PATH).hasRole(Role.ADMIN.name())
+                        // 공개 경로와 달리 /** 를 쓴다. 나중에 생기는 관리 경로도 ADMIN만 호출한다.
+                        .requestMatchers("/api/admin/**").hasRole(Role.ADMIN.name())
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 

@@ -90,6 +90,20 @@ public class CartService {
         return CartResponse.empty();
     }
 
+    /**
+     * [Phase 4 · 5단계] 주문 트랜잭션에서 장바구니를 잠근다. 상품을 잠그기 전이라 그래프로 읽지 않는다.
+     *
+     * @throws BusinessException 장바구니가 없으면 CT001
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public Cart lockForOrder(Long userId) {
+        if (!cartRepository.existsByUserId(userId)) {
+            throw new BusinessException(CartErrorCode.CART_ITEM_NOT_FOUND);
+        }
+        return cartRepository.lockByUserId(userId)
+                .orElseThrow(() -> new BusinessException(CartErrorCode.CART_ITEM_NOT_FOUND));
+    }
+
     /** 장바구니가 없으면 항목도 없다 — CT001. */
     private Cart getLockedCart(Long userId) {
         return findLockedCart(userId)

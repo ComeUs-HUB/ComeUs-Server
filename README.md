@@ -1,92 +1,67 @@
 # ComeUs Backend
 
-커머스 플랫폼의 REST API 서버. Spring Boot 3.5.0 · Java 21 · JPA · MySQL · Gradle (Kotlin DSL).
+대용량 트래픽을 목표로 한 이커머스 백엔드입니다.
+장바구니, 주문, 결제 과정에서 동시 요청에도 재고와 결제가 어긋나지 않도록 설계하고, 설계 선택을 측정치로 검증합니다.
 
-카카오 OAuth 로그인과 JWT 인증까지 동작한다. 현재 진행 상황은 [docs/roadmap.md](docs/roadmap.md).
+## 기술 스택
 
-## 로컬 실행
+| 구분 | 기술 |
+|---|---|
+| 언어·프레임워크 | Java 21, Spring Boot 3.5, Spring Security |
+| 데이터 | MySQL 8, Spring Data JPA, Flyway |
+| 인증 | 카카오 OAuth, JWT |
+| 테스트 | JUnit 5, H2 |
+| 결제 | 토스페이먼츠 (예정) |
+| 배포 | Docker, docker-compose, CI/CD, Actuator (예정) |
+| 부하 측정 | k6 또는 Gatling (예정) |
+| 동시성 전환 후보 | 원자적 감소, Redis 분산 락, Redis 재고 게이트 (예정) |
 
-**필요한 것**: Java 21, MySQL 8
+## 전체 아키텍처
 
-### 1. 데이터베이스
+![시스템 구성도](docs/diagrams/images/system-overview.png)
 
-```sql
-CREATE DATABASE toyproject CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
+자세한 설명은 [시스템 구성도 문서](docs/diagrams/global/system-overview.md)에 있습니다.
 
-스키마는 만들지 않아도 된다. **Flyway가 기동 시 `V1__init.sql`로 생성한다**
-([ADR 0008](docs/decisions/platform/0008-flyway-owns-schema.md)).
+도메인 구성: User, Auth, Category, Product, Cart, Order, Payment, Review
 
-### 2. `.env` — 프로젝트 루트
+## 핵심 도메인 아키텍처: 주문 & 결제
 
-`application.yml`이 `spring.config.import`로 읽는다. **`.gitignore` 대상이라 클론 후 직접 만들어야 한다.**
+### 주문 생성
 
-```properties
-LOCAL_DB_USERNAME=<mysql 사용자>
-LOCAL_DB_PASSWORD=<mysql 비밀번호>
+동시 주문에서도 재고가 초과 판매되지 않도록 `carts` → `products` 순으로 잠그고, 같은 멱등키의 재요청에는 기존 주문을 돌려줍니다. ([설명](docs/diagrams/purchase/seq-order-create.md))
 
-KAKAO_CLIENT_ID=<카카오 REST API 키>
-KAKAO_CLIENT_SECRET=<카카오 client secret>
-KAKAO_ADMIN_KEY=<카카오 Admin 키>
+![주문 생성 시퀀스](docs/diagrams/images/seq-order-create.png)
 
-# 최소 32바이트. 짧으면 기동 시 WeakKeyException.
-# 키 길이가 알고리즘을 정한다 — 32+ HS256, 48+ HS384, 64+ HS512
-JWT_SECRET=<32바이트 이상 문자열>
-```
+### 결제 승인 (설계, 구현 예정)
 
-### 3. `src/main/resources/application-local.yml`
+되돌릴 수 없는 토스 승인은 트랜잭션 밖에서 호출하고, 주문 상태 CAS로 한 번만 진입시킵니다. ([설명](docs/diagrams/purchase/seq-payment-confirm.md))
 
-이것도 **`.gitignore` 대상이라 직접 만들어야 한다.**
+![결제 승인 시퀀스](docs/diagrams/images/seq-payment-confirm.png)
 
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/toyproject?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: ${LOCAL_DB_USERNAME}
-    password: ${LOCAL_DB_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+### 주문 상태
 
-kakao:
-  client-id: ${KAKAO_CLIENT_ID}
-  client-secret: ${KAKAO_CLIENT_SECRET}
-  admin-key: ${KAKAO_ADMIN_KEY}
-  # BE 콜백 주소다. FE 주소가 아니다
-  redirect-uri: http://localhost:8080/api/auth/kakao/callback
+재고는 `PENDING`에서 점유하고, `CANCELLED`로 가는 모든 전이가 복구합니다. ([설명](docs/diagrams/purchase/state-order.md))
 
-app:
-  frontend:
-    base-url: http://localhost:3000
-  cors:
-    allowed-origins: http://localhost:3000
-  cookie:
-    # 평문 HTTP에서 Safari가 Secure 쿠키를 거부해 로그인이 실패한다. local은 반드시 false
-    secure: false
-```
+![주문 상태](docs/diagrams/images/state-order.png)
 
-### 4. 카카오 개발자 콘솔
+### 핵심 설계 결정
 
-Redirect URI에 **`http://localhost:8080/api/auth/kakao/callback`** 을 등록한다.
-누락하면 카카오가 `KOE006`으로 거부해 로그인이 첫 시도부터 실패한다.
-
-### 5. 실행
-
-```bash
-./gradlew bootRun     # http://localhost:8080
-./gradlew test        # 전체 테스트
-```
-
-테스트는 H2 인메모리로 돌기 때문에 MySQL이 없어도 통과한다.
-현재 테스트 규모는 [docs/roadmap.md](docs/roadmap.md)에 있다.
+| 문제 | 해결 | 근거 |
+|---|---|---|
+| 재고 초과 판매 | 비관적 락을 기준선으로 시작하고 전환은 측정 후 판단 | [ADR 0025](docs/decisions/purchase/0025-pessimistic-lock-as-stock-concurrency-baseline.md) |
+| 중복 주문 | 헤더 멱등키와 복합 유니크 | [ADR 0024](docs/decisions/purchase/0024-order-idempotency-key-in-header.md), [0027](docs/decisions/purchase/0027-idempotency-uk-violation-responds-conflict.md) |
+| 중복 청구, 승인 후 장애 | 토스 호출을 트랜잭션 밖에 두고 상태 CAS와 복구 배치로 메움 | [ADR 0026](docs/decisions/purchase/0026-payment-confirm-outside-transaction.md) |
+| 결제 안 된 주문의 재고 점유 | 15분 만료 배치 | [order.md](docs/domains/purchase/order.md) |
 
 ## 문서
 
-| 알고 싶은 것 | 문서 |
+| 문서 | 내용 |
 |---|---|
-| 지금 어디까지 됐고 다음은 무엇인가 | [docs/roadmap.md](docs/roadmap.md) |
-| 패키지 구조 · 의존 규칙 · 인증 배선 | [docs/architecture.md](docs/architecture.md) |
-| 특정 도메인의 API와 규칙 | [docs/domains/](docs/domains/) |
-| 응답 포맷 · 에러 코드 · git 규칙 | [docs/conventions/](docs/conventions/) |
-| 왜 그렇게 정했는가 | [docs/decisions/](docs/decisions/) |
-| 배포 | [docs/deployment.md](docs/deployment.md) |
-
-전체 안내는 [docs/README.md](docs/README.md).
+| [로드맵](docs/roadmap.md) | 지금 어디까지 됐고 다음은 무엇인가 |
+| [아키텍처](docs/architecture.md) | 패키지 구조, 의존 규칙, 인증 배선 |
+| [도메인 계약](docs/domains/) | 도메인별 API와 규칙 |
+| [개발 규약](docs/conventions/) | 응답 포맷, 에러 코드, git 규칙 |
+| [결정 기록(ADR)](docs/decisions/) | 왜 그렇게 정했는가 |
+| [배포](docs/deployment.md) | 배포 방식과 운영 설정 |
+| [로컬 실행](docs/local-setup.md) | 로컬 환경 세팅과 실행 방법 |
+| [문서 안내](docs/README.md) | 전체 문서 구조 |
