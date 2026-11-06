@@ -14,7 +14,7 @@
 | "왜 이렇게 돼 있지?" 싶을 때 | [decisions/](decisions/) |
 | 부하 측정·성능 목표 확인 | [performance/order-stock-concurrency.md](performance/order-stock-concurrency.md) |
 | 배포·CI/CD·운영 | [deployment.md](deployment.md) |
-| 로컬 실행 환경 세팅 | [../README.md](../README.md) |
+| 로컬 실행 환경 세팅 | [local-setup.md](local-setup.md) |
 
 ## 도메인별
 
@@ -36,7 +36,7 @@
 
 | 축 | 무엇 | 어디 | 언제 고치나 |
 |---|---|---|---|
-| **주제축** | 계약·규약. 코드와 1:1 대응 | `architecture.md`, `domains/`, `conventions/`, `deployment.md`, `performance/` | 코드가 바뀔 때만 |
+| **주제축** | 계약·규약. 코드와 1:1 대응 | `architecture.md`, `domains/`, `conventions/`, `deployment.md`, `local-setup.md`, `performance/` | 코드가 바뀔 때만 |
 | **시점축** | 왜 그렇게 정했는가 | `decisions/` | 새 결정이 생길 때만 **추가** |
 | **시간축** | 무엇이 끝났고 다음은 뭔가 | `roadmap.md` **한 장** | 단계가 끝날 때마다 |
 
