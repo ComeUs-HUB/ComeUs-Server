@@ -19,7 +19,7 @@
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
-**Phase 4 Cart(1~3단계)와 Order(4~8단계) 구현이 끝났다.** MySQL 최소 검증을 마쳤고 PR #16 리뷰 중이다. 다음은 Payment다.
+**Phase 4 Cart(1~3단계)와 Order(4~8단계) 구현이 끝났다.** MySQL 최소 검증을 마쳤다. 다음은 Payment다.
 **동시성 제어 방식은 Order 착수 전까지 ADR로 정한다** — 되돌리기 비용이 큰 결정이지만
 재고를 차감하는 것은 Order이고 Cart는 읽기만 하므로 Cart는 그 결정 없이 착수할 수 있다
 ([domains/purchase/order.md](domains/purchase/order.md)).
@@ -297,10 +297,11 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
       `int` 오버플로로 재고 검사를 우회하는 경로를 막아 뒀다
 - [x] **`V4` 번호 충돌 메모 정리** — 아래 미결 사항의 LOCAL 로그인 항목에서 번호를 고정하지 않고
       "착수 시점의 다음 번호"로 바꿨다. 번호를 박아 두면 다음 도메인이 가져갈 때마다 같은 충돌이 난다
-- [x] **장바구니 락을 MySQL에서 확인한다** — 2026-11-06 확인. 아래 "Order MySQL 최소 검증" 참고 — H2는 기본 격리 수준이 READ COMMITTED이고 gap lock도 재현하지 않아
+- [x] **장바구니 락을 MySQL에서 확인한다** — H2는 기본 격리 수준이 READ COMMITTED이고 gap lock도 재현하지 않아
       `./gradlew test`로 검증되지 않는다([ADR 0020](decisions/purchase/0020-cart-writes-use-read-committed.md)).
-      같은 회원의 동시 담기 2건이 **합산 4**로 끝나는지(Lost Update 없음), 동시 첫 담기가 교착(500)이 아니라
-      `C005`(409)로 끝나는지 본다. **2026-10-08 실기동에서는 하지 않았다** — 아래 기록 참고
+      2026-11-06에 확인했다: 같은 회원의 동시 담기 2건이 **합산 4**로 끝나고, 동시 첫 담기 2건은 교착 없이 1건 성공, 1건 uk 위반으로 끝난다
+- [ ] **동시 첫 담기의 `C005`(409) HTTP 응답을 확인한다** — uk 위반까지만 봤고 응답 변환은 HTTP로 보지 않았다.
+      Cart 단계에서 밀린 항목이고 Order와는 무관하다
 
 ### Cart MySQL 실기동 (2026-10-08)
 
@@ -319,10 +320,10 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 - [x] **쓰기 요청이 실제로 READ COMMITTED로 실행된다** — general log에 `SET SESSION TRANSACTION ISOLATION LEVEL
       READ COMMITTED` → 트랜잭션 → `REPEATABLE READ` 복원이 찍힌다. 비용은 쓰기 요청당 3문장이다
 - [x] 요청당 쿼리 수(인증 필터의 회원 조회 1회 포함) — 조회 2 · 담기 6 · 수량 변경 5 · 항목 삭제 5 · 비우기 4 + N(N ≤ 50)
-- [x] **동시성 확인** — 이 실기동에서는 하지 않았고 2026-11-06에 확인했다. 아래 "Order MySQL 최소 검증" 참고
+- [x] **동시성 확인** — 이 실기동에서는 하지 않았다. 2026-11-06에 위 체크리스트 범위까지 확인했다
 - [ ] `existsByUserId`가 `carts left join users`로 실행된다. `carts.user_id`만 보면 되므로 `@Query`로 조인을 없앨 수 있다
 
-### Order — 4~8단계 ⬜
+### Order — 4~8단계 ✅
 
 구현 순서는 5단계로 나눴다.
 
@@ -334,7 +335,7 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
 | 7 | 컨트롤러 + DTO + ADMIN API + `O003`~`O005` | `OrderControllerTest` | ✅ |
 | 8 | `PENDING` 만료 배치 | `OrderServiceTest` | ✅ |
 
-`PAID` 취소는 환불이 필요해 Payment로 넘긴다. MySQL 동시성 확인과 기준선 측정은 구현 뒤에 따로 한다.
+`PAID` 취소는 환불이 필요해 Payment로 넘긴다. 기준선 측정은 구현 뒤에 따로 한다.
 
 착수 전 ADR 셋을 작성했다.
 
@@ -358,10 +359,10 @@ MySQL 8.0.41에 별도 검증 DB를 만들어 V1~V5를 적용하고 기본 격�
 - [x] 재고 10에 동시 주문 200건 — 성공 10, `P002` 190, 재고 0, `SOLD_OUT`
 - [x] 같은 멱등키 동시 5건 — 주문 1건, 재고 1회 차감
 - [x] 같은 상품을 반대 순서로 담은 동시 주문 60건 — 전부 성공, 재고 정확, 교착 없음
-- [x] 장바구니 동시 담기 2건 — 합산 4, Lost Update 없음
-- [x] 동시 첫 담기 2건 — 1건 성공, 1건 uk 위반, 교착 없음. `C005` 응답은 HTTP로 보지 않았다
 - [x] `createOrder`의 격리 수준 지정을 빼면 `IllegalTransactionStateException`으로 실패한다
 - [x] 주문·장바구니 관련 기존 테스트 31개 통과
+
+Cart 단계에서 밀린 장바구니 락 확인도 이때 함께 했다. 결과는 Cart 체크리스트에 있다.
 
 확인하지 못한 것:
 
