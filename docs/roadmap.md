@@ -370,9 +370,18 @@ Cart 단계에서 밀린 장바구니 락 확인도 이때 함께 했다. 결과
 - [ ] **성능 측정** — 로컬 소량 부하라 TPS, p99, 커넥션 풀 포화 지점은 재지 않았다. [측정 계획](performance/order-stock-concurrency.md)
 - [ ] **프로세스 강제 종료 시나리오**
 
-### Payment — 9~11단계 ⬜
+### Payment — 9~12단계 ⬜
 
-착수 전 정할 것 — 확정 거절을 토스 에러 코드 화이트리스트로 바꾸는 것과 복구 배치의 종결 조건이다. PR #16 리뷰에서 나왔다.
+| 단계 | 내용 | 검증 | |
+|---|---|---|---|
+| 9 | `Payment` 엔티티 + `V6__create_payments.sql` + `PaymentGateway`와 토스 구현 | 엔티티·영속성 테스트 | ⬜ |
+| 10 | 승인 API — 선점, 토스 호출, 반영 + `PAY003`~`PAY006` | 서비스·컨트롤러 테스트 | ⬜ |
+| 11 | 복구 배치 + 결제 조회 API | 배치 테스트 | ⬜ |
+| 12 | 환불 + `PAID` 취소(회원·ADMIN) | 서비스 테스트 | ⬜ |
+
+환불은 처리 순서와 토스 취소 실패 처리를 12단계 전에 ADR로 정한다.
+
+승인 응답 판정과 복구 종결 조건은 [ADR 0028](decisions/purchase/0028-payment-result-whitelist-and-recovery-limit.md)이 정했다.
 
 계약은 [payment.md](domains/purchase/payment.md), 승인 경계는
 [ADR 0026](decisions/purchase/0026-payment-confirm-outside-transaction.md).

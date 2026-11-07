@@ -1,6 +1,6 @@
 # ADR 0026 — 결제 승인은 트랜잭션 밖에서 호출하고 주문 상태 선점으로 한 번만 진입시킨다
 
-- 상태: 채택
+- 상태: 채택 (0028이 보강)
 - 일자: 2026-11-04
 - 관련: [domains/purchase/payment.md](../../domains/purchase/payment.md), [domains/purchase/order.md](../../domains/purchase/order.md), [ADR 0016](0016-stock-reserved-at-order-not-cart.md), [ADR 0024](0024-order-idempotency-key-in-header.md)
 
