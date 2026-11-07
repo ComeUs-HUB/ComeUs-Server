@@ -51,10 +51,12 @@ PENDING ──승인 선점──▶ PAYMENT_IN_PROGRESS ──승인 성공─�
 |---|---|---|---|
 | POST | `/api/orders` | 주문 생성 | 회원 |
 | GET | `/api/orders` | 내 주문 목록 | 회원 |
-| GET | `/api/orders/{id}` | 주문 상세 | 회원 |
-| POST | `/api/orders/{id}/cancel` | 주문 취소 | 회원 |
+| GET | `/api/orders/{orderNumber}` | 주문 상세 | 회원 |
+| POST | `/api/orders/{orderNumber}/cancel` | 주문 취소 | 회원 |
 | GET | `/api/admin/orders` | 전체 주문 목록 | ADMIN |
 | PUT | `/api/admin/orders/{id}/status` | 주문 상태 변경 | ADMIN |
+
+**회원 API는 주문을 PK가 아니라 `orderNumber`로 가리키고, 응답에도 PK를 담지 않는다.** 순차 PK를 내보내면 두 주문의 번호 차이로 주문량이 드러난다. ADMIN API는 내부 운영용이라 PK를 쓴다.
 
 ### POST `/api/orders` — 주문 생성
 
@@ -111,22 +113,20 @@ Controller   키 형식, 빈 목록 검증                        → C001
 자기 주문만 돌려준다. 재고와 장바구니를 건드리지 않는다.
 페이징은 [product.md](../catalog/product.md)와 같다 — 기본 `size=20`, 최대 100, `createdAt` 내림차순.
 
-### GET `/api/orders/{id}` — 주문 상세
+### GET `/api/orders/{orderNumber}` — 주문 상세
 
 ```
-1. id로 주문 조회                    → 없으면 O001
-2. 소유자 검증                       → 타인의 주문 O001
-3. 주문 항목과 함께 응답 변환
+1. orderNumber와 회원으로 주문 조회  → 없거나 타인의 주문 O001
+2. 주문 항목과 함께 응답 변환
 ```
 
 상품명과 금액은 주문 시점 스냅샷으로 보여 준다. 타인의 주문은 존재 여부를 드러내지 않도록 없는 주문과 같은 `O001`로 응답한다.
 
-### POST `/api/orders/{id}/cancel` — 주문 취소
+### POST `/api/orders/{orderNumber}/cancel` — 주문 취소
 
 ```
-1. id로 주문 조회                    → 없으면 O001
-2. 소유자 검증                       → 타인의 주문 O001
-3. 현재 상태로 분기
+1. orderNumber와 회원으로 주문 조회  → 없거나 타인의 주문 O001
+2. 현재 상태로 분기
    PENDING               CAS → CANCELLED, products 잠금 (id 오름차순), 재고 복구
    PAYMENT_IN_PROGRESS   거절 O003
    PAID                  환불 후 CANCELLED, 재고 복구

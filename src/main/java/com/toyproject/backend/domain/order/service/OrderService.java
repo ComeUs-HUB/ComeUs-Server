@@ -3,6 +3,7 @@ package com.toyproject.backend.domain.order.service;
 import com.toyproject.backend.domain.cart.entity.Cart;
 import com.toyproject.backend.domain.cart.entity.CartItem;
 import com.toyproject.backend.domain.cart.service.CartService;
+import com.toyproject.backend.domain.order.dto.AdminOrderSummaryResponse;
 import com.toyproject.backend.domain.order.dto.OrderCreateResponse;
 import com.toyproject.backend.domain.order.dto.OrderDetailResponse;
 import com.toyproject.backend.domain.order.dto.OrderSummaryResponse;
@@ -103,8 +104,8 @@ public class OrderService {
      *
      * @throws BusinessException 없거나 타인의 주문이면 O001
      */
-    public OrderDetailResponse getMyOrderDetail(Long userId, Long orderId) {
-        return orderRepository.findWithItemsByIdAndUserId(orderId, userId)
+    public OrderDetailResponse getMyOrderDetail(Long userId, String orderNumber) {
+        return orderRepository.findWithItemsByOrderNumberAndUserId(orderNumber, userId)
                 .map(OrderDetailResponse::from)
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
     }
@@ -115,17 +116,16 @@ public class OrderService {
      * @throws BusinessException O001 · O002 · O003 · O004
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public void cancelOrder(Long userId, Long orderId) {
-        if (!orderRepository.existsByIdAndUserId(orderId, userId)) {
-            throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
-        }
+    public void cancelOrder(Long userId, String orderNumber) {
+        Long orderId = orderRepository.findIdByOrderNumberAndUserId(orderNumber, userId)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
 
         cancelPendingOrder(orderId);
     }
 
     /** [Phase 4 · 7단계] 전체 주문 목록. 상한과 정렬은 컨트롤러가 정한다. */
-    public PageResponse<OrderSummaryResponse> getOrderList(Pageable pageable) {
-        return PageResponse.of(orderRepository.findAll(pageable).map(OrderSummaryResponse::from));
+    public PageResponse<AdminOrderSummaryResponse> getOrderList(Pageable pageable) {
+        return PageResponse.of(orderRepository.findAll(pageable).map(AdminOrderSummaryResponse::from));
     }
 
     /**

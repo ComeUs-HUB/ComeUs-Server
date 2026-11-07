@@ -272,7 +272,7 @@ class OrderServiceTest {
         tee.updateInfo(category, "이름 변경", "면 100%", new BigDecimal("29900.00"), 4);
         productRepository.save(tee);
 
-        OrderDetailResponse detail = orderService.getMyOrderDetail(userId, orderIdOf(number));
+        OrderDetailResponse detail = orderService.getMyOrderDetail(userId, number);
 
         assertThat(detail.items()).singleElement().satisfies(item -> {
             assertThat(item.priceAtOrder()).isEqualByComparingTo("19900.00");
@@ -290,7 +290,7 @@ class OrderServiceTest {
         Long orderId = orderIdOf(number);
         LocalDateTime before = orderOf(orderId).getUpdatedAt();
 
-        orderService.cancelOrder(userId, orderId);
+        orderService.cancelOrder(userId, number);
 
         assertThat(orderOf(orderId).getStatus()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(orderOf(orderId).getUpdatedAt())
@@ -310,16 +310,16 @@ class OrderServiceTest {
         Long orderId = orderIdOf(number);
 
         forceStatus(orderId, OrderStatus.PENDING, OrderStatus.PAYMENT_IN_PROGRESS);
-        assertThatThrownBy(() -> orderService.cancelOrder(userId, orderId))
+        assertThatThrownBy(() -> orderService.cancelOrder(userId, number))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS));
 
         forceStatus(orderId, OrderStatus.PAYMENT_IN_PROGRESS, OrderStatus.PAID);
-        assertThatThrownBy(() -> orderService.cancelOrder(userId, orderId))
+        assertThatThrownBy(() -> orderService.cancelOrder(userId, number))
                 .as("환불 없이 재고만 돌아가면 안 된다")
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
 
         forceStatus(orderId, OrderStatus.PAID, OrderStatus.CANCELLED);
-        assertThatThrownBy(() -> orderService.cancelOrder(userId, orderId))
+        assertThatThrownBy(() -> orderService.cancelOrder(userId, number))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(OrderErrorCode.ORDER_ALREADY_CANCELLED));
 
         assertThat(stockOf(tee)).isEqualTo(4);
@@ -333,7 +333,7 @@ class OrderServiceTest {
         String number = orderService.createOrder(userId, "key-1", cartOf(userId, tee), ADDRESS).orderNumber();
         Long orderId = orderIdOf(number);
         Callable<Boolean> request = () -> {
-            orderService.cancelOrder(userId, orderId);
+            orderService.cancelOrder(userId, number);
             return true;
         };
 

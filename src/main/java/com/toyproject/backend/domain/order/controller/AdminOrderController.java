@@ -1,7 +1,7 @@
 package com.toyproject.backend.domain.order.controller;
 
 import com.toyproject.backend.domain.order.dto.OrderStatusUpdateRequest;
-import com.toyproject.backend.domain.order.dto.OrderSummaryResponse;
+import com.toyproject.backend.domain.order.dto.AdminOrderSummaryResponse;
 import com.toyproject.backend.domain.order.service.OrderService;
 import com.toyproject.backend.global.exception.BusinessException;
 import com.toyproject.backend.global.exception.CommonErrorCode;
@@ -32,7 +32,7 @@ public class AdminOrderController {
     private final OrderService orderService;
 
     @GetMapping
-    public ApiResponse<PageResponse<OrderSummaryResponse>> getOrderList(
+    public ApiResponse<PageResponse<AdminOrderSummaryResponse>> getOrderList(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.success(orderService.getOrderList(sanitize(pageable)));
     }

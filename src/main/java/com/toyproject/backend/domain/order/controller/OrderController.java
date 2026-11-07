@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
  * [Phase 4 · 7단계] 회원 주문 API. 계약은 {@code docs/domains/purchase/order.md}.
  *
  * <p>생성은 멱등 재요청이면 기존 주문을 돌려주므로 201이 아니라 200이다.
+ * <p>주문은 PK가 아니라 {@code orderNumber}로 가리킨다. 순차 PK를 내보내면 주문량이 드러난다.
  */
 @RestController
 @RequestMapping("/api/orders")
@@ -67,16 +68,16 @@ public class OrderController {
         return ApiResponse.success(orderService.getMyOrderList(principal.getId(), sanitize(pageable)));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{orderNumber}")
     public ApiResponse<OrderDetailResponse> getMyOrderDetail(@AuthenticationPrincipal UserPrincipal principal,
-                                                             @PathVariable Long id) {
-        return ApiResponse.success(orderService.getMyOrderDetail(principal.getId(), id));
+                                                             @PathVariable String orderNumber) {
+        return ApiResponse.success(orderService.getMyOrderDetail(principal.getId(), orderNumber));
     }
 
-    @PostMapping("/{id}/cancel")
+    @PostMapping("/{orderNumber}/cancel")
     public ApiResponse<Void> cancelOrder(@AuthenticationPrincipal UserPrincipal principal,
-                                         @PathVariable Long id) {
-        orderService.cancelOrder(principal.getId(), id);
+                                         @PathVariable String orderNumber) {
+        orderService.cancelOrder(principal.getId(), orderNumber);
         return ApiResponse.success(null);
     }
 

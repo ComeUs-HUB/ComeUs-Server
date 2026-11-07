@@ -8,9 +8,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** [Phase 4 · 6단계] 주문 상세. {@code paymentKey}와 {@code idempotencyKey}는 내보내지 않는다. */
+/** [Phase 4 · 6단계] 주문 상세. PK, {@code paymentKey}, {@code idempotencyKey}는 내보내지 않는다. */
 public record OrderDetailResponse(
-        Long id,
         String orderNumber,
         OrderStatus status,
         BigDecimal totalAmount,
@@ -24,7 +23,6 @@ public record OrderDetailResponse(
     public static OrderDetailResponse from(Order order) {
         ShippingAddress shipping = order.getShippingAddress();
         return new OrderDetailResponse(
-                order.getId(),
                 order.getOrderNumber(),
                 order.getStatus(),
                 order.getTotalAmount(),

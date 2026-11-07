@@ -23,12 +23,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     /** [Phase 4 · 6단계] */
     Page<Order> findByUserId(Long userId, Pageable pageable);
 
-    /** [Phase 4 · 6단계] 타인의 주문은 없는 주문과 같게 취급한다. */
-    boolean existsByIdAndUserId(Long id, Long userId);
+    /** [Phase 4 · 6단계] 회원 API의 주문 식별. 타인의 주문은 없는 주문과 같게 취급한다. */
+    @Query("select o.id from Order o where o.orderNumber = :orderNumber and o.user.id = :userId")
+    Optional<Long> findIdByOrderNumberAndUserId(@Param("orderNumber") String orderNumber, @Param("userId") Long userId);
 
     /** [Phase 4 · 6단계] 상세 응답이 항목을 읽으므로 함께 조회한다. 상품은 스냅샷이 있어 읽지 않는다. */
     @EntityGraph(attributePaths = "orderItems")
-    Optional<Order> findWithItemsByIdAndUserId(Long id, Long userId);
+    Optional<Order> findWithItemsByOrderNumberAndUserId(String orderNumber, Long userId);
 
     /**
      * [Phase 4 · 6단계] 상태를 CAS로 전이한다. 벌크 UPDATE라 {@code updatedAt}을 직접 쓴다.

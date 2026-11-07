@@ -146,22 +146,24 @@ class OrderControllerTest {
     @Test
     @DisplayName("주문부터 상세·목록·취소까지 트랜잭션 밖에서 지연 로딩 오류 없이 끝난다")
     void orderLifecycleOverHttp() throws Exception {
-        Long orderId = placeOrder();
+        String orderNumber = orderRepository.findById(placeOrder()).orElseThrow().getOrderNumber();
 
-        mockMvc.perform(get("/api/orders/" + orderId).header(HttpHeaders.AUTHORIZATION, buyer))
+        mockMvc.perform(get("/api/orders/" + orderNumber).header(HttpHeaders.AUTHORIZATION, buyer))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").doesNotExist())
                 .andExpect(jsonPath("$.data.status").value("PENDING"))
                 .andExpect(jsonPath("$.data.items[0].productName").value("기본 반팔티"))
                 .andExpect(jsonPath("$.data.items[0].productId").value(tee.getId()));
 
         mockMvc.perform(get("/api/orders").header(HttpHeaders.AUTHORIZATION, buyer))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].id").value(orderId));
+                .andExpect(jsonPath("$.data.content[0].orderNumber").value(orderNumber))
+                .andExpect(jsonPath("$.data.content[0].id").doesNotExist());
 
-        mockMvc.perform(post("/api/orders/" + orderId + "/cancel").header(HttpHeaders.AUTHORIZATION, buyer))
+        mockMvc.perform(post("/api/orders/" + orderNumber + "/cancel").header(HttpHeaders.AUTHORIZATION, buyer))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/orders/" + orderId).header(HttpHeaders.AUTHORIZATION, buyer))
+        mockMvc.perform(get("/api/orders/" + orderNumber).header(HttpHeaders.AUTHORIZATION, buyer))
                 .andExpect(jsonPath("$.data.status").value("CANCELLED"));
     }
 
