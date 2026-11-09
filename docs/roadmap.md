@@ -379,7 +379,7 @@ Cart 단계에서 밀린 장바구니 락 확인도 이때 함께 했다. 결과
 | 11 | 복구 배치 + 결제 조회 API | 배치 테스트 | ⬜ |
 | 12 | 환불 + `PAID` 취소(회원·ADMIN) | 서비스 테스트 | ⬜ |
 
-환불은 처리 순서와 토스 취소 실패 처리를 12단계 전에 ADR로 정한다.
+환불 흐름은 [ADR 0029](decisions/purchase/0029-refund-outside-transaction.md)가 정했다.
 
 승인 응답 판정과 복구 종결 조건은 [ADR 0028](decisions/purchase/0028-payment-result-whitelist-and-recovery-limit.md)이 정했다.
 

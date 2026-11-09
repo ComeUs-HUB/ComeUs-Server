@@ -9,7 +9,7 @@
 ## 엔티티
 
 id, user, orderNumber, idempotencyKey, paymentKey, orderItems[ { product, quantity, productNameAtOrder, priceAtOrder } ], totalAmount,
-status(PENDING/PAYMENT_IN_PROGRESS/PAID/SHIPPING/DELIVERED/CANCELLED), shippingAddress, createdAt, updatedAt
+status(PENDING/PAYMENT_IN_PROGRESS/PAID/REFUND_IN_PROGRESS/SHIPPING/DELIVERED/CANCELLED), shippingAddress, createdAt, updatedAt
 
 - `orderNumber` — 서버가 발급하고 토스 `orderId`로 쓴다. unique
 - `paymentKey` — 승인을 선점한 시도의 키. 승인 거절로 `PENDING`에 돌아오면 비운다
@@ -18,13 +18,9 @@ status(PENDING/PAYMENT_IN_PROGRESS/PAID/SHIPPING/DELIVERED/CANCELLED), shippingA
 
 ## 상태 흐름
 
-```
-PENDING ──승인 선점──▶ PAYMENT_IN_PROGRESS ──승인 성공──▶ PAID ──▶ SHIPPING ──▶ DELIVERED
-   ▲                        │                           │
-   └───── 승인 거절 ──────────┘                           │
-   │                                                    │
-   └───── 취소·만료 ──▶ CANCELLED   ◀──── 취소·환불 ────────┘
-```
+![주문 상태](../../diagrams/images/state-order.png)
+
+읽는 법과 Mermaid 원본: [state-order.md](../../diagrams/purchase/state-order.md).
 
 | 현재 상태 | 다음 상태 | 언제 |
 |---|---|---|
@@ -33,7 +29,9 @@ PENDING ──승인 선점──▶ PAYMENT_IN_PROGRESS ──승인 성공─�
 | `PAYMENT_IN_PROGRESS` | `PAID` | 승인 성공 |
 | `PAYMENT_IN_PROGRESS` | `PENDING` | 승인 거절 |
 | `PAID` | `SHIPPING` | ADMIN 배송 처리 |
-| `PAID` | `CANCELLED` | 회원·ADMIN의 환불 후 취소 |
+| `PAID` | `REFUND_IN_PROGRESS` | 회원·ADMIN 취소 (환불 선점) |
+| `REFUND_IN_PROGRESS` | `CANCELLED` | 토스 취소 성공 |
+| `REFUND_IN_PROGRESS` | `PAID` | 토스 취소 거절 |
 | `SHIPPING` | `DELIVERED` | ADMIN 배송 완료 처리 |
 
 `DELIVERED`와 `CANCELLED`는 최종 상태다. **표에 없는 전이는 모두 거절한다.**
@@ -129,7 +127,8 @@ Controller   키 형식, 빈 목록 검증                        → C001
 2. 현재 상태로 분기
    PENDING               CAS → CANCELLED, products 잠금 (id 오름차순), 재고 복구
    PAYMENT_IN_PROGRESS   거절 O003
-   PAID                  환불 후 CANCELLED, 재고 복구
+   PAID                  환불 (선점 → 토스 취소 → CANCELLED, 재고 복구)
+   REFUND_IN_PROGRESS    거절 O003
    SHIPPING, DELIVERED   거절 O002
    CANCELLED             거절 O004
 ```
@@ -139,7 +138,7 @@ Controller   키 형식, 빈 목록 검증                        → C001
 - **결제 승인 중인 주문은 취소할 수 없다** — 토스 승인과 어긋날 수 있다. [ADR 0026](../../decisions/purchase/0026-payment-confirm-outside-transaction.md)
 - `PENDING` 취소는 CAS로 한다. 그사이 승인이 선점했다면 갱신 0건이므로 취소하지 않는다
 - `SHIPPING` 이후에는 회원이 직접 취소할 수 없다 → `O002 ORDER_CANCEL_NOT_ALLOWED`
-- `PAID` 취소의 갱신 순서는 [payment.md](payment.md)의 환불 순서를 따른다
+- `PAID` 취소는 [payment.md](payment.md)의 환불 흐름을 탄다. 토스 취소가 끝난 뒤에 재고를 푼다 — [ADR 0029](../../decisions/purchase/0029-refund-outside-transaction.md)
 
 ### GET `/api/admin/orders` — 전체 주문 목록
 
@@ -166,9 +165,9 @@ Controller   키 형식, 빈 목록 검증                        → C001
 ADMIN이 배송 처리처럼 주문 상태를 직접 바꾼다.
 
 - 허용되는 전환은 위 상태 전환표가 정한다. ADMIN은 `SHIPPING`·`DELIVERED` 주문을 취소할 수 없다
-- **결제 승인 중인 주문은 ADMIN도 취소할 수 없다**
+- **결제 승인·환불 중인 주문은 ADMIN도 취소할 수 없다**
 - ADMIN도 `PENDING`·`PAID` 주문을 `CANCELLED`로 바꿀 수 있고 재고를 복구한다
-- `PAID` 취소의 갱신 순서는 [payment.md](payment.md)의 환불 순서를 따른다
+- `PAID` 취소는 [payment.md](payment.md)의 환불 흐름을 탄다. 토스 취소가 끝난 뒤에 재고를 푼다 — [ADR 0029](../../decisions/purchase/0029-refund-outside-transaction.md)
 
 ## `PENDING` 만료 배치
 
@@ -193,6 +192,6 @@ API가 아니라 스케줄 작업이다.
 
 | 코드 | 상수 | HTTP | 언제 |
 |---|---|---|---|
-| O003 | `ORDER_PAYMENT_IN_PROGRESS` | 409 | 결제 승인 중인 주문의 취소 |
+| O003 | `ORDER_PAYMENT_IN_PROGRESS` | 409 | 결제 승인·환불 중인 주문의 취소 |
 | O004 | `ORDER_ALREADY_CANCELLED` | 409 | 이미 취소된 주문의 재취소 |
 | O005 | `INVALID_ORDER_STATUS_TRANSITION` | 409 | 배송 전이가 아닌 ADMIN 변경 |

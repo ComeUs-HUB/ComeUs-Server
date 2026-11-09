@@ -1,6 +1,6 @@
 # ADR 0028 — 승인 거절은 확인된 코드만 인정하고 복구는 1시간 뒤 수동으로 넘긴다
 
-- 상태: 채택
+- 상태: 채택 (0029가 보강)
 - 일자: 2026-11-06
 - 관련: [ADR 0026](0026-payment-confirm-outside-transaction.md), [domains/purchase/payment.md](../../domains/purchase/payment.md), PR #16 리뷰
 

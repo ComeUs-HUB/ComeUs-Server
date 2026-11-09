@@ -49,7 +49,6 @@ id, order, paymentKey, amount, method, status(SUCCESS/REFUNDED), paidAt
 |---|---|---|---|
 | POST | `/api/payments/confirm` | 결제 승인 | 회원 |
 | GET | `/api/payments/{orderNumber}` | 결제 정보 조회 | 회원 |
-| POST | `/api/payments/{orderNumber}/refund` | 환불 요청 | 회원 |
 
 ### POST `/api/payments/confirm` — 결제 승인
 
@@ -112,16 +111,33 @@ FE가 successUrl에서 받은 값으로 호출한다. 토스 승인을 한 번�
 
 자기 주문의 결제를 돌려준다. 성공한 결제만 저장하므로 승인 전이거나 거절된 주문은 `PAY001`이다.
 
-### POST `/api/payments/{orderNumber}/refund` — 환불 요청
+## 환불
+
+API가 따로 없다. 회원의 주문 취소(`POST /api/orders/{orderNumber}/cancel`)와 ADMIN의 상태 변경이 `PAID` 주문이면 이 흐름을 탄다.
 
 ```
-1. orderNumber와 회원으로 결제 조회   → 없거나 타인의 결제 PAY001
-2. 토스 결제 취소 호출
-3. Payment(REFUNDED), Order CANCELLED, 재고 복구
+선점 트랜잭션
+  CAS PAID → REFUND_IN_PROGRESS              → 0건이면 상태로 거절 (O002 · O003 · O004)
+커밋
+
+토스 결제 취소 호출 (트랜잭션 없음)
+  POST /v1/payments/{paymentKey}/cancel
+  Idempotency-Key: cancel-{paymentKey}
+  { cancelReason }                           cancelAmount 없음 = 전액 취소
+
+반영 트랜잭션
+  성공         CANCELLED + Payment(REFUNDED) + products 잠금 (id 오름차순) 후 재고 복구
+  확정 거절    CAS → PAID, ERROR 로그          → 409 PAY007
+  결과 불명    변경 없음 → 복구 배치가 판정     → 409 PAY008
+커밋
 ```
 
-결제를 취소하고 점유했던 재고를 돌려놓는다. `CANCELLED` 전환이므로 재고 복구는 [order.md](order.md)의 규칙을 따른다.
-2~3번의 **순서와 실패 처리는 아직 정해지지 않았다** — 아래 "착수 전 정할 것".
+토스 취소는 되돌릴 수 없어 트랜잭션 밖에서 부르고, 재고는 돈이 돌아간 뒤에 푼다.
+판정과 근거는 [ADR 0029](../../decisions/purchase/0029-refund-outside-transaction.md)가 소유한다.
+
+- 환불은 `PAID`인 주문만, 전액만 한다. `SHIPPING` 이후는 반품이라 범위 밖이다
+- 토스 취소 요청 중(`REFUND_IN_PROGRESS`)인 주문은 다시 취소하거나 배송 처리할 수 없다
+- 환불 시각은 응답의 `cancels[].canceledAt`이다
 
 ## 복구 배치
 
@@ -129,7 +145,7 @@ API가 아니라 스케줄 작업이다.
 
 ```
 1분마다 실행
-1. PAYMENT_IN_PROGRESS로 5분 넘게 멈춘 주문 조회 (한 번에 100건, 1시간 넘은 주문 제외)
+1. PAYMENT_IN_PROGRESS · REFUND_IN_PROGRESS로 5분 넘게 멈춘 주문 조회 (한 번에 100건, 1시간 넘은 주문 제외)
 2. 저장된 paymentKey로 토스 결제 조회
 3. 결과 반영 (승인 API의 반영과 같은 CAS)
    DONE + orderId·금액 일치              PAID + Payment(SUCCESS) 저장
@@ -137,6 +153,11 @@ API가 아니라 스케줄 작업이다.
    ABORTED, EXPIRED, NOT_FOUND_PAYMENT   PENDING + paymentKey 비움
    READY, IN_PROGRESS, 조회 실패         변경 없음, 다음 주기에 다시 조회
    CANCELED 계열, WAITING_FOR_DEPOSIT    변경 없음, ERROR 로그
+
+   REFUND_IN_PROGRESS인 주문
+   CANCELED                              환불 반영과 같은 전이 (CANCELLED, REFUNDED, 재고 복구)
+   DONE                                  PAID 복귀 (취소되지 않았다)
+   그 밖                                 변경 없음, ERROR 로그
 4. 1시간 넘은 주문은 ERROR 로그만 남기고 수동 처리로 넘긴다
 ```
 
@@ -167,7 +188,7 @@ public interface PaymentGateway {
 |---|---|---|
 | 결제 승인 | `POST /v1/payments/confirm` | `POST /api/payments/confirm` |
 | 결과 불명 판정 | `GET /v1/payments/{paymentKey}` | 복구 배치 |
-| 환불 | `POST /v1/payments/{paymentKey}/cancel` | `POST /api/payments/{orderNumber}/refund` |
+| 환불 | `POST /v1/payments/{paymentKey}/cancel` | 주문 취소의 `PAID` 분기 |
 
 - **연동 제품은 주문서형이다.** 키는 `test_gck`/`test_gsk` 세트이고 `orderId`로는 결제를 조회할 수 없어, 복구는 저장한 `paymentKey`로 한다
 - 인증은 `Authorization: Basic base64(시크릿키 + ":")`다. 시크릿 키는 환경변수 `TOSS_SECRET_KEY`로만 받는다
@@ -183,7 +204,7 @@ Idempotency-Key: {paymentKey}
 { paymentKey, orderId, amount }
 
 POST /v1/payments/{paymentKey}/cancel
-Idempotency-Key: {환불 시도별 값}
+Idempotency-Key: cancel-{paymentKey}
 { cancelReason }
 ```
 
@@ -216,6 +237,8 @@ Idempotency-Key: {환불 시도별 값}
 | PAY004 | `PAYMENT_AMOUNT_MISMATCH` | 400 | 요청 금액이 주문 금액과 다름 |
 | PAY005 | `PAYMENT_NOT_ALLOWED` | 409 | 승인할 수 없는 주문 상태 |
 | PAY006 | `PAYMENT_REJECTED` | 402 | 토스의 승인 거절 |
+| PAY007 | `PAYMENT_REFUND_REJECTED` | 409 | 토스의 환불 거절 |
+| PAY008 | `PAYMENT_REFUND_IN_PROGRESS` | 409 | 환불 결과 불명 |
 
 ## 착수 전 정할 것
 
@@ -223,5 +246,3 @@ Idempotency-Key: {환불 시도별 값}
 - **테스트 키로 확인한다** — 같은 `paymentKey`로 승인을 다시 호출했을 때의 응답, 실제 응답 시간, `method` 값
 - **같은 `orderId`의 재결제를 토스 테스트 환경에서 확인한다** — 승인 거절 뒤 재시도의 전제인데 공식 문서에 허용 여부가 없다.
   막혀 있으면 토스 `orderId`를 시도마다 새로 발급하도록 `orderNumber`와 분리해야 한다
-- 환불 시 토스 취소 호출과 결제 상태·주문 상태·재고 갱신의 **순서**, 토스 취소 실패 처리를 명확히 정의
-- 환불 API와 `PAID` 주문의 취소 API(`POST /api/orders/{orderNumber}/cancel`)의 관계, 환불 가능한 주문 상태

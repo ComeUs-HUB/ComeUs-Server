@@ -61,7 +61,8 @@
 | [0025](purchase/0025-pessimistic-lock-as-stock-concurrency-baseline.md) | 재고 동시성은 비관적 락을 기준선으로 시작하고 전환은 측정치로 판단한다 | 채택 |
 | [0026](purchase/0026-payment-confirm-outside-transaction.md) | 결제 승인은 트랜잭션 밖에서 호출하고 주문 상태 선점으로 한 번만 진입시킨다 | 채택 (0028이 보강) |
 | [0027](purchase/0027-idempotency-uk-violation-responds-conflict.md) | 멱등키 uk 위반은 기존 주문을 찾지 않고 409로 응답한다 | 채택 |
-| [0028](purchase/0028-payment-result-whitelist-and-recovery-limit.md) | 승인 거절은 확인된 코드만 인정하고 복구는 1시간 뒤 수동으로 넘긴다 | 채택 |
+| [0028](purchase/0028-payment-result-whitelist-and-recovery-limit.md) | 승인 거절은 확인된 코드만 인정하고 복구는 1시간 뒤 수동으로 넘긴다 | 채택 (0029가 보강) |
+| [0029](purchase/0029-refund-outside-transaction.md) | 환불은 승인과 같이 선점·호출·반영으로 나누고 토스 취소가 끝난 뒤에 재고를 푼다 | 채택 |
 
 ### platform — 전역 기반
 
