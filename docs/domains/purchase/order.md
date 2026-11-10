@@ -54,7 +54,7 @@ status(PENDING/PAYMENT_IN_PROGRESS/PAID/REFUND_IN_PROGRESS/SHIPPING/DELIVERED/CA
 | GET | `/api/admin/orders` | 전체 주문 목록 | ADMIN |
 | PUT | `/api/admin/orders/{id}/status` | 주문 상태 변경 | ADMIN |
 
-**회원 API는 주문을 PK가 아니라 `orderNumber`로 가리키고, 응답에도 PK를 담지 않는다.** 순차 PK를 내보내면 두 주문의 번호 차이로 주문량이 드러난다. ADMIN API는 내부 운영용이라 PK를 쓴다.
+**회원 API는 주문을 PK가 아니라 `orderNumber`로 가리키고, 응답에도 주문 PK를 담지 않는다.** 순차 PK를 내보내면 두 주문의 번호 차이로 주문량이 드러난다. ADMIN API는 내부 운영용이라 PK를 쓴다.
 
 ### POST `/api/orders` — 주문 생성
 
@@ -149,6 +149,7 @@ Controller   키 형식, 빈 목록 검증                        → C001
 ```
 
 회원 구분 없이 모든 주문을 돌려준다. 페이징은 내 주문 목록과 같다.
+응답은 회원 목록과 달리 `id`를 `orderNumber`와 함께 내보낸다. 상태 변경 API가 PK로 주문을 가리키기 때문이다.
 
 ### PUT `/api/admin/orders/{id}/status` — 주문 상태 변경
 
