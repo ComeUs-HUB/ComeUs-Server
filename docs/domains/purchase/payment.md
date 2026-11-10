@@ -141,31 +141,72 @@ API가 따로 없다. 회원의 주문 취소(`POST /api/orders/{orderNumber}/ca
 
 ## 복구 배치
 
-API가 아니라 스케줄 작업이다.
+API가 아니라 스케줄 작업이다. 서버 장애나 응답 유실로 요청이 끝내지 못한 주문(`PAYMENT_IN_PROGRESS`·`REFUND_IN_PROGRESS`)을 토스 조회 결과로 바로잡는다.
+판정과 종결 근거는 [ADR 0026](../../decisions/purchase/0026-payment-confirm-outside-transaction.md)·[0028](../../decisions/purchase/0028-payment-result-whitelist-and-recovery-limit.md)·[0029](../../decisions/purchase/0029-refund-outside-transaction.md)가, 실행 시간 상한과 판정하지 못한 주문의 처리는 [0030](../../decisions/purchase/0030-recovery-batch-runtime-limits.md)이 소유한다.
+
+### 구조
 
 ```
-1분마다 실행
-1. PAYMENT_IN_PROGRESS · REFUND_IN_PROGRESS로 5분 넘게 멈춘 주문 조회 (한 번에 100건, 1시간 넘은 주문 제외)
-2. 저장된 paymentKey로 토스 결제 조회
-3. 결과 반영 (승인 API의 반영과 같은 CAS)
-   DONE + orderId·금액 일치              PAID + Payment(SUCCESS) 저장
-   DONE + 불일치                         변경 없음, ERROR 로그
-   ABORTED, EXPIRED, NOT_FOUND_PAYMENT   PENDING + paymentKey 비움
-   READY, IN_PROGRESS, 조회 실패         변경 없음, 다음 주기에 다시 조회
-   CANCELED 계열, WAITING_FOR_DEPOSIT    변경 없음, ERROR 로그
-
-   REFUND_IN_PROGRESS인 주문
-   CANCELED                              환불 반영과 같은 전이 (CANCELLED, REFUNDED, 재고 복구)
-   DONE                                  PAID 복귀 (취소되지 않았다)
-   그 밖                                 변경 없음, ERROR 로그
-4. 1시간 넘은 주문은 ERROR 로그만 남기고 수동 처리로 넘긴다
+PaymentRecoveryScheduler      @Scheduled 1분, 트랜잭션 없음
+  ├─ recoverStuckOrders()     5분~1시간 멈춘 주문 판정, 실행당 50초 예산
+  │    └─ PaymentRecoveryService.recover(id)        주문마다, 트랜잭션 없음
+  │         ├─ 주문 읽기 (status, paymentKey 고정)
+  │         ├─ 토스 조회 (트랜잭션 밖, 읽기 타임아웃 5초)
+  │         └─ ApprovalTransactions / RefundTransactions   요청 경로와 같은 CAS
+  └─ alertAbandoned()         이번에 1시간을 막 넘긴 주문만 한 번 ERROR
 ```
 
-서버 장애 등으로 결과가 반영되지 못한 주문을 토스 기준으로 바로잡는다. 판정 시간 5분은 요청 최대 수명(커넥션 대기 30초 + 토스 호출 약 33초 + DB 작업)보다 넉넉하게 잡은 값이다.
-최대 수명이 바뀌면 이 값도 함께 바꾼다.
-판정과 종결 근거는 [ADR 0026](../../decisions/purchase/0026-payment-confirm-outside-transaction.md)·[0028](../../decisions/purchase/0028-payment-result-whitelist-and-recovery-limit.md)이 소유한다.
+### 흐름
 
-**수동 처리:** 자동으로 취소하지 않는다. 운영자가 토스 개발자센터에서 `paymentKey`로 상태를 확인한다.
+![결제 복구 배치 시퀀스](../../diagrams/images/seq-payment-recovery.png)
+
+읽는 법과 Mermaid 원본: [seq-payment-recovery.md](../../diagrams/purchase/seq-payment-recovery.md).
+
+### 수치
+
+| 항목 | 값 | 이유 |
+|---|---|---|
+| 실행 주기 | 1분 (`fixedDelay`) | 앞 실행이 끝난 뒤 센다. 한 인스턴스 안에서는 겹치지 않는다 |
+| 판정 대상 | `updated_at`이 5분 ~ 1시간 전 | 5분은 요청 최대 수명보다 길어야 한다. 1시간이 넘으면 수동 처리 |
+| 한 번에 | 100건, 오래된 순 | `idx_orders_status_updated_at`을 탄다 |
+| 실행 예산 | 50초 | 다음 주문을 시작하기 전에만 확인하고, 넘으면 남은 건은 다음 주기로 넘긴다. 처리 중인 주문은 끊지 않아 실제 상한은 50초 + 한 건(약 15초)이다 |
+| 토스 조회 타임아웃 | 읽기 5초 | 조회는 실패해도 다음 주기에 다시 하면 된다. 승인·취소 호출의 30초와 별개다 |
+| 반영 트랜잭션 타임아웃 | 10초 | 요청 최대 수명에 상한을 두기 위해서다 |
+| 스케줄러 스레드 | 2 (`spring.task.scheduling.pool.size`) | 기본값 1이면 복구 배치가 토스 지연으로 길어질 때 `PENDING` 만료 배치까지 멈춘다 |
+
+- **요청 최대 수명:** 커넥션 대기 30초 × 2(선점·반영) + 토스 호출(연결 3초 + 읽기 30초) + 반영 10초로 약 100초다. 5분은 이보다 넉넉하다. 수명이 바뀌면 판정 시간도 함께 바꾼다
+- 5초와 50초는 토스 실제 응답 시간을 모르고 잡은 임시값이다. 테스트 키로 응답 시간을 확인한 뒤 조정한다
+
+### 판정
+
+**`PAYMENT_IN_PROGRESS` 주문** — 승인 반영과 같은 CAS (`status` + `payment_key`)
+
+| 토스 조회 결과 | 처리 |
+|---|---|
+| `DONE` + `orderId`·금액 일치 | `PAID` + `Payment(SUCCESS)` 저장 |
+| `DONE` + 불일치 | 변경 없음, WARN. 1시간 뒤 수동 처리 |
+| `ABORTED`, `EXPIRED`, `NOT_FOUND_PAYMENT` | `PENDING` + `paymentKey` 비움 |
+| `READY`, `IN_PROGRESS`, 조회 실패 | 변경 없음, 다음 주기에 다시 조회 |
+| `CANCELED` 계열, `WAITING_FOR_DEPOSIT` | 변경 없음, WARN. 1시간 뒤 수동 처리 |
+
+**`REFUND_IN_PROGRESS` 주문** — 환불 반영과 같은 CAS (`status`)
+
+| 토스 조회 결과 | 처리 |
+|---|---|
+| `CANCELED` | `CANCELLED` + `Payment(REFUNDED)` + 재고 복구 |
+| `DONE` | `PAID` 복귀. 취소되지 않았다 |
+| `PARTIAL_CANCELED`, 그 밖 | 변경 없음, WARN. 1시간 뒤 수동 처리 |
+| 조회 실패 | 변경 없음, 다음 주기에 다시 조회 |
+
+### 규칙
+
+- **반영은 요청 경로와 같은 메서드를 쓴다.** 요청과 배치가 같은 CAS를 타야 둘이 겹쳐도 한쪽만 반영된다. 여러 인스턴스가 동시에 돌아도 같다
+- **조회에 쓴 `paymentKey`를 그대로 CAS에 넘긴다.** 반영 직전에 다시 읽으면 그사이 거절 → 재시도로 바뀐 키에 이전 결과가 반영된다
+- **판정하지 못하면 행을 갱신하지 않는다.** `updated_at`이 바뀌면 1시간 종결 시계가 리셋되어 수동 처리로 넘어가지 않는다
+- **반영 CAS가 0건이면 현재 상태를 확인한다.** 이미 목표 상태면 다른 경로가 먼저 반영한 것이다. 아니면 토스와 주문이 어긋난 것이라 ERROR를 남긴다
+- **1시간 경보는 한 번만 낸다.** 직전 실행 이후 1시간 경계를 넘은 주문만 ERROR로 남긴다. 매 주기 반복하지 않는다. 인스턴스가 여러 대면 중복될 수 있다
+
+**수동 처리:** 자동으로 취소하지 않는다. 돈이 빠져나갔을 수 있어서다. 운영자가 토스 개발자센터에서 `paymentKey`로 상태를 확인한다.
 승인됐으면 `PAID`와 `Payment`를 DB에 반영하고, 승인되지 않았으면 `PENDING`으로 되돌리고 `paymentKey`를 비운다.
 
 ## 토스 연동

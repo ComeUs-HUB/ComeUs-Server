@@ -13,6 +13,7 @@
 | [장바구니 담기](purchase/seq-cart-add.md) | 동시 담기에서 수량이 사라지지 않고, 첫 담기 경합이 왜 409가 되는가 | [cart.md](../domains/purchase/cart.md) |
 | [주문 생성](purchase/seq-order-create.md) | 동시 주문에서 재고가 초과 판매되지 않고, 같은 요청이 왜 주문을 두 번 만들지 않는가 | [order.md](../domains/purchase/order.md) |
 | [결제 승인](purchase/seq-payment-confirm.md) | 토스 승인을 어떻게 한 번만 호출하고, 서버가 죽어도 어떻게 복구하는가 | [payment.md](../domains/purchase/payment.md) |
+| [결제 복구 배치](purchase/seq-payment-recovery.md) | 결과를 모른 채 멈춘 결제·환불 주문을 어떻게 토스 기준으로 바로잡는가 | [payment.md](../domains/purchase/payment.md) |
 | [주문 상태](purchase/state-order.md) | 주문은 어떤 상태를 거치고, 언제 재고를 점유·복구하는가 | [order.md](../domains/purchase/order.md) |
 | [ERD](images/erd.png) | 테이블과 관계 | `src/main/resources/db/migration` |
 

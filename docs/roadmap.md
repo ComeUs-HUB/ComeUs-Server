@@ -376,12 +376,15 @@ Cart 단계에서 밀린 장바구니 락 확인도 이때 함께 했다. 결과
 |---|---|---|---|
 | 9 | `Payment` 엔티티 + `V6__create_payments.sql` + `PaymentGateway`와 토스 구현 | 엔티티·영속성 테스트 | ⬜ |
 | 10 | 승인 API — 선점, 토스 호출, 반영 + `PAY003`~`PAY006` | 서비스·컨트롤러 테스트 | ⬜ |
-| 11 | 복구 배치 + 결제 조회 API | 배치 테스트 | ⬜ |
-| 12 | 환불 + `PAID` 취소(회원·ADMIN) | 서비스 테스트 | ⬜ |
+| 11 | 복구 배치(승인 판정) + 결제 조회 API | 배치 테스트 | ⬜ |
+| 12 | 환불 + `PAID` 취소(회원·ADMIN) + 복구 배치의 환불 판정 | 서비스·배치 테스트 | ⬜ |
 
 환불 흐름은 [ADR 0029](decisions/purchase/0029-refund-outside-transaction.md)가 정했다.
 
 승인 응답 판정과 복구 종결 조건은 [ADR 0028](decisions/purchase/0028-payment-result-whitelist-and-recovery-limit.md)이 정했다.
+
+복구 배치의 실행 시간 상한과 판정하지 못한 주문의 처리는 [ADR 0030](decisions/purchase/0030-recovery-batch-runtime-limits.md)이 정했다.
+11단계는 `PAYMENT_IN_PROGRESS`만 판정하고, `REFUND_IN_PROGRESS` 판정은 환불을 만드는 12단계에서 더한다 — 단계마다 테스트할 수 있는 코드만 들어간다.
 
 계약은 [payment.md](domains/purchase/payment.md), 승인 경계는
 [ADR 0026](decisions/purchase/0026-payment-confirm-outside-transaction.md).
