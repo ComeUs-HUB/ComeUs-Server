@@ -188,6 +188,18 @@ class OrderControllerTest {
     }
 
     @Test
+    @DisplayName("ADMIN 주문 목록은 상태 변경 API가 쓰는 PK를 orderNumber와 함께 내보낸다")
+    void adminOrderListExposesId() throws Exception {
+        Long orderId = placeOrder();
+        String orderNumber = orderRepository.findById(orderId).orElseThrow().getOrderNumber();
+
+        mockMvc.perform(get("/api/admin/orders").header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].id").value(orderId))
+                .andExpect(jsonPath("$.data.content[0].orderNumber").value(orderNumber));
+    }
+
+    @Test
     @DisplayName("ADMIN은 배송 전이만 진행할 수 있고 결제 전 주문을 배송으로 건너뛸 수 없다")
     void adminFollowsTransitionTable() throws Exception {
         Long orderId = placeOrder();
