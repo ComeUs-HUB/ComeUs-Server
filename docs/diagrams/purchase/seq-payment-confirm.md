@@ -1,6 +1,6 @@
 # 결제 승인
 
-> Payment는 아직 구현 전이다. 이 그림은 [ADR 0026](../../decisions/purchase/0026-payment-confirm-outside-transaction.md)·[0028](../../decisions/purchase/0028-payment-result-whitelist-and-recovery-limit.md)의 설계다.
+> 이 그림은 [ADR 0026](../../decisions/purchase/0026-payment-confirm-outside-transaction.md)·[0028](../../decisions/purchase/0028-payment-result-whitelist-and-recovery-limit.md)의 설계다. 구현 진행은 [roadmap.md](../../roadmap.md)가 소유한다.
 
 - **답하는 질문**: 되돌릴 수 없는 토스 승인을 어떻게 한 번만 호출하고, 서버가 죽어도 어떻게 복구하는가
 - **범위**: 토스 결제창 인증부터 `POST /api/payments/confirm` 응답까지
