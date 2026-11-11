@@ -1,6 +1,6 @@
 # ADR 0029 — 환불은 승인과 같이 선점·호출·반영으로 나누고 토스 취소가 끝난 뒤에 재고를 푼다
 
-- 상태: 채택
+- 상태: 채택 (0030이 보강)
 - 일자: 2026-11-07
 - 관련: [ADR 0026](0026-payment-confirm-outside-transaction.md), [ADR 0028](0028-payment-result-whitelist-and-recovery-limit.md), [domains/purchase/payment.md](../../domains/purchase/payment.md), [domains/purchase/order.md](../../domains/purchase/order.md)
 

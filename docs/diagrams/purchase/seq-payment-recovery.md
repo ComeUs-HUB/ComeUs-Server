@@ -23,11 +23,11 @@ sequenceDiagram
     loop 주문마다 — 50초를 넘으면 남은 건은 다음 주기로
         J->>S: recover(orderId)
         S->>M: 주문 읽기
-        M-->>S: status, paymentKey — 이 값으로 고정
+        M-->>S: status · paymentKey · updated_at 고정
         S->>T: GET /v1/payments/{paymentKey}
         T-->>S: 결제 상태 (읽기 타임아웃 5초)
-        S->>M: 반영 TX · CAS status (+ paymentKey)
-        Note over S,T: 1건 → 전이 완료<br/>0건 → 현재 상태 확인. 목표 상태가 아니면 ERROR<br/>판정 불가 · 조회 실패 → 행을 갱신하지 않고 다음 주기
+        S->>M: 반영 CAS + 읽은 updated_at
+        Note over S,T: 1건 → 전이 완료<br/>0건 → 읽은 뒤 다른 경로가 먼저 처리함. WARN<br/>판정 불가 · 조회 실패 → 행을 갱신하지 않고 다음 주기
     end
     J->>M: 1시간 경계를 이번에 넘은 주문 조회
     M-->>J: id 목록
@@ -44,7 +44,8 @@ sequenceDiagram
 
 **판정과 반영**
 - **토스 조회는 트랜잭션 밖이다.** 조회가 느려도 커넥션과 행 락을 쥐지 않는다
-- **반영은 요청 경로와 같은 CAS다.** 승인은 `status`와 `payment_key`를, 환불은 `status`를 비교한다. 요청과 배치, 여러 인스턴스가 겹쳐도 한쪽만 반영된다
+- **반영은 요청 경로와 같은 CAS에 읽은 `updated_at`을 더한다.** 승인은 `status`·`payment_key`, 환불은 `status`를 비교하고, 배치는 여기에 `updated_at`까지 본다. 상태가 같은 값으로 되돌아와도 `updated_at`이 달라 옛 조회 결과가 새 시도에 반영되지 않는다
+- 0건이면 다른 경로가 먼저 처리한 것이라 WARN으로 끝낸다
 - 처음 읽은 `paymentKey`를 그대로 CAS에 넘긴다. 그사이 거절 → 재시도로 키가 바뀌었으면 0건으로 끝난다
 - 판정하지 못하면 행을 건드리지 않는다. `updated_at`이 바뀌면 1시간 종결 시계가 리셋된다
 

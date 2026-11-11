@@ -152,7 +152,7 @@ PaymentRecoveryScheduler      @Scheduled 1분, 트랜잭션 없음
   │    └─ PaymentRecoveryService.recover(id)        주문마다, 트랜잭션 없음
   │         ├─ 주문 읽기 (status, paymentKey 고정)
   │         ├─ 토스 조회 (트랜잭션 밖, 읽기 타임아웃 5초)
-  │         └─ ApprovalTransactions / RefundTransactions   요청 경로와 같은 CAS
+  │         └─ ApprovalTransactions / RefundTransactions   요청 경로와 같은 CAS + 읽은 updated_at
   └─ alertAbandoned()         이번에 1시간을 막 넘긴 주문만 한 번 ERROR
 ```
 
@@ -180,7 +180,7 @@ PaymentRecoveryScheduler      @Scheduled 1분, 트랜잭션 없음
 
 ### 판정
 
-**`PAYMENT_IN_PROGRESS` 주문** — 승인 반영과 같은 CAS (`status` + `payment_key`)
+**`PAYMENT_IN_PROGRESS` 주문** — 승인 반영과 같은 CAS (`status` + `payment_key` + 읽은 `updated_at`)
 
 | 토스 조회 결과 | 처리 |
 |---|---|
@@ -190,7 +190,7 @@ PaymentRecoveryScheduler      @Scheduled 1분, 트랜잭션 없음
 | `READY`, `IN_PROGRESS`, 조회 실패 | 변경 없음, 다음 주기에 다시 조회 |
 | `CANCELED` 계열, `WAITING_FOR_DEPOSIT` | 변경 없음, WARN. 1시간 뒤 수동 처리 |
 
-**`REFUND_IN_PROGRESS` 주문** — 환불 반영과 같은 CAS (`status`)
+**`REFUND_IN_PROGRESS` 주문** — 환불 반영과 같은 CAS (`status` + 읽은 `updated_at`)
 
 | 토스 조회 결과 | 처리 |
 |---|---|
@@ -201,13 +201,16 @@ PaymentRecoveryScheduler      @Scheduled 1분, 트랜잭션 없음
 
 ### 규칙
 
-- **반영은 요청 경로와 같은 메서드를 쓴다.** 요청과 배치가 같은 CAS를 타야 둘이 겹쳐도 한쪽만 반영된다. 여러 인스턴스가 동시에 돌아도 같다
+- **반영은 요청 경로와 같은 메서드를 쓰고, 읽을 때 본 `updated_at`을 조건에 더한다.** 요청과 배치, 여러 인스턴스가 겹쳐도 한쪽만 반영된다.
+  `updated_at`이 없으면 환불은 상태만 비교해, 다른 인스턴스가 `PAID`로 되돌린 뒤 사용자가 다시 취소한 새 시도를 옛 조회 결과로 되돌린다
 - **조회에 쓴 `paymentKey`를 그대로 CAS에 넘긴다.** 반영 직전에 다시 읽으면 그사이 거절 → 재시도로 바뀐 키에 이전 결과가 반영된다
 - **판정하지 못하면 행을 갱신하지 않는다.** `updated_at`이 바뀌면 1시간 종결 시계가 리셋되어 수동 처리로 넘어가지 않는다
-- **반영 CAS가 0건이면 현재 상태를 확인한다.** 이미 목표 상태면 다른 경로가 먼저 반영한 것이다. 아니면 토스와 주문이 어긋난 것이라 ERROR를 남긴다
+- **배치의 반영 CAS가 0건이면 WARN으로 끝낸다.** 읽은 뒤 다른 경로가 먼저 처리했다는 뜻이고, 그 주문은 바뀐 `updated_at` 때문에 다음 주기 대상에서도 빠진다.
+  요청 경로의 반영이 0건이면 현재 상태를 확인해, 목표 상태가 아니면 토스와 주문이 어긋난 것이라 ERROR를 남긴다
 - **1시간 경보는 한 번만 낸다.** 직전 실행 이후 1시간 경계를 넘은 주문만 ERROR로 남긴다. 매 주기 반복하지 않는다. 인스턴스가 여러 대면 중복될 수 있다
   - 기동 후 첫 실행은 1시간 넘은 주문 전체를 경보한다. 서버가 내려가 있는 동안 경계를 넘은 주문이 빠지지 않게 한다
   - 기준 시각은 경보 조회가 성공한 뒤에만 갱신한다
+  - 대상이 많으면 건수 ERROR 한 줄과 주문 목록 WARN으로 나눈다. 형태는 구현 단계에서 정한다
 
 **수동 처리:** 자동으로 취소하지 않는다. 돈이 빠져나갔을 수 있어서다. 운영자가 토스 개발자센터에서 `paymentKey`로 상태를 확인한다.
 승인됐으면 `PAID`와 `Payment`를 DB에 반영하고, 승인되지 않았으면 `PENDING`으로 되돌리고 `paymentKey`를 비운다.
