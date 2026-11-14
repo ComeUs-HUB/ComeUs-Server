@@ -49,3 +49,9 @@ logging:
   level:
     org.hibernate.SQL: debug
     org.hibernate.orm.jdbc.bind: trace
+
+# 토스페이먼츠. 시크릿 키는 .env 또는 환경변수 TOSS_SECRET_KEY로만 넣는다.
+# 키가 없어도 기동은 된다 — 토스 호출이 UNAUTHORIZED_KEY로 실패하고 경보 대상 결과 불명이 된다.
+toss:
+  base-url: https://api.tosspayments.com
+  secret-key: ${TOSS_SECRET_KEY:}

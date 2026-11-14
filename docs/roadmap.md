@@ -391,9 +391,9 @@ Cart 단계에서 밀린 장바구니 락 확인도 이때 함께 했다. 결과
 
 착수 전 확인할 것:
 
-- [ ] **거절 뒤 같은 `orderId`로 재결제되는지** 토스 테스트 환경에서 확인한다. 공식 문서에 허용 여부가 없다
-- [ ] **토스 에러 코드 목록을 판정표와 대조한다** — "이미 처리됨"류 4xx를 결과 불명으로 분류하고, 같은 `paymentKey` 재호출의 응답을 본다
-- [ ] **`open-in-view: false`의 영향을 확인한다** — 컨트롤러·응답 변환에서 지연 로딩이 깨지는 곳이 없는지 본다
+- [x] **토스 에러 코드 목록을 판정표와 대조한다** — [ADR 0028](decisions/purchase/0028-payment-result-whitelist-and-recovery-limit.md)·[0029](decisions/purchase/0029-refund-outside-transaction.md)
+- [x] **`open-in-view: false`의 영향을 확인한다** — Order 단계에서 확인했다
+- [x] **테스트 키로 확인한다** (2026-11-11, 문서용 키. 결과는 [payment.md](domains/purchase/payment.md)) — 주문서형 키의 `paymentKey` 조회·취소, 전액 취소 후 `CANCELED`, 거절 뒤 같은 `orderId` 재결제, 같은 `paymentKey` 재승인 응답, 실제 응답 시간과 `method` 값
 
 ## Phase 5 — 리뷰 ⬜
 

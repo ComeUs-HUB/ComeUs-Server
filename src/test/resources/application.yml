@@ -53,3 +53,8 @@ kakao:
   token-uri: https://kauth.kakao.com/oauth/token
   user-info-uri: https://kapi.kakao.com/v2/user/me
   unlink-uri: https://kapi.kakao.com/v1/user/unlink
+
+# TossRestClientConfig가 기동 시 toss.*를 읽는다. 테스트는 실제 토스를 부르지 않는다.
+toss:
+  base-url: https://api.tosspayments.com
+  secret-key: test_sk_dummy
