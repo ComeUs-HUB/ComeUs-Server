@@ -77,4 +77,66 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                                   @Param("cancelled") OrderStatus cancelled,
                                   @Param("cutoff") LocalDateTime cutoff,
                                   @Param("updatedAt") LocalDateTime updatedAt);
+
+    /** [Phase 4 · 10단계] 결제 승인의 주문 식별. 타인의 주문은 없는 주문과 같게 취급한다. */
+    Optional<Order> findByOrderNumberAndUserId(String orderNumber, Long userId);
+
+    /**
+     * [Phase 4 · 10단계] 결제 승인을 선점한다. 승인 진입은 이 CAS로 한 번만 허용된다(ADR 0026).
+     * [PENDING -> PAYMENT_IN_PROGRESS]
+     *
+     * @return 갱신된 행 수. 0이면 이미 다른 시도가 선점했거나 승인할 수 없는 상태다
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Order o
+               set o.status = :inProgress, o.paymentKey = :paymentKey, o.updatedAt = :updatedAt
+             where o.id = :orderId
+               and o.status = :pending
+            """)
+    int claimPayment(@Param("orderId") Long orderId,
+                     @Param("paymentKey") String paymentKey,
+                     @Param("pending") OrderStatus pending,
+                     @Param("inProgress") OrderStatus inProgress,
+                     @Param("updatedAt") LocalDateTime updatedAt);
+
+    /**
+     * [Phase 4 · 10단계] 승인 성공을 반영한다. {@code paymentKey}까지 비교해 이전 시도의 늦은 반영을 막는다.
+     * [PAYMENT_IN_PROGRESS -> PAID]
+     *
+     * @return 갱신된 행 수. 0이면 다른 경로가 먼저 반영했거나 선점한 시도가 바뀌었다
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Order o
+               set o.status = :paid, o.updatedAt = :updatedAt
+             where o.id = :orderId
+               and o.status = :inProgress
+               and o.paymentKey = :paymentKey
+            """)
+    int applyPaymentSuccess(@Param("orderId") Long orderId,
+                            @Param("paymentKey") String paymentKey,
+                            @Param("inProgress") OrderStatus inProgress,
+                            @Param("paid") OrderStatus paid,
+                            @Param("updatedAt") LocalDateTime updatedAt);
+
+    /**
+     * [Phase 4 · 10단계] 승인 거절을 반영한다. {@code paymentKey}를 비워 같은 주문으로 다시 결제할 수 있게 한다.
+     * [PAYMENT_IN_PROGRESS -> PENDING]
+     *
+     * @return 갱신된 행 수. 0이면 다른 경로가 먼저 반영했거나 선점한 시도가 바뀌었다
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Order o
+               set o.status = :pending, o.paymentKey = null, o.updatedAt = :updatedAt
+             where o.id = :orderId
+               and o.status = :inProgress
+               and o.paymentKey = :paymentKey
+            """)
+    int applyPaymentRejection(@Param("orderId") Long orderId,
+                              @Param("paymentKey") String paymentKey,
+                              @Param("inProgress") OrderStatus inProgress,
+                              @Param("pending") OrderStatus pending,
+                              @Param("updatedAt") LocalDateTime updatedAt);
 }

@@ -1,7 +1,7 @@
 # payment — 결제
 
 > 이 문서는 **구현할 계약**이고, 진행 현황은 [roadmap.md](../../roadmap.md)가 소유한다.
-> 엔티티와 토스 연동 경계(`PaymentGateway`)가 코드에 있다. 승인·조회 API, 환불, 복구 배치는 아직 없다.
+> 엔티티, 토스 연동 경계(`PaymentGateway`), 승인 API가 코드에 있다. 조회 API, 환불, 복구 배치는 아직 없다.
 
 [order.md](order.md)의 주문 하나에 결제 하나가 붙는다. 셋에 걸친 엔티티 관계는 [README.md](README.md)가 소유한다.
 
@@ -97,6 +97,19 @@ FE가 successUrl에서 받은 `{ paymentKey, orderId, amount }`로 호출한다.
 | `PAID` + 같은 `paymentKey` | 기존 결제 반환 — 응답을 잃은 FE의 재시도다 |
 | `PAID` + 다른 `paymentKey` | `PAY002 PAYMENT_ALREADY_EXISTS` |
 | 그 밖의 상태 | `PAY005` 승인 불가 |
+
+**0건 뒤의 재확인은 새 트랜잭션에서 한다.** 선점·반영 CAS가 0건이면 현재 상태를 다시 읽는데, MySQL 기본 격리 수준(REPEATABLE READ)에서는
+같은 트랜잭션 안의 재조회가 처음 읽은 시점의 스냅샷을 돌려줘 다른 쪽이 커밋한 상태를 놓친다.
+
+**반영 쪽 예외 처리**
+
+| 상황 | 응답 | 처리 |
+|---|---|---|
+| 성공 반영 0건, 다른 경로가 같은 키로 `PAID` 반영 | 기존 결제 반환 | 정상 |
+| 성공 반영 0건, 그 밖 | `PAY003` | ERROR — 토스는 승인했으니 실패로 답하지 않는다([ADR 0030](../../decisions/purchase/0030-recovery-batch-runtime-limits.md)) |
+| 성공 반영 트랜잭션 실패 (DB 예외·타임아웃 10초) | `PAY003` | ERROR, 상태 유지 → 복구 배치가 `PAID`로 전진 |
+| 승인 응답의 `orderId`·금액이 주문과 다름, 또는 `DONE`이 아님 | `PAY003` | ERROR, 전이하지 않음([ADR 0028](../../decisions/purchase/0028-payment-result-whitelist-and-recovery-limit.md) 응답 검증) |
+| 거절 반영 0건·실패 | `PAY006` | 토스 거절은 확정이라 응답은 그대로. 상태가 `PENDING`이 아니면 ERROR |
 
 **응답 형식** — 승인 성공, 같은 키의 재요청, 결제 조회가 같다. 결제 PK와 `paymentKey`는 내보내지 않고 결제는 `orderNumber`로 가리킨다.
 
@@ -225,6 +238,8 @@ PaymentRecoveryScheduler      @Scheduled 1분, 트랜잭션 없음
 토스를 부르는 곳은 승인 API, 복구 배치, 환불 세 군데다. 각자 토스를 직접 부르면 인증 헤더, 멱등키, 에러 코드 해석이 세 곳에 흩어지고
 한 곳만 틀려도 그 경로만 다르게 동작한다. 그래서 **토스와의 통신을 `PaymentGateway` 한 곳에 모은다.**
 
+구조와 응답 판정 흐름은 [결제 게이트웨이 다이어그램](../../diagrams/purchase/payment-gateway.md)이 그림으로 보여준다.
+
 | 얻는 것 | 내용 |
 |---|---|
 | 판정이 한 곳 | **"확실히 안 됐다"와 "모른다"의 구분**을 게이트웨이만 한다. 이 구분이 틀리면 결제된 주문을 되돌려 중복 청구가 날 수 있다(ADR 0028) |
@@ -344,7 +359,7 @@ public interface PaymentGateway {
 
 ## 에러 코드
 
-`PAY001`·`PAY002`는 `PaymentErrorCode`에 있다. 아래는 구현 단계에서 `PaymentErrorCode`와 [error-codes.md](../../conventions/error-codes.md)에 추가한다.
+`PAY001`~`PAY006`은 `PaymentErrorCode`에 있다. `PAY007`·`PAY008`은 12단계에서 `PaymentErrorCode`와 [error-codes.md](../../conventions/error-codes.md)에 추가한다.
 
 | 코드 | 상수 | HTTP | 언제 |
 |---|---|---|---|

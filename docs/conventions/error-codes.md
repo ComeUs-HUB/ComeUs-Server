@@ -82,6 +82,10 @@ public interface ErrorCode {          // global/exception/ErrorCode.java
 | O005 | `INVALID_ORDER_STATUS_TRANSITION` | 409 | 〃 |
 | PAY001 | `PAYMENT_NOT_FOUND` | 404 | `domain.payment.exception.PaymentErrorCode` |
 | PAY002 | `PAYMENT_ALREADY_EXISTS` | 409 | 〃 |
+| PAY003 | `PAYMENT_IN_PROGRESS` | 409 | 〃 |
+| PAY004 | `PAYMENT_AMOUNT_MISMATCH` | 400 | 〃 |
+| PAY005 | `PAYMENT_NOT_ALLOWED` | 409 | 〃 |
+| PAY006 | `PAYMENT_REJECTED` | 402 | 〃 |
 | R001 | `REVIEW_NOT_FOUND` | 404 | `domain.review.exception.ReviewErrorCode` |
 | R002 | `REVIEW_ALREADY_EXISTS` | 409 | 〃 |
 | R003 | `REVIEW_NOT_ALLOWED` | 403 | 〃 |

@@ -16,6 +16,7 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -86,7 +87,8 @@ public class Payment {
     private Payment(Order order, String paymentKey, BigDecimal amount, String method, LocalDateTime paidAt) {
         this.order = order;
         this.paymentKey = paymentKey;
-        this.amount = amount;
+        // 컬럼 자릿수에 맞춰 저장 직후의 응답과 다시 읽은 응답이 같은 값이 되게 한다
+        this.amount = amount.setScale(2, RoundingMode.UNNECESSARY);
         this.method = method;
         this.paidAt = paidAt;
         this.status = PaymentStatus.SUCCESS;
