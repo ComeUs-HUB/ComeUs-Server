@@ -58,6 +58,7 @@ class OrderServiceTest {
     private static final ShippingAddress ADDRESS = ShippingAddress.of("구매자", "010-0000-0000", "서울시");
 
     @Autowired private OrderService orderService;
+    @Autowired private OrderCancelService orderCancelService;
     @Autowired private OrderRepository orderRepository;
     @Autowired private CartRepository cartRepository;
     @Autowired private ProductRepository productRepository;
@@ -290,7 +291,7 @@ class OrderServiceTest {
         Long orderId = orderIdOf(number);
         LocalDateTime before = orderOf(orderId).getUpdatedAt();
 
-        orderService.cancelOrder(userId, number);
+        orderCancelService.cancelByMember(userId, number);
 
         assertThat(orderOf(orderId).getStatus()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(orderOf(orderId).getUpdatedAt())
@@ -310,16 +311,20 @@ class OrderServiceTest {
         Long orderId = orderIdOf(number);
 
         forceStatus(orderId, OrderStatus.PENDING, OrderStatus.PAYMENT_IN_PROGRESS);
-        assertThatThrownBy(() -> orderService.cancelOrder(userId, number))
+        assertThatThrownBy(() -> orderCancelService.cancelByMember(userId, number))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS));
 
-        forceStatus(orderId, OrderStatus.PAYMENT_IN_PROGRESS, OrderStatus.PAID);
-        assertThatThrownBy(() -> orderService.cancelOrder(userId, number))
-                .as("환불 없이 재고만 돌아가면 안 된다")
+        // PAID 취소는 환불이다 — RefundServiceTest가 검증한다
+        forceStatus(orderId, OrderStatus.PAYMENT_IN_PROGRESS, OrderStatus.REFUND_IN_PROGRESS);
+        assertThatThrownBy(() -> orderCancelService.cancelByMember(userId, number))
+                .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS));
+
+        forceStatus(orderId, OrderStatus.REFUND_IN_PROGRESS, OrderStatus.SHIPPING);
+        assertThatThrownBy(() -> orderCancelService.cancelByMember(userId, number))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED));
 
-        forceStatus(orderId, OrderStatus.PAID, OrderStatus.CANCELLED);
-        assertThatThrownBy(() -> orderService.cancelOrder(userId, number))
+        forceStatus(orderId, OrderStatus.SHIPPING, OrderStatus.CANCELLED);
+        assertThatThrownBy(() -> orderCancelService.cancelByMember(userId, number))
                 .satisfies(e -> assertThat(errorCodeOf(e)).isEqualTo(OrderErrorCode.ORDER_ALREADY_CANCELLED));
 
         assertThat(stockOf(tee)).isEqualTo(4);
@@ -333,7 +338,7 @@ class OrderServiceTest {
         String number = orderService.createOrder(userId, "key-1", cartOf(userId, tee), ADDRESS).orderNumber();
         Long orderId = orderIdOf(number);
         Callable<Boolean> request = () -> {
-            orderService.cancelOrder(userId, number);
+            orderCancelService.cancelByMember(userId, number);
             return true;
         };
 

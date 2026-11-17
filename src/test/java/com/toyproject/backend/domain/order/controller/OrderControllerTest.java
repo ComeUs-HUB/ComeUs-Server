@@ -2,6 +2,17 @@ package com.toyproject.backend.domain.order.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;
+import com.toyproject.backend.domain.payment.exception.PaymentRejectedException;
+import com.toyproject.backend.domain.payment.exception.PaymentResultUnknownException;
+import com.toyproject.backend.domain.payment.gateway.FakePaymentGateway;
+import com.toyproject.backend.domain.payment.gateway.FakePaymentGatewayConfig;
+import com.toyproject.backend.domain.payment.gateway.TossPayment;
+import com.toyproject.backend.domain.payment.gateway.TossPaymentStatus;
+import com.toyproject.backend.domain.payment.repository.PaymentRepository;
+import com.toyproject.backend.domain.payment.service.PaymentTransitions;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import org.springframework.context.annotation.Import;
 import com.toyproject.backend.domain.auth.token.JwtProvider;
 import com.toyproject.backend.domain.cart.dto.CartItemAddRequest;
 import com.toyproject.backend.domain.cart.repository.CartRepository;
@@ -47,6 +58,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 지연 로딩 오류가 가려지고 서비스의 격리 수준과 충돌한다.
  */
 @SpringBootTest
+@Import(FakePaymentGatewayConfig.class)
 @AutoConfigureMockMvc
 @DisplayName("주문 API (Phase 4 · 7단계)")
 class OrderControllerTest {
@@ -60,6 +72,9 @@ class OrderControllerTest {
     @Autowired private CategoryRepository categoryRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private TransactionTemplate transactionTemplate;
+    @Autowired private FakePaymentGateway gateway;
+    @Autowired private PaymentTransitions paymentTransitions;
+    @Autowired private PaymentRepository paymentRepository;
 
     private String buyer;
     private String admin;
@@ -67,6 +82,7 @@ class OrderControllerTest {
 
     @BeforeEach
     void setUp() {
+        gateway.reset();
         buyer = bearerOf(userRepository.save(User.ofKakao("kakao-order-1", "buyer@kakao.com", "구매자")));
         User adminUser = User.ofKakao("kakao-order-2", "admin@kakao.com", "관리자");
         adminUser.promoteToAdmin();
@@ -79,6 +95,7 @@ class OrderControllerTest {
 
     @AfterEach
     void tearDown() {
+        paymentRepository.deleteAll();
         orderRepository.deleteAll();
         cartRepository.deleteAll();
         productRepository.deleteAll();
@@ -117,6 +134,32 @@ class OrderControllerTest {
     private Long placeOrder() throws Exception {
         createOrder(UUID.randomUUID().toString(), List.of(addToCart())).andExpect(status().isOk());
         return orderRepository.findAll().get(0).getId();
+    }
+
+    /** 승인 반영까지 거친 PAID 주문(수량 2, 결제 1건). [12단계] */
+    private String paidOrder() throws Exception {
+        Long orderId = placeOrder();
+        String orderNumber = orderRepository.findById(orderId).orElseThrow().getOrderNumber();
+        BigDecimal amount = orderRepository.findById(orderId).orElseThrow().getTotalAmount();
+        transactionTemplate.executeWithoutResult(status -> orderRepository.claimPayment(orderId, "pk-1",
+                OrderStatus.PENDING, OrderStatus.PAYMENT_IN_PROGRESS, LocalDateTime.now()));
+        paymentTransitions.applySuccess(orderId, orderNumber, "pk-1", tossPayment(orderNumber, amount, TossPaymentStatus.DONE));
+        return orderNumber;
+    }
+
+    private static TossPayment tossPayment(String orderNumber, BigDecimal amount, TossPaymentStatus status) {
+        return new TossPayment("pk-1", orderNumber, status, amount, "카드",
+                OffsetDateTime.parse("2026-11-17T10:00:00+09:00"),
+                List.of(new TossPayment.Cancel(OffsetDateTime.parse("2026-11-17T11:00:00+09:00"))));
+    }
+
+    private ResultActions cancel(String orderNumber) throws Exception {
+        return mockMvc.perform(post("/api/orders/" + orderNumber + "/cancel").header(HttpHeaders.AUTHORIZATION, buyer));
+    }
+
+    private OrderStatus statusOf(String orderNumber) {
+        return orderRepository.findAll().stream().filter(o -> o.getOrderNumber().equals(orderNumber))
+                .findFirst().orElseThrow().getStatus();
     }
 
     private ResultActions changeStatus(String token, Long orderId, OrderStatus next) throws Exception {
@@ -230,5 +273,54 @@ class OrderControllerTest {
         changeStatus(admin, orderId, OrderStatus.CANCELLED).andExpect(status().isOk());
 
         assertThat(productRepository.findById(tee.getId()).orElseThrow().getStockQuantity()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("PAID 주문 취소는 환불하고 재고를 복구한다 (12단계)")
+    void cancelPaidOrderRefunds() throws Exception {
+        String orderNumber = paidOrder();
+        BigDecimal amount = orderRepository.findAll().get(0).getTotalAmount();
+        gateway.onCancel(() -> tossPayment(orderNumber, amount, TossPaymentStatus.CANCELED));
+
+        cancel(orderNumber).andExpect(status().isOk());
+
+        assertThat(statusOf(orderNumber)).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(productRepository.findById(tee.getId()).orElseThrow().getStockQuantity()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("환불 확정 거절은 409 PAY007, 결과 불명은 409 PAY008 (12단계)")
+    void refundFailureResponses() throws Exception {
+        String orderNumber = paidOrder();
+
+        gateway.onCancel(() -> { throw new PaymentRejectedException("REFUND_REJECTED", "거절"); });
+        cancel(orderNumber)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("PAY007"));
+        assertThat(statusOf(orderNumber)).isEqualTo(OrderStatus.PAID);
+
+        gateway.onCancel(() -> { throw new PaymentResultUnknownException(null, false, "타임아웃", null); });
+        cancel(orderNumber)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("PAY008"));
+        assertThat(statusOf(orderNumber)).isEqualTo(OrderStatus.REFUND_IN_PROGRESS);
+
+        cancel(orderNumber)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("O003"));
+    }
+
+    @Test
+    @DisplayName("ADMIN도 PAID 주문을 취소하면 환불한다 (12단계)")
+    void adminCancelPaidOrderRefunds() throws Exception {
+        String orderNumber = paidOrder();
+        Long orderId = orderRepository.findAll().get(0).getId();
+        BigDecimal amount = orderRepository.findAll().get(0).getTotalAmount();
+        gateway.onCancel(() -> tossPayment(orderNumber, amount, TossPaymentStatus.CANCELED));
+
+        changeStatus(admin, orderId, OrderStatus.CANCELLED).andExpect(status().isOk());
+
+        assertThat(statusOf(orderNumber)).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(gateway.calls()).containsExactly("cancel:pk-1");
     }
 }

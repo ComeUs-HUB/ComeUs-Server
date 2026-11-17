@@ -12,6 +12,7 @@ import com.toyproject.backend.domain.payment.gateway.FakePaymentGateway;
 import com.toyproject.backend.domain.payment.gateway.FakePaymentGatewayConfig;
 import com.toyproject.backend.domain.payment.gateway.TossPayment;
 import com.toyproject.backend.domain.payment.gateway.TossPaymentStatus;
+import com.toyproject.backend.domain.payment.entity.PaymentStatus;
 import com.toyproject.backend.domain.payment.repository.PaymentRepository;
 import com.toyproject.backend.domain.product.entity.Product;
 import com.toyproject.backend.domain.product.repository.ProductRepository;
@@ -22,6 +23,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
@@ -44,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * [Phase 4 · 11단계] 복구 배치의 판정, 읽은 뒤의 경합, 실행 예산, 1시간 경보를 실제 트랜잭션으로 검증한다.
+ * 12단계부터 환불 판정도 검증한다.
  *
  * <p>{@code updated_at}은 {@link JdbcTemplate}으로 과거로 돌린다. 시각은 인자로 넘긴다 — 8단계 만료 배치와 같은 방식.
  */
@@ -56,6 +59,7 @@ class PaymentRecoveryTest {
     private static final BigDecimal PRICE = new BigDecimal("19900");
 
     @Autowired private PaymentRecoveryService recoveryService;
+    @Autowired private PaymentTransitions paymentTransitions;
     @Autowired private FakePaymentGateway gateway;
     @Autowired private PaymentRepository paymentRepository;
     @Autowired private OrderRepository orderRepository;
@@ -102,6 +106,21 @@ class PaymentRecoveryTest {
                 OrderStatus.PENDING, OrderStatus.PAYMENT_IN_PROGRESS, LocalDateTime.now()));
         touch(order.getId(), now.minusMinutes(minutesAgo));
         return order;
+    }
+
+    /** 승인 반영까지 거친 뒤 환불을 선점한 채 {@code minutesAgo}분 전부터 멈춘 주문. 결제 1건이 있다. */
+    private Order refundingOrder(String paymentKey, long minutesAgo) {
+        Order order = stuckOrder(paymentKey, minutesAgo);
+        assertThat(paymentTransitions.applySuccess(order.getId(), order.getOrderNumber(), paymentKey,
+                lookup(paymentKey, order.getOrderNumber(), TossPaymentStatus.DONE, PRICE))).isPresent();
+        transactionTemplate.executeWithoutResult(status -> orderRepository.transitionStatus(order.getId(),
+                OrderStatus.PAID, OrderStatus.REFUND_IN_PROGRESS, LocalDateTime.now()));
+        touch(order.getId(), now.minusMinutes(minutesAgo));
+        return order;
+    }
+
+    private int stock() {
+        return productRepository.findById(productId).orElseThrow().getStockQuantity();
     }
 
     private void touch(Long orderId, LocalDateTime updatedAt) {
@@ -248,6 +267,120 @@ class PaymentRecoveryTest {
     }
 
     @Nested
+    @DisplayName("환불 주문 하나의 판정 (12단계)")
+    class RecoverRefund {
+
+        private Order order;
+        private LocalDateTime stuckAt;
+
+        @BeforeEach
+        void stuck() {
+            order = refundingOrder("pk-r", 10);
+            stuckAt = current(order).getUpdatedAt();
+            gateway.reset();
+        }
+
+        private TossPayment refundLookup(TossPaymentStatus status) {
+            return new TossPayment("pk-r", order.getOrderNumber(), status, PRICE, "카드",
+                    OffsetDateTime.parse("2026-11-17T10:15:30+09:00"),
+                    List.of(new TossPayment.Cancel(OffsetDateTime.parse("2026-11-17T10:20:00+09:00"))));
+        }
+
+        private void assertUntouched() {
+            Order after = current(order);
+            assertThat(after.getStatus()).isEqualTo(OrderStatus.REFUND_IN_PROGRESS);
+            assertThat(after.getUpdatedAt()).as("판정하지 못하면 1시간 시계를 리셋하지 않는다").isEqualTo(stuckAt);
+            assertThat(paymentRepository.findByOrderId(order.getId()).orElseThrow().getStatus())
+                    .isEqualTo(PaymentStatus.SUCCESS);
+            assertThat(stock()).isEqualTo(10);
+        }
+
+        @Test
+        @DisplayName("CANCELED — CANCELLED, 결제 REFUNDED, 재고 복구")
+        void canceledIsRefunded() {
+            gateway.onLookup(() -> refundLookup(TossPaymentStatus.CANCELED));
+
+            recoveryService.recover(order.getId(), now);
+
+            assertThat(current(order).getStatus()).isEqualTo(OrderStatus.CANCELLED);
+            assertThat(paymentRepository.findByOrderId(order.getId()).orElseThrow().getStatus())
+                    .isEqualTo(PaymentStatus.REFUNDED);
+            assertThat(stock()).isEqualTo(11);
+            assertThat(gateway.calls()).containsExactly("getPayment:pk-r");
+        }
+
+        @Test
+        @DisplayName("DONE — 취소되지 않았다, PAID로 복귀")
+        void doneReturnsToPaid() {
+            gateway.onLookup(() -> refundLookup(TossPaymentStatus.DONE));
+
+            recoveryService.recover(order.getId(), now);
+
+            assertThat(current(order).getStatus()).isEqualTo(OrderStatus.PAID);
+            assertThat(stock()).isEqualTo(10);
+        }
+
+        @Test
+        @DisplayName("조회 거절(NOT_FOUND_PAYMENT) — 승인 판정과 달리 PENDING으로 가지 않고 그대로")
+        void lookupRejectedIsUntouched() {
+            gateway.onLookup(() -> { throw new PaymentRejectedException("NOT_FOUND_PAYMENT", "결제 없음"); });
+
+            recoveryService.recover(order.getId(), now);
+
+            assertUntouched();
+            assertThat(current(order).getPaymentKey()).isEqualTo("pk-r");
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = TossPaymentStatus.class, names = {"CANCELED", "DONE"}, mode = EnumSource.Mode.EXCLUDE)
+        @DisplayName("판정할 수 없는 상태 — 아무것도 바꾸지 않는다")
+        void undecidableStatusIsUntouched(TossPaymentStatus status) {
+            gateway.onLookup(() -> refundLookup(status));
+
+            recoveryService.recover(order.getId(), now);
+
+            assertUntouched();
+        }
+
+        @Test
+        @DisplayName("주문과 다른 조회 결과 — 아무것도 바꾸지 않는다")
+        void mismatchedIsUntouched() {
+            gateway.onLookup(() -> new TossPayment("pk-r", order.getOrderNumber(), TossPaymentStatus.CANCELED,
+                    new BigDecimal("100"), "카드", null, null));
+
+            recoveryService.recover(order.getId(), now);
+
+            assertUntouched();
+        }
+
+        @Test
+        @DisplayName("조회 결과 불명 — 아무것도 바꾸지 않는다")
+        void lookupUnknownIsUntouched() {
+            gateway.onLookup(() -> { throw new PaymentResultUnknownException(null, false, "타임아웃", null); });
+
+            recoveryService.recover(order.getId(), now);
+
+            assertUntouched();
+        }
+
+        @Test
+        @DisplayName("읽은 뒤 PAID 복귀 → 재취소로 새 시도 — 옛 조회 결과(DONE)가 새 시도를 PAID로 되돌리지 않는다")
+        void newRefundAttemptAfterReadIsPreserved() {
+            LocalDateTime retriedAt = now.minusMinutes(6);
+            gateway.onLookup(() -> {
+                // 다른 인스턴스가 PAID로 돌린 뒤 사용자가 다시 취소했다. 상태는 같고 updated_at만 다르다(ABA)
+                touch(order.getId(), retriedAt);
+                return refundLookup(TossPaymentStatus.DONE);
+            });
+
+            recoveryService.recover(order.getId(), now);
+
+            assertThat(current(order).getStatus()).isEqualTo(OrderStatus.REFUND_IN_PROGRESS);
+            assertThat(current(order).getUpdatedAt()).isEqualTo(retriedAt);
+        }
+    }
+
+    @Nested
     @DisplayName("스케줄러")
     @ExtendWith(OutputCaptureExtension.class)
     class Scheduler {
@@ -269,6 +402,20 @@ class PaymentRecoveryTest {
             stuckOrder("pk-abandoned", 61);
 
             assertThat(recoveryService.findTargetIds(now)).containsExactly(older.getId(), newer.getId());
+        }
+
+        @Test
+        @DisplayName("대상·경보에 환불 진행 중 주문도 들어간다 (12단계)")
+        void refundOrdersAreTargetedAndAlerted(CapturedOutput output) {
+            Order payment = stuckOrder("pk-pay", 20);
+            Order refund = refundingOrder("pk-refund", 10);
+            Order abandonedRefund = refundingOrder("pk-refund-old", 70);
+
+            assertThat(recoveryService.findTargetIds(now)).containsExactly(payment.getId(), refund.getId());
+
+            int start = output.getOut().length();
+            scheduler.alertAbandoned(now);
+            assertThat(output.getOut().substring(start)).contains("count=1").contains(abandonedRefund.getOrderNumber());
         }
 
         @Test
