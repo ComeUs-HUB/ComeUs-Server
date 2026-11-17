@@ -4,6 +4,7 @@ import com.toyproject.backend.domain.order.dto.OrderCreateRequest;
 import com.toyproject.backend.domain.order.dto.OrderCreateResponse;
 import com.toyproject.backend.domain.order.dto.OrderDetailResponse;
 import com.toyproject.backend.domain.order.dto.OrderSummaryResponse;
+import com.toyproject.backend.domain.order.service.OrderCancelService;
 import com.toyproject.backend.domain.order.service.OrderService;
 import com.toyproject.backend.global.exception.BusinessException;
 import com.toyproject.backend.global.exception.CommonErrorCode;
@@ -48,6 +49,7 @@ public class OrderController {
             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
 
     private final OrderService orderService;
+    private final OrderCancelService orderCancelService;
 
     /** 헤더를 필수로 받으면 누락이 500이 되므로 {@code required = false}와 검증으로 C001을 낸다(ADR 0024). */
     @PostMapping
@@ -78,7 +80,7 @@ public class OrderController {
     @PostMapping("/{orderNumber}/cancel")
     public ApiResponse<Void> cancelOrder(@AuthenticationPrincipal UserPrincipal principal,
                                          @PathVariable String orderNumber) {
-        orderService.cancelOrder(principal.getId(), orderNumber);
+        orderCancelService.cancelByMember(principal.getId(), orderNumber);
         return ApiResponse.success(null);
     }
 

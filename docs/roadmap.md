@@ -19,7 +19,7 @@
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
-**Phase 4 Cart(1~3단계)와 Order(4~8단계) 구현이 끝났다.** MySQL 최소 검증을 마쳤다. 다음은 Payment다.
+**Phase 4 Cart(1~3단계)·Order(4~8단계)·Payment(9~12단계) 구현이 끝났다.** Cart·Order는 MySQL 최소 검증을 마쳤다. Payment는 자동 테스트만 통과했고 MySQL·토스 테스트 키 실기동이 남았다.
 **동시성 제어 방식은 Order 착수 전까지 ADR로 정한다** — 되돌리기 비용이 큰 결정이지만
 재고를 차감하는 것은 Order이고 Cart는 읽기만 하므로 Cart는 그 결정 없이 착수할 수 있다
 ([domains/purchase/order.md](domains/purchase/order.md)).
@@ -370,21 +370,21 @@ Cart 단계에서 밀린 장바구니 락 확인도 이때 함께 했다. 결과
 - [ ] **성능 측정** — 로컬 소량 부하라 TPS, p99, 커넥션 풀 포화 지점은 재지 않았다. [측정 계획](performance/order-stock-concurrency.md)
 - [ ] **프로세스 강제 종료 시나리오**
 
-### Payment — 9~12단계 ⬜
+### Payment — 9~12단계 ✅
 
 | 단계 | 내용 | 검증 | |
 |---|---|---|---|
 | 9 | `Payment` 엔티티 + `V6__create_payments.sql` + `PaymentGateway`와 토스 구현 | 엔티티·영속성 테스트 | ✅ |
 | 10 | 승인 API — 선점, 토스 호출, 반영 + `PAY003`~`PAY006` | 서비스·컨트롤러 테스트 | ✅ |
 | 11 | 복구 배치(승인 판정) + 결제 조회 API | 배치·컨트롤러 테스트 | ✅ |
-| 12 | 환불 + `PAID` 취소(회원·ADMIN) + 복구 배치의 환불 판정 | 서비스·배치 테스트 | ⬜ |
+| 12 | 환불 + `PAID` 취소(회원·ADMIN) + 복구 배치의 환불 판정 | 서비스·배치·컨트롤러 테스트 | ✅ |
 
 환불 흐름은 [ADR 0029](decisions/purchase/0029-refund-outside-transaction.md)가 정했다.
 
 승인 응답 판정과 복구 종결 조건은 [ADR 0028](decisions/purchase/0028-payment-result-whitelist-and-recovery-limit.md)이 정했다.
 
 복구 배치의 실행 시간 상한과 판정하지 못한 주문의 처리는 [ADR 0030](decisions/purchase/0030-recovery-batch-runtime-limits.md)이 정했다.
-11단계는 `PAYMENT_IN_PROGRESS`만 판정하고, `REFUND_IN_PROGRESS` 판정은 환불을 만드는 12단계에서 더한다 — 단계마다 테스트할 수 있는 코드만 들어간다.
+11단계는 `PAYMENT_IN_PROGRESS`만 판정했고, `REFUND_IN_PROGRESS` 판정은 환불을 만든 12단계에서 더했다 — 단계마다 테스트할 수 있는 코드만 들어간다.
 
 계약은 [payment.md](domains/purchase/payment.md), 승인 경계는
 [ADR 0026](decisions/purchase/0026-payment-confirm-outside-transaction.md).

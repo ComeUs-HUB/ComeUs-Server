@@ -2,6 +2,8 @@ package com.toyproject.backend.domain.order.controller;
 
 import com.toyproject.backend.domain.order.dto.OrderStatusUpdateRequest;
 import com.toyproject.backend.domain.order.dto.AdminOrderSummaryResponse;
+import com.toyproject.backend.domain.order.entity.OrderStatus;
+import com.toyproject.backend.domain.order.service.OrderCancelService;
 import com.toyproject.backend.domain.order.service.OrderService;
 import com.toyproject.backend.global.exception.BusinessException;
 import com.toyproject.backend.global.exception.CommonErrorCode;
@@ -30,6 +32,7 @@ public class AdminOrderController {
     private static final String SORTABLE_FIELD = "createdAt";
 
     private final OrderService orderService;
+    private final OrderCancelService orderCancelService;
 
     @GetMapping
     public ApiResponse<PageResponse<AdminOrderSummaryResponse>> getOrderList(
@@ -40,7 +43,12 @@ public class AdminOrderController {
     @PutMapping("/{id}/status")
     public ApiResponse<Void> changeOrderStatus(@PathVariable Long id,
                                                @Valid @RequestBody OrderStatusUpdateRequest request) {
-        orderService.changeOrderStatus(id, request.status());
+        // 취소는 환불을 트랜잭션 밖에서 해야 해서 따로 보낸다(ADR 0029). 그 밖은 배송 전이다
+        if (request.status() == OrderStatus.CANCELLED) {
+            orderCancelService.cancelByAdmin(id);
+        } else {
+            orderService.changeOrderStatus(id, request.status());
+        }
         return ApiResponse.success(null);
     }
 

@@ -15,7 +15,11 @@ public enum PaymentErrorCode implements ErrorCode {
     PAYMENT_IN_PROGRESS(HttpStatus.CONFLICT, "PAY003", "결제 승인이 진행 중입니다. 잠시 후 주문 상태를 확인해 주세요."),
     PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "PAY004", "결제 금액이 주문 금액과 일치하지 않습니다."),
     PAYMENT_NOT_ALLOWED(HttpStatus.CONFLICT, "PAY005", "결제할 수 없는 주문 상태입니다."),
-    PAYMENT_REJECTED(HttpStatus.PAYMENT_REQUIRED, "PAY006", "결제가 거절되었습니다. 다시 시도해 주세요.");
+    PAYMENT_REJECTED(HttpStatus.PAYMENT_REQUIRED, "PAY006", "결제가 거절되었습니다. 다시 시도해 주세요."),
+    /** [Phase 4 · 12단계] 토스가 취소를 받아들이지 않았다. 결제는 그대로이고 주문은 PAID로 돌아간다. */
+    PAYMENT_REFUND_REJECTED(HttpStatus.CONFLICT, "PAY007", "환불이 거절되었습니다. 고객센터로 문의해 주세요."),
+    /** [Phase 4 · 12단계] 토스에서 취소됐을 수 있어 되돌리지 않는다. 복구 배치가 판정한다. */
+    PAYMENT_REFUND_IN_PROGRESS(HttpStatus.CONFLICT, "PAY008", "환불이 진행 중입니다. 잠시 후 주문 상태를 확인해 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;

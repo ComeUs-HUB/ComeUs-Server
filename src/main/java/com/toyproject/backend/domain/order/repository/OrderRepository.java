@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -150,17 +151,40 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                               @Param("updatedAt") LocalDateTime updatedAt);
 
     /**
-     * [Phase 4 · 11단계] 복구 판정 대상 id. {@code updated_at}이 {@code (abandonCutoff, judgeCutoff]} 구간인 주문을 오래된 순으로.
+     * [Phase 4 · 12단계] 환불 결과를 반영한다. 성공은 {@code CANCELLED}, 확정 거절은 {@code PAID}로 보낸다.
+     * [REFUND_IN_PROGRESS -> CANCELLED | PAID]
+     *
+     * <p>{@code payment_key}는 비교하지 않는다. 결제 하나에 전액 취소 한 번이라 키가 바뀌지 않는다(ADR 0029).
+     * {@code readUpdatedAt}의 뜻은 {@link #applyPaymentSuccess}와 같다 — 배치의 옛 조회 결과가 새 환불 시도에 반영되는 것을 막는다(ADR 0030).
+     *
+     * @return 갱신된 행 수. 0이면 다른 경로가 먼저 반영했다
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Order o
+               set o.status = :nextStatus, o.updatedAt = :updatedAt
+             where o.id = :orderId
+               and o.status = :refundInProgress
+               and (:readUpdatedAt is null or o.updatedAt = :readUpdatedAt)
+            """)
+    int applyRefundResult(@Param("orderId") Long orderId,
+                          @Param("readUpdatedAt") LocalDateTime readUpdatedAt,
+                          @Param("refundInProgress") OrderStatus refundInProgress,
+                          @Param("nextStatus") OrderStatus nextStatus,
+                          @Param("updatedAt") LocalDateTime updatedAt);
+
+    /**
+     * [Phase 4 · 11단계] 복구 판정 대상 id. 12단계부터 승인·환불 진행 중 두 상태를 함께 본다. {@code updated_at}이 {@code (abandonCutoff, judgeCutoff]} 구간인 주문을 오래된 순으로.
      * {@code idx_orders_status_updated_at}을 탄다.
      */
     @Query("""
             select o.id from Order o
-             where o.status = :status
+             where o.status in :statuses
                and o.updatedAt > :abandonCutoff
                and o.updatedAt <= :judgeCutoff
              order by o.updatedAt
             """)
-    List<Long> findRecoveryTargetIds(@Param("status") OrderStatus status,
+    List<Long> findRecoveryTargetIds(@Param("statuses") Collection<OrderStatus> statuses,
                                      @Param("abandonCutoff") LocalDateTime abandonCutoff,
                                      @Param("judgeCutoff") LocalDateTime judgeCutoff,
                                      Pageable pageable);
@@ -170,12 +194,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
      */
     @Query("""
             select o.orderNumber from Order o
-             where o.status = :status
+             where o.status in :statuses
                and o.updatedAt <= :abandonCutoff
                and (:from is null or o.updatedAt > :from)
              order by o.updatedAt
             """)
-    List<String> findAbandonedOrderNumbers(@Param("status") OrderStatus status,
+    List<String> findAbandonedOrderNumbers(@Param("statuses") Collection<OrderStatus> statuses,
                                            @Param("from") LocalDateTime from,
                                            @Param("abandonCutoff") LocalDateTime abandonCutoff);
 }

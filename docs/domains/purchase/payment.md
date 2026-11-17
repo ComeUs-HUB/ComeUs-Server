@@ -1,7 +1,7 @@
 # payment — 결제
 
 > 이 문서는 **구현할 계약**이고, 진행 현황은 [roadmap.md](../../roadmap.md)가 소유한다.
-> 엔티티, 토스 연동 경계(`PaymentGateway`), 승인·조회 API, 복구 배치의 승인 판정이 코드에 있다. 환불과 복구 배치의 환불 판정은 아직 없다.
+> 엔티티, 토스 연동 경계(`PaymentGateway`), 승인·조회 API, 환불, 복구 배치의 승인·환불 판정이 모두 코드에 있다.
 
 [order.md](order.md)의 주문 하나에 결제 하나가 붙는다. 셋에 걸친 엔티티 관계는 [README.md](README.md)가 소유한다.
 
@@ -145,10 +145,27 @@ API가 따로 없다. 회원의 주문 취소(`POST /api/orders/{orderNumber}/ca
 커밋
 ```
 
+```
+OrderCancelService            회원·ADMIN 취소 진입점, 트랜잭션 없음. 읽은 상태로 분기
+  ├─ PENDING 등 → OrderService.cancelPendingOrder      기존 결제 전 취소 (아니면 CAS 0건 → 상태별 코드)
+  └─ PAID      → RefundService.refund(orderId, reason)  트랜잭션 없음
+       ├─ RefundTransitions.claim          선점 TX (transitionStatus PAID → REFUND_IN_PROGRESS)
+       ├─ PaymentGateway.cancel            트랜잭션 밖, 재시도 없음
+       └─ RefundTransitions.applySuccess / applyRejection   반영 TX (applyRefundResult CAS)
+```
+
+![환불 시퀀스](../../diagrams/images/seq-refund.png)
+
+읽는 법과 Mermaid 원본: [seq-refund.md](../../diagrams/purchase/seq-refund.md).
+
 - **토스 취소가 끝난 뒤에 재고를 푼다.** 토스 취소는 되돌릴 수 없어 트랜잭션 밖에서 부르고, 돈이 돌아간 뒤에 재고를 복구한다
 - 환불은 `PAID`인 주문만, 전액만 한다. `SHIPPING` 이후는 반품이라 범위 밖이다
 - 토스 취소 요청 중(`REFUND_IN_PROGRESS`)인 주문은 다시 취소하거나 배송 처리할 수 없다
-- 환불 시각은 응답의 `cancels[].canceledAt`이다
+- 환불 시각은 응답의 `cancels[].canceledAt`이다. 없으면 반영 시각으로 넣고 WARN을 남긴다
+- 응답이 `CANCELED`가 아니거나 `paymentKey`·`orderId`·금액이 주문과 다르면 반영하지 않고 ERROR, `PAY008`이다
+- 반영이 0건이면 새 트랜잭션에서 다시 본다. `CANCELLED`면 배치가 먼저 반영한 정상이라 성공으로 답한다
+- 토스 취소 뒤 반영이 실패하면 `PAY008`이다. 돈은 돌아갔으니 실패로 답하지 않고 배치에 맡긴다
+- ADMIN의 `CANCELLED`는 컨트롤러가 `OrderCancelService`로 보낸다. `OrderService.changeOrderStatus`는 트랜잭션 메서드라 환불을 품을 수 없다
 
 ## 복구 배치
 
@@ -162,8 +179,11 @@ PaymentRecoveryScheduler      @Scheduled 1분, 트랜잭션 없음
   │    └─ PaymentRecoveryService.recover(id)        주문마다, 트랜잭션 없음
   │         ├─ PaymentTransitions.readForRecovery   주문 읽기 (status, paymentKey, updated_at 고정)
   │         ├─ 토스 조회 (트랜잭션 밖, 읽기 타임아웃 5초)
-  │         └─ PaymentTransitions.applySuccess / applyRejection   요청 경로와 같은 CAS + 읽은 updated_at
-  │                                                 (환불 반영 메서드는 12단계에서 정한다)
+  │         ├─ (status로 분기 — 조회 전에 가른다)
+  │         ├─ 토스 조회 결과에 따라
+  │         │    PAYMENT_IN_PROGRESS → PaymentTransitions.applySuccess / applyRejection
+  │         │    REFUND_IN_PROGRESS  → RefundTransitions.applySuccess / applyRejection
+  │         └─ 모두 요청 경로와 같은 CAS + 읽은 updated_at
   └─ alertAbandoned()         이번에 1시간을 막 넘긴 주문만 한 번 ERROR
 ```
 
@@ -189,7 +209,8 @@ PaymentRecoveryScheduler      @Scheduled 1분, 트랜잭션 없음
 |---|---|
 | `CANCELED` | `CANCELLED` + `Payment(REFUNDED)` + 재고 복구 |
 | `DONE` | `PAID` 복귀. 취소되지 않았다 |
-| `PARTIAL_CANCELED`, 그 밖 | 변경 없음, WARN. 1시간 뒤 수동 처리 |
+| `PARTIAL_CANCELED`, 불일치, 그 밖 | 변경 없음, WARN. 1시간 뒤 수동 처리 |
+| `NOT_FOUND_PAYMENT` | 변경 없음, WARN. 승인 판정과 달리 `PENDING`으로 되돌리지 않는다 — 결제가 있던 주문이다 |
 | 조회 실패 | 변경 없음, 다음 주기에 다시 조회 |
 
 ### 규칙
@@ -361,7 +382,7 @@ public interface PaymentGateway {
 
 ## 에러 코드
 
-`PAY001`~`PAY006`은 `PaymentErrorCode`에 있다. `PAY007`·`PAY008`은 12단계에서 `PaymentErrorCode`와 [error-codes.md](../../conventions/error-codes.md)에 추가한다.
+`PAY001`~`PAY008`은 `PaymentErrorCode`에 있다. 값의 주인은 [error-codes.md](../../conventions/error-codes.md)다.
 
 | 코드 | 상수 | HTTP | 언제 |
 |---|---|---|---|
