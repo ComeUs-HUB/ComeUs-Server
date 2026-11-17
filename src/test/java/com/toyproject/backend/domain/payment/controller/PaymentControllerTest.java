@@ -35,15 +35,16 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** [Phase 4 · 10단계] 결제 승인 API의 요청 검증, 인증, 응답 형식. 판정 규칙은 {@code PaymentServiceTest}가 본다. */
+/** [Phase 4 · 10~11단계] 결제 승인·조회 API의 요청 검증, 인증, 응답 형식. 판정 규칙은 {@code PaymentServiceTest}가 본다. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(FakePaymentGatewayConfig.class)
-@DisplayName("결제 API (Phase 4 · 10단계)")
+@DisplayName("결제 API (Phase 4 · 10~11단계)")
 class PaymentControllerTest {
 
     @Autowired private MockMvc mockMvc;
@@ -153,5 +154,51 @@ class PaymentControllerTest {
         confirm(buyer, new PaymentConfirmRequest("pk-1", orderNumber, new BigDecimal("100")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("PAY004"));
+    }
+
+    private ResultActions getPayment(String token, String number) throws Exception {
+        var request = get("/api/payments/{orderNumber}", number);
+        if (token != null) {
+            request.header(HttpHeaders.AUTHORIZATION, token);
+        }
+        return mockMvc.perform(request);
+    }
+
+    @Test
+    @DisplayName("결제 조회 — 200, 승인 응답과 같은 형식")
+    void getPaymentSuccess() throws Exception {
+        gateway.onConfirm(this::approved);
+        confirm(buyer, new PaymentConfirmRequest("pk-1", orderNumber, new BigDecimal("19900")))
+                .andExpect(status().isOk());
+
+        getPayment(buyer, orderNumber)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.orderNumber").value(orderNumber))
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.paymentKey").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("결제 조회 — 결제 전 주문은 404 PAY001")
+    void getPaymentBeforeConfirmIsNotFound() throws Exception {
+        getPayment(buyer, orderNumber)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("PAY001"));
+    }
+
+    @Test
+    @DisplayName("결제 조회 — 타인의 주문은 O001")
+    void getPaymentOfOthersIsOrderNotFound() throws Exception {
+        User other = userRepository.save(User.ofKakao("kakao-pay-other", "other@kakao.com", "타인"));
+
+        getPayment("Bearer " + jwtProvider.createAccessToken(other), orderNumber)
+                .andExpect(jsonPath("$.error.code").value("O001"));
+    }
+
+    @Test
+    @DisplayName("결제 조회 — 토큰 없음 401")
+    void getPaymentUnauthenticated() throws Exception {
+        getPayment(null, orderNumber)
+                .andExpect(status().isUnauthorized());
     }
 }
