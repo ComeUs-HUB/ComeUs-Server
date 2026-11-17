@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>환불</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<style>html,body{margin:0;padding:0;background:#f5f5f5}svg{display:block}</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 802" width="960" height="802" role="img" aria-labelledby="seq-refund-title seq-refund-desc">
+<title id="seq-refund-title">환불</title>
+<desc id="seq-refund-desc">회원·ADMIN의 PAID 주문 취소. 선점 트랜잭션에서 PAID를 REFUND_IN_PROGRESS로 바꾸고, 트랜잭션 밖에서 토스 결제를 전액 취소한 뒤, 반영 트랜잭션에서 성공이면 CANCELLED와 결제 환불·재고 복구, 확정 거절이면 PAID로 되돌린다. 결과를 모르면 상태를 두고 복구 배치에 맡긴다</desc>
+<defs><marker id="seq-refund-m" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker><marker id="seq-refund-l" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker><marker id="seq-refund-a" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker></defs>
+<rect width="960" height="802" fill="#f5f5f5"/>
+<line x1="80" y1="84" x2="80" y2="742" stroke="rgba(45,49,66,0.28)" stroke-dasharray="3,3"/>
+<line x1="237" y1="84" x2="237" y2="742" stroke="rgba(45,49,66,0.28)" stroke-dasharray="3,3"/>
+<line x1="395" y1="84" x2="395" y2="742" stroke="rgba(45,49,66,0.28)" stroke-dasharray="3,3"/>
+<line x1="555" y1="84" x2="555" y2="742" stroke="rgba(45,49,66,0.28)" stroke-dasharray="3,3"/>
+<line x1="715" y1="84" x2="715" y2="742" stroke="rgba(45,49,66,0.28)" stroke-dasharray="3,3"/>
+<line x1="880" y1="84" x2="880" y2="742" stroke="rgba(45,49,66,0.28)" stroke-dasharray="3,3"/>
+<rect x="20" y="440" width="920" height="236" rx="4" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.22)"/>
+<rect x="20" y="440" width="32" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.22)"/>
+<text x="36.0" y="452" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle" letter-spacing="0.12em">ALT</text>
+<line x1="28" y1="556" x2="932" y2="556" stroke="rgba(45,49,66,0.20)" stroke-dasharray="4,3"/>
+<rect x="233" y="150" width="8" height="510" rx="1" fill="rgba(79,93,117,0.16)" stroke="rgba(45,49,66,0.28)" stroke-width="0.8"/>
+<rect x="391" y="220" width="8" height="440" rx="1" fill="rgba(79,93,117,0.16)" stroke="rgba(45,49,66,0.28)" stroke-width="0.8"/>
+<rect x="551" y="252" width="8" height="60" rx="1" fill="rgba(79,93,117,0.16)" stroke="rgba(45,49,66,0.28)" stroke-width="0.8"/>
+<rect x="551" y="472" width="8" height="48" rx="1" fill="rgba(79,93,117,0.16)" stroke="rgba(45,49,66,0.28)" stroke-width="0.8"/>
+<rect x="551" y="592" width="8" height="48" rx="1" fill="rgba(79,93,117,0.16)" stroke="rgba(45,49,66,0.28)" stroke-width="0.8"/>
+<path d="M82 150 H231" fill="none" stroke="#2e5aa8" stroke-width="1.1" marker-end="url(#seq-refund-l)"/>
+<rect x="130.1" y="132" width="56.7" height="12" fill="#f5f5f5"/>
+<text x="158.5" y="141" fill="#2e5aa8" font-size="8.5" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">① 취소 요청</text>
+<rect x="252" y="160" width="420" height="38" rx="4" fill="#ececec" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+<text x="264" y="177" fill="#2d3142" font-size="9.5" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">읽은 상태가 PAID면 환불로, 그 밖은 결제 전 취소(CAS)로</text>
+<text x="264" y="191" fill="#2d3142" font-size="9.5" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">읽은 상태는 판단용 — 보호는 각 CAS가 한다</text>
+<path d="M243 222 H389" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#seq-refund-m)"/>
+<rect x="285.6" y="204" width="60.9" height="12" fill="#f5f5f5"/>
+<text x="316.0" y="213" fill="#4f5d75" font-size="8.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle">② refund()</text>
+<path d="M401 252 H549" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#seq-refund-m)"/>
+<rect x="451.1" y="234" width="47.7" height="12" fill="#f5f5f5"/>
+<text x="475.0" y="243" fill="#4f5d75" font-size="8.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle">claim()</text>
+<text x="547" y="274" fill="#7a8399" font-size="7" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="end" letter-spacing="0.06em">선점 TX</text>
+<path d="M561 284 H713" fill="none" stroke="#eb6c36" stroke-width="1.1" marker-end="url(#seq-refund-a)"/>
+<rect x="567.4" y="266" width="135.2" height="12" fill="#f5f5f5"/>
+<text x="635.0" y="275" fill="#eb6c36" font-size="8.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle">PAID → REFUND_IN_PROGRESS</text>
+<path d="M549 312 H401" fill="none" stroke="#4f5d75" stroke-width="1.1" stroke-dasharray="5,4" marker-end="url(#seq-refund-m)"/>
+<rect x="436.7" y="294" width="76.7" height="12" fill="#f5f5f5"/>
+<text x="475.0" y="303" fill="#4f5d75" font-size="8.5" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">커밋 · 선점 결과</text>
+<rect x="410" y="322" width="530" height="24" rx="4" fill="#ececec" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+<text x="422" y="339" fill="#2d3142" font-size="9.5" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">선점 0건이면 지금 상태로 O002 · O003 · O004 (토스 호출 없음)</text>
+<path d="M401 384 H878" fill="none" stroke="#2e5aa8" stroke-width="1.1" marker-end="url(#seq-refund-l)"/>
+<rect x="525.3" y="366" width="224.5" height="12" fill="#f5f5f5"/>
+<text x="637.5" y="375" fill="#2e5aa8" font-size="8.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle">③ 취소 · Idempotency-Key cancel-{paymentKey}</text>
+<text x="565" y="400" fill="#7a8399" font-size="8.5" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start" font-style="italic">트랜잭션 없음 · 재시도 없음</text>
+<path d="M878 422 H401" fill="none" stroke="#4f5d75" stroke-width="1.1" stroke-dasharray="5,4" marker-end="url(#seq-refund-m)"/>
+<rect x="570.2" y="404" width="134.7" height="12" fill="#f5f5f5"/>
+<text x="637.5" y="413" fill="#4f5d75" font-size="8.5" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">취소 결과 · 읽기 타임아웃 30초</text>
+<rect x="56" y="443" width="207.9" height="12" fill="#f5f5f5"/>
+<text x="62" y="452" fill="#4f5d75" font-size="8.5" font-weight="500" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="start">[CANCELED · paymentKey·orderId·금액 일치]</text>
+<path d="M401 472 H549" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#seq-refund-m)"/>
+<rect x="429.3" y="454" width="91.5" height="12" fill="#f5f5f5"/>
+<text x="475.0" y="463" fill="#4f5d75" font-size="8.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle">④ applySuccess()</text>
+<text x="547" y="494" fill="#7a8399" font-size="7" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="end" letter-spacing="0.06em">반영 TX · 10초</text>
+<path d="M561 504 H713" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#seq-refund-m)"/>
+<rect x="576.9" y="486" width="116.1" height="12" fill="#f5f5f5"/>
+<text x="635.0" y="495" fill="#4f5d75" font-size="8.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle">→ CANCELLED + 환불·재고</text>
+<path d="M389 536 H82" fill="none" stroke="#eb6c36" stroke-width="1.1" stroke-dasharray="5,4" marker-end="url(#seq-refund-a)"/>
+<rect x="204.4" y="518" width="66.2" height="12" fill="#f5f5f5"/>
+<text x="237.5" y="527" fill="#eb6c36" font-size="8.5" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">200 취소 완료</text>
+<rect x="28" y="561" width="123.8" height="12" fill="#f5f5f5"/>
+<text x="34" y="570" fill="#4f5d75" font-size="8.5" font-weight="500" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="start">[확정 거절 — 토스 코드 6개]</text>
+<path d="M401 592 H549" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#seq-refund-m)"/>
+<rect x="424.2" y="574" width="101.7" height="12" fill="#f5f5f5"/>
+<text x="475.0" y="583" fill="#4f5d75" font-size="8.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle">④ applyRejection()</text>
+<text x="547" y="614" fill="#7a8399" font-size="7" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="end" letter-spacing="0.06em">반영 TX · 10초</text>
+<path d="M561 624 H713" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#seq-refund-m)"/>
+<rect x="614.8" y="606" width="40.5" height="12" fill="#f5f5f5"/>
+<text x="635.0" y="615" fill="#4f5d75" font-size="8.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle">→ PAID</text>
+<path d="M389 656 H82" fill="none" stroke="#4f5d75" stroke-width="1.1" stroke-dasharray="5,4" marker-end="url(#seq-refund-m)"/>
+<rect x="208.6" y="638" width="57.8" height="12" fill="#f5f5f5"/>
+<text x="237.5" y="647" fill="#4f5d75" font-size="8.5" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">409 PAY007</text>
+<rect x="20" y="690" width="920" height="38" rx="4" fill="#ececec" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+<text x="32" y="707" fill="#2d3142" font-size="9.5" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">그 밖(결과 불명 · 응답 불일치 · 반영 실패)은 REFUND_IN_PROGRESS를 두고 409 PAY008. 복구 배치가 조회해 CANCELED면 취소 반영, DONE이면 PAID</text>
+<text x="32" y="721" fill="#2d3142" font-size="9.5" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">반영 0건인데 이미 CANCELLED면 배치가 먼저 반영한 정상이라 200. 재고는 토스 취소가 끝난 뒤 반영 TX에서만 푼다</text>
+<rect x="8" y="32" width="144" height="52" rx="5" fill="#ececec" stroke="rgba(45,49,66,0.35)"/>
+<rect x="14" y="37" width="28.8" height="10" rx="2" fill="none" stroke="rgba(79,93,117,0.35)" stroke-width="0.6"/>
+<text x="28.4" y="44.4" fill="#7a8399" font-size="5.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle" letter-spacing="0.08em">USER</text>
+<text x="80" y="62" fill="#2d3142" font-size="10.5" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">회원 · ADMIN</text>
+<text x="80" y="75" fill="#4f5d75" font-size="6.8" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle">취소 API · 상태 변경 API</text>
+<rect x="165" y="32" width="144" height="52" rx="5" fill="#ffffff" stroke="#2d3142"/>
+<rect x="171" y="37" width="34.0" height="10" rx="2" fill="none" stroke="rgba(79,93,117,0.35)" stroke-width="0.6"/>
+<text x="188.0" y="44.4" fill="#7a8399" font-size="5.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle" letter-spacing="0.08em">ENTRY</text>
+<text x="237" y="62" fill="#2d3142" font-size="10.5" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">OrderCancelService</text>
+<text x="237" y="75" fill="#4f5d75" font-size="6.8" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle">상태로 분기 · TX 없음</text>
+<rect x="323" y="32" width="144" height="52" rx="5" fill="#f9ede7" stroke="#eb6c36"/>
+<rect x="329" y="37" width="23.6" height="10" rx="2" fill="none" stroke="rgba(79,93,117,0.35)" stroke-width="0.6"/>
+<text x="340.8" y="44.4" fill="#7a8399" font-size="5.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle" letter-spacing="0.08em">SVC</text>
+<text x="395" y="62" fill="#2d3142" font-size="10.5" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">RefundService</text>
+<text x="395" y="75" fill="#4f5d75" font-size="6.8" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle">흐름 · @Transactional 없음</text>
+<rect x="483" y="32" width="144" height="52" rx="5" fill="#ffffff" stroke="#2d3142"/>
+<rect x="489" y="37" width="18.4" height="10" rx="2" fill="none" stroke="rgba(79,93,117,0.35)" stroke-width="0.6"/>
+<text x="498.2" y="44.4" fill="#7a8399" font-size="5.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle" letter-spacing="0.08em">TX</text>
+<text x="555" y="62" fill="#2d3142" font-size="10.5" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">RefundTransitions</text>
+<text x="555" y="75" fill="#4f5d75" font-size="6.8" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle">선점 · 반영 트랜잭션</text>
+<rect x="643" y="32" width="144" height="52" rx="5" fill="#ececec" stroke="#2d3142"/>
+<rect x="649" y="37" width="18.4" height="10" rx="2" fill="none" stroke="rgba(79,93,117,0.35)" stroke-width="0.6"/>
+<text x="658.2" y="44.4" fill="#7a8399" font-size="5.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle" letter-spacing="0.08em">DB</text>
+<text x="715" y="62" fill="#2d3142" font-size="10.5" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">MySQL</text>
+<text x="715" y="75" fill="#4f5d75" font-size="6.8" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle">orders · payments · products</text>
+<rect x="808" y="32" width="144" height="52" rx="5" fill="#ececec" stroke="rgba(45,49,66,0.35)"/>
+<rect x="814" y="37" width="23.6" height="10" rx="2" fill="none" stroke="rgba(79,93,117,0.35)" stroke-width="0.6"/>
+<text x="825.8" y="44.4" fill="#7a8399" font-size="5.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle" letter-spacing="0.08em">EXT</text>
+<text x="880" y="62" fill="#2d3142" font-size="10.5" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">토스페이먼츠</text>
+<text x="880" y="75" fill="#4f5d75" font-size="6.8" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="middle">PaymentGateway 너머</text>
+<line x1="32" y1="754" x2="928" y2="754" stroke="rgba(45,49,66,0.12)" stroke-width="0.6"/>
+<text x="32" y="772" fill="#7a8399" font-size="6.5" font-weight="400" font-family="'Geist Mono',ui-monospace,monospace" text-anchor="start" letter-spacing="0.14em">LEGEND</text>
+<path d="M92 769 H118" fill="none" stroke="#2e5aa8" stroke-width="1.1" marker-end="url(#seq-refund-l)"/>
+<text x="124" y="772" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">HTTP · 외부 호출</text>
+<path d="M212.8 769 H238.8" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#seq-refund-m)"/>
+<text x="244.8" y="772" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">메서드 · DB 호출</text>
+<path d="M332.64 769 H358.64" fill="none" stroke="#4f5d75" stroke-width="1.1" stroke-dasharray="5,4" marker-end="url(#seq-refund-m)"/>
+<text x="364.64" y="772" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">응답</text>
+<path d="M406.64 769 H432.64" fill="none" stroke="#eb6c36" stroke-width="1.1" marker-end="url(#seq-refund-a)"/>
+<text x="438.64" y="772" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">선점 · 성공 응답</text>
+<rect x="525.52" y="764" width="8" height="10" rx="2" fill="rgba(79,93,117,0.16)" stroke="rgba(45,49,66,0.25)"/>
+<text x="539.52" y="772" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">실행 구간 (TX 막대 = 트랜잭션)</text>
+<rect x="681.92" y="764" width="14" height="10" rx="2" fill="rgba(45,49,66,0.04)" stroke="rgba(45,49,66,0.25)"/>
+<text x="701.92" y="772" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">조건 조각</text>
+<rect x="762.7199999999999" y="764" width="14" height="10" rx="2" fill="#ececec" stroke="rgba(45,49,66,0.25)"/>
+<text x="782.7199999999999" y="772" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">노트</text>
+</svg>
+</body>
+</html>

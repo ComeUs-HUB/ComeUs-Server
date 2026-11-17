@@ -1,10 +1,10 @@
 # 결제 복구 배치
 
-> 이 그림은 Phase 4 · 11단계에서 구현한 **승인 판정**이다. `REFUND_IN_PROGRESS` 판정은 12단계에서 같은 배치에 더한다. 설계 근거는 [ADR 0026](../../decisions/purchase/0026-payment-confirm-outside-transaction.md)·[0028](../../decisions/purchase/0028-payment-result-whitelist-and-recovery-limit.md)·[0030](../../decisions/purchase/0030-recovery-batch-runtime-limits.md), 구현 진행은 [roadmap.md](../../roadmap.md)가 소유한다.
+> 이 그림은 Phase 4 · 11단계의 **승인 판정**과 12단계에서 같은 배치에 더한 **환불 판정**이다. 설계 근거는 [ADR 0029](../../decisions/purchase/0029-refund-outside-transaction.md)· [ADR 0026](../../decisions/purchase/0026-payment-confirm-outside-transaction.md)·[0028](../../decisions/purchase/0028-payment-result-whitelist-and-recovery-limit.md)·[0030](../../decisions/purchase/0030-recovery-batch-runtime-limits.md), 구현 진행은 [roadmap.md](../../roadmap.md)가 소유한다.
 
-- **답하는 질문**: 결과를 모른 채 `PAYMENT_IN_PROGRESS`에 멈춘 주문을 어떻게 토스 기준으로 바로잡고, 판정되지 않는 주문은 어떻게 넘기는가
+- **답하는 질문**: 결과를 모른 채 `PAYMENT_IN_PROGRESS`·`REFUND_IN_PROGRESS`에 멈춘 주문을 어떻게 토스 기준으로 바로잡고, 판정되지 않는 주문은 어떻게 넘기는가
 - **범위**: `PaymentRecoveryScheduler` 한 번 실행. 판정 표는 [payment.md](../../domains/purchase/payment.md)의 "복구 배치"가 기준이다
-- **원천**: [payment.md](../../domains/purchase/payment.md) · `PaymentRecoveryScheduler` · `PaymentRecoveryService` · `PaymentTransitions`
+- **원천**: [payment.md](../../domains/purchase/payment.md) · `PaymentRecoveryScheduler` · `PaymentRecoveryService` · `PaymentTransitions` · `RefundTransitions`
 
 ![결제 복구 배치 시퀀스](../images/seq-payment-recovery.png)
 
@@ -15,29 +15,35 @@
 sequenceDiagram
     participant J as Scheduler (PaymentRecoveryScheduler)
     participant S as RecoveryService (PaymentRecoveryService)
-    participant X as PaymentTransitions
+    participant X as Transitions (Payment · RefundTransitions)
     participant M as MySQL
     participant T as 토스페이먼츠
 
-    J->>M: ① 대상 조회 — PAYMENT_IN_PROGRESS · 5분~1시간 전 · 100건
+    J->>M: ① 대상 조회 — 승인·환불 진행 중 · 5분~1시간 전 · 100건
     M-->>J: id 목록 (오래된 순)
     loop 주문마다 — 50초를 넘기면 남은 건은 다음 주기
         J->>S: ② recover(orderId, now)
         activate S
         S->>X: readForRecovery()
-        Note right of X: status · paymentKey · updated_at을 읽어 끝까지 쓴다<br/>그사이 처리돼 대상이 아니면 여기서 끝낸다
+        Note right of X: status · paymentKey · updated_at을 읽어 끝까지 쓴다<br/>대상이 아니면 끝낸다 (토스 호출 없음)<br/>status로 승인·환불 판정을 가른다 — 조회 전에
         S->>T: ③ GET /v1/payments/{paymentKey}
         Note right of X: 트랜잭션 없음
         T-->>S: 결제 상태 · 읽기 타임아웃 5초
-        alt DONE · orderId·금액 일치
-            S->>X: ④ applySuccess(…, readUpdatedAt)
+        alt PAYMENT_IN_PROGRESS · DONE · orderId·금액 일치
+            S->>X: ④ applySuccess(…, readUpdatedAt) — PaymentTransitions
             X->>M: CAS → PAID + Payment
-        else ABORTED · EXPIRED · 조회 NOT_FOUND_PAYMENT
-            S->>X: ④ applyRejection(…, readUpdatedAt)
+        else PAYMENT_IN_PROGRESS · ABORTED · EXPIRED · 조회 NOT_FOUND
+            S->>X: ④ applyRejection(…, readUpdatedAt) — PaymentTransitions
             X->>M: CAS → PENDING, key 비움
+        else REFUND_IN_PROGRESS · CANCELED · orderId·금액 일치
+            S->>X: ④ applySuccess(…, readUpdatedAt) — RefundTransitions
+            X->>M: CAS → CANCELLED + REFUNDED + 재고
+        else REFUND_IN_PROGRESS · DONE — 취소되지 않음
+            S->>X: ④ applyRejection(…, readUpdatedAt) — RefundTransitions
+            X->>M: CAS → PAID
         end
         deactivate S
-        Note over S,T: 그 밖은 어떤 컬럼도 바꾸지 않고 다음 주기에 다시 본다<br/>반영 0건 = 읽은 뒤 다른 경로가 먼저 처리. WARN
+        Note over S,T: 그 밖(READY · 불일치 · PARTIAL_CANCELED · 조회 실패 …)은 어떤 컬럼도 바꾸지 않는다<br/>환불 주문은 조회 NOT_FOUND도 그대로 둔다. 반영 0건 = 다른 경로가 먼저 처리, WARN
     end
     J->>M: ⑤ 1시간 경계를 이번에 넘긴 주문 (첫 실행은 전체)
     M-->>J: 주문번호 목록
@@ -59,7 +65,8 @@ sequenceDiagram
 ### ① 대상 조회
 
 **무엇을 하나**
-- `updated_at`이 **5분 ~ 1시간 전**인 `PAYMENT_IN_PROGRESS` 주문을 오래된 순으로 100건 가져온다(`findRecoveryTargetIds`)
+- `updated_at`이 **5분 ~ 1시간 전**인 `PAYMENT_IN_PROGRESS`·`REFUND_IN_PROGRESS` 주문을 오래된 순으로 100건 가져온다(`findRecoveryTargetIds`, `status in`)
+- 두 상태는 판정 시간 · 1시간 종결 · 예산 · 경보 규칙이 같아 한 쿼리로 본다(ADR 0029)
 
 **왜 그 구간인가**
 - **5분보다 최근인 주문은 보지 않는다.** 요청 하나의 최대 수명은 약 100초다. 그래서 아직 살아 있는 요청과 배치가 같은 주문을 판정하지 않는다
@@ -74,6 +81,7 @@ sequenceDiagram
 **왜 그렇게 하나**
 - **처리 중인 주문은 끊지 않는다.** 조회 결과를 받아 놓고 버리는 낭비를 피한다. 그래서 실제 상한은 50초 + 한 건이다
 - **한 건이 실패해도 나머지는 계속한다.** 예외는 WARN으로 남기고 다음 주문으로 넘어간다. 행을 건드리지 않았으니 다음 주기에 다시 판정된다
+- **읽은 `status`로 승인·환불 판정을 가른다.** 토스 조회 전에 가르는 이유는 ④의 "환불 판정"을 본다
 - **읽은 값이 대상이 아니면 끝낸다** — 그림의 노트. ①에서 고른 뒤 읽기 전에 요청이나 다른 인스턴스가 이미 처리했을 수 있다. 상태가 바뀌었거나 구간을 벗어났으면 토스를 부르지 않는다
 
 ### ③ 토스 조회 — 트랜잭션 밖
@@ -87,7 +95,7 @@ sequenceDiagram
 
 ### ④ 반영 — 요청 경로와 같은 메서드
 
-조회 결과가 둘 중 하나일 때만 반영한다. 그림의 `ALT`가 그 둘이다.
+조회 결과가 아래 넷 중 하나일 때만 반영한다. 그림의 `ALT`가 그 넷이다. 위 둘은 승인 판정(`PaymentTransitions`), 아래 둘은 환불 판정(`RefundTransitions`)이다.
 
 **승인됨 — `applySuccess()`**
 - `status`가 `DONE`이고 `orderId` · 금액이 주문과 같을 때다
@@ -97,12 +105,25 @@ sequenceDiagram
 - `ABORTED` · `EXPIRED`이거나, 조회가 `NOT_FOUND_PAYMENT`로 거절됐을 때다. 토스에 결제가 끝나지 않았거나 아예 없다
 - CAS `PAYMENT_IN_PROGRESS → PENDING`, `paymentKey`를 비운다. 사용자는 같은 주문으로 다시 결제할 수 있다
 
-**두 CAS 모두 읽은 `updated_at`을 비교한다**
+**환불됨 — `RefundTransitions.applySuccess()`** (12단계)
+- 주문이 `REFUND_IN_PROGRESS`이고 조회가 `CANCELED`, `orderId` · 금액이 같을 때다
+- 요청 경로의 환불 성공과 같은 반영이다. CAS `REFUND_IN_PROGRESS → CANCELLED`, `Payment(REFUNDED)`, 재고 복구가 한 트랜잭션이다
+
+**취소되지 않음 — `RefundTransitions.applyRejection()`** (12단계)
+- 조회가 `DONE`일 때다. 토스는 취소하지 않았다
+- CAS `REFUND_IN_PROGRESS → PAID`. 사용자가 다시 취소하면 같은 멱등키 `cancel-{paymentKey}`가 나가 토스가 중복 취소를 막는다
+
+**환불 판정은 토스 조회 전에 가른다**
+- 승인 판정은 조회가 `NOT_FOUND_PAYMENT`로 거절되면 `PENDING`으로 되돌린다. 환불 주문에 이 규칙이 적용되면 결제가 있던 주문이 결제 전 상태로 돌아간다
+- 그래서 `recover()`가 ②에서 읽은 `status`로 먼저 가르고, 환불 주문은 `NOT_FOUND_PAYMENT`도 판정 불가(WARN, 변경 없음)로 둔다
+
+**네 CAS 모두 읽은 `updated_at`을 비교한다**
 - 10단계 요청 경로가 쓰는 메서드와 같다. 배치는 여기에 `readUpdatedAt`(②에서 읽은 값)을 넘긴다
   - 요청 경로는 `null`을 넘겨 이 조건을 건너뛴다(`readUpdatedAt is null or updated_at = readUpdatedAt`)
 - 모든 상태 전이는 `updated_at`을 새로 쓴다. 그래서 `updated_at`이 읽은 값 그대로면, 그사이 아무도 행을 바꾸지 않았다는 뜻이다
 - 읽은 뒤 누가 행을 바꿨으면 상태와 키가 같아도 0건이 된다. 옛 조회 결과가 새 시도에 반영되지 않는다(ABA)
-- 조회에 쓴 `paymentKey`도 그대로 넘긴다. 그사이 거절 → 재선점으로 키가 바뀌었으면 역시 0건이다
+- 조회에 쓴 `paymentKey`도 그대로 넘긴다. 그사이 거절 → 재선점으로 키가 바뀌었으면 역시 0건이다(승인만)
+- 환불 CAS는 `payment_key`를 비교하지 않는다. `PAID`로 되돌린 뒤 사용자가 다시 취소한 새 시도는 `updated_at`이 달라 막힌다
 
 **그 밖 — 그림의 아래 노트**
 - 아래 결과는 **어떤 컬럼도 바꾸지 않는다.** `updated_at`도 그대로다
@@ -111,7 +132,9 @@ sequenceDiagram
 |---|---|---|
 | `READY`, `IN_PROGRESS` | DEBUG | 아직 진행 중. 토스에서 만료되면 다음 조회가 `EXPIRED`로 정리한다 |
 | `DONE` + `orderId`·금액 불일치 | WARN | 다른 주문의 결제다. 1시간 뒤 사람이 본다 |
-| `CANCELED`, `PARTIAL_CANCELED`, `WAITING_FOR_DEPOSIT`, 모르는 상태 | WARN | 이 흐름에서 나올 수 없는 상태다. 1시간 뒤 사람이 본다 |
+| 승인 판정: `CANCELED`, `PARTIAL_CANCELED`, `WAITING_FOR_DEPOSIT`, 모르는 상태 | WARN | 이 흐름에서 나올 수 없는 상태다. 1시간 뒤 사람이 본다 |
+| 환불 판정: `CANCELED`·`DONE` 외 전부, `orderId`·금액 불일치 | WARN | 부분 취소 등 이 흐름에서 나올 수 없는 상태다. 1시간 뒤 사람이 본다 |
+| 환불 판정: 조회 `NOT_FOUND_PAYMENT` | WARN | 결제가 있던 주문이다. 되돌리지 않고 사람이 본다 |
 | 조회 결과 불명 (5xx · 타임아웃 · 경보 코드) | WARN | 다음 주기에 다시 조회한다 |
 
 - **`updated_at`을 건드리지 않는 이유**: 1시간 종결은 `updated_at`을 기준으로 한다. 판정하지 못할 때마다 갱신하면 시계가 계속 리셋돼, 영원히 사람에게 넘어가지 않는다
@@ -141,7 +164,7 @@ sequenceDiagram
 | ① | `PaymentRecoveryService.findTargetIds` → `OrderRepository.findRecoveryTargetIds` |
 | ② | `PaymentRecoveryScheduler.recoverStuckOrders` → `PaymentRecoveryService.recover` → `PaymentTransitions.readForRecovery` |
 | ③ | `PaymentGateway.getPayment` → `TossPaymentGateway` (`tossLookupRestClient`) |
-| ④ | `PaymentTransitions.applySuccess` · `applyRejection`의 `readUpdatedAt` 오버로드 |
-| CAS | `OrderRepository.applyPaymentSuccess` · `applyPaymentRejection` |
+| ④ | `PaymentTransitions.applySuccess` · `applyRejection`, `RefundTransitions.applySuccess` · `applyRejection`의 `readUpdatedAt` 오버로드 |
+| CAS | `OrderRepository.applyPaymentSuccess` · `applyPaymentRejection` · `applyRefundResult` |
 | ⑤ | `PaymentRecoveryScheduler.alertAbandoned` → `OrderRepository.findAbandonedOrderNumbers` |
-| 테스트 | `PaymentRecoveryTest` — 판정 15건, 스케줄러 4건 |
+| 테스트 | `PaymentRecoveryTest` — 승인 판정 15건, 환불 판정 13건, 스케줄러 5건 |
