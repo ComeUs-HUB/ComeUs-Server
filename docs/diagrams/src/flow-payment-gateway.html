@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>토스 응답 판정</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<style>html,body{margin:0;padding:0;background:#f5f5f5}svg{display:block}</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 664" width="960" height="664" role="img" aria-labelledby="flow-payment-gateway-title flow-payment-gateway-desc">
+<title id="flow-payment-gateway-title">토스 응답 판정</title>
+<desc id="flow-payment-gateway-desc">TossPaymentGateway가 토스 응답 하나를 성공, 확정 거절, 결과 불명 셋 중 하나로 나누는 과정. 호출별 거절 목록에 있는 코드만 거절이고 나머지는 결과 불명이다</desc>
+<defs><marker id="flow-payment-gateway-m" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker><marker id="flow-payment-gateway-a" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker></defs>
+<rect width="960" height="664" fill="#f5f5f5"/>
+<path d="M330 78 V116.0" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#flow-payment-gateway-m)"/>
+<path d="M330 182.0 V226.0" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#flow-payment-gateway-m)"/>
+<path d="M330 292.0 V336.0" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#flow-payment-gateway-m)"/>
+<path d="M330 402.0 V446.0" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#flow-payment-gateway-m)"/>
+<rect x="333.0" y="194.0" width="18.0" height="14" fill="#f5f5f5"/>
+<text x="338" y="204.0" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="start">예</text>
+<rect x="333.0" y="304.0" width="53.2" height="14" fill="#f5f5f5"/>
+<text x="338" y="314.0" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="start">4xx · 5xx</text>
+<rect x="333.0" y="414.0" width="24.4" height="14" fill="#f5f5f5"/>
+<text x="338" y="424.0" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="start">4xx</text>
+<path d="M230.0 260 H202" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#flow-payment-gateway-m)"/>
+<rect x="203.8" y="242.0" width="24.4" height="14" fill="#f5f5f5"/>
+<text x="216.0" y="252" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="middle">2xx</text>
+<path d="M430.0 150 H552 Q560 150 560 158 V370" fill="none" stroke="#4f5d75" stroke-width="1.1"/>
+<path d="M430.0 370 H560" fill="none" stroke="#4f5d75" stroke-width="1.1"/>
+<path d="M430.0 480 H552 Q560 480 560 472 V370" fill="none" stroke="#4f5d75" stroke-width="1.1"/>
+<path d="M560 370 H598" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#flow-payment-gateway-m)"/>
+<circle cx="560" cy="370" r="4" fill="#2d3142"/>
+<rect x="478.0" y="132.0" width="34.0" height="14" fill="#f5f5f5"/>
+<text x="495.0" y="142" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="middle">아니오</text>
+<rect x="482.8" y="352.0" width="24.4" height="14" fill="#f5f5f5"/>
+<text x="495.0" y="362" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="middle">5xx</text>
+<rect x="478.0" y="462.0" width="34.0" height="14" fill="#f5f5f5"/>
+<text x="495.0" y="472" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="middle">아니오</text>
+<path d="M330 512.0 V558" fill="none" stroke="#eb6c36" stroke-width="1.1" marker-end="url(#flow-payment-gateway-a)"/>
+<rect x="333.0" y="524.0" width="18.0" height="14" fill="#f5f5f5"/>
+<text x="338" y="534.0" fill="#eb6c36" font-size="8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="start">예</text>
+<rect x="220" y="34" width="220" height="44" rx="20" fill="#ececec" stroke="#2d3142"/>
+<text x="330" y="53" fill="#2d3142" font-size="10.5" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">토스 호출</text>
+<text x="330" y="67" fill="#4f5d75" font-size="7.5" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="middle">confirm · getPayment · cancel</text>
+<polygon points="330,118.0 430.0,150 330,182.0 230.0,150" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<text x="330" y="148" fill="#2d3142" font-size="9.5" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">응답을 받아 읽었나</text>
+<text x="330" y="162" fill="#4f5d75" font-size="7.5" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="middle">실패: 연결·타임아웃·빈 본문</text>
+<polygon points="330,228.0 430.0,260 330,292.0 230.0,260" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<text x="330" y="264" fill="#2d3142" font-size="9.5" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">상태 코드가 2xx인가</text>
+<polygon points="330,338.0 430.0,370 330,402.0 230.0,370" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<text x="330" y="368" fill="#2d3142" font-size="9.5" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">5xx인가</text>
+<text x="330" y="382" fill="#4f5d75" font-size="7.5" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="middle">서버에서 처리됐을 수 있다</text>
+<polygon points="330,448.0 430.0,480 330,512.0 230.0,480" fill="#f9ede7" stroke="#eb6c36" stroke-width="1"/>
+<text x="330" y="478" fill="#2d3142" font-size="9.5" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="middle">코드가 이 호출의</text>
+<text x="330" y="492" fill="#4f5d75" font-size="7.5" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="middle">거절 목록에 있나</text>
+<rect x="28" y="216" width="172" height="88" rx="6" fill="#ffffff" stroke="#2d3142"/>
+<rect x="36" y="223" width="16.6" height="11" rx="2" fill="none" stroke="rgba(79,93,117,0.35)" stroke-width="0.6"/>
+<text x="44.3" y="231" fill="#7a8399" font-size="5.5" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="middle" letter-spacing="0.08em">OK</text>
+<text x="40" y="252" fill="#2d3142" font-size="10.5" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">성공</text>
+<text x="40" y="268" fill="#4f5d75" font-size="7.8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="start">TossPayment 반환</text>
+<text x="40" y="281" fill="#4f5d75" font-size="7.8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="start">검증은 호출자 몫</text>
+<text x="40" y="294" fill="#4f5d75" font-size="7.8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="start">(orderId · 금액 · DONE)</text>
+<rect x="190" y="560" width="280" height="80" rx="6" fill="#ffffff" stroke="#eb6c36"/>
+<rect x="198" y="567" width="36.4" height="11" rx="2" fill="none" stroke="rgba(79,93,117,0.35)" stroke-width="0.6"/>
+<text x="216.2" y="575" fill="#7a8399" font-size="5.5" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="middle" letter-spacing="0.08em">REJECTED</text>
+<text x="202" y="596" fill="#2d3142" font-size="10.5" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">확정 거절</text>
+<text x="202" y="612" fill="#4f5d75" font-size="7.8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="start">PaymentRejectedException(code)</text>
+<text x="202" y="625" fill="#4f5d75" font-size="7.8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="start">호출자는 상태를 되돌린다</text>
+<rect x="600" y="320" width="320" height="100" rx="6" fill="#ffffff" stroke="#2d3142"/>
+<rect x="608" y="327" width="33.1" height="11" rx="2" fill="none" stroke="rgba(79,93,117,0.35)" stroke-width="0.6"/>
+<text x="624.55" y="335" fill="#7a8399" font-size="5.5" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="middle" letter-spacing="0.08em">UNKNOWN</text>
+<text x="612" y="356" fill="#2d3142" font-size="10.5" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">결과 불명</text>
+<text x="612" y="372" fill="#4f5d75" font-size="7.8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="start">PaymentResultUnknownException(code, alert)</text>
+<text x="612" y="385" fill="#4f5d75" font-size="7.8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="start">호출자는 상태를 유지한다</text>
+<text x="612" y="398" fill="#4f5d75" font-size="7.8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="start">alert = 코드가 경보 목록에 있음</text>
+<text x="612" y="411" fill="#4f5d75" font-size="7.8" font-weight="400" font-family="'Geist Mono','Noto Sans KR',ui-monospace,monospace" text-anchor="start">요청 경로 ERROR / 아니면 WARN</text>
+<rect x="600" y="448" width="320" height="68" rx="4" fill="#ececec" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+<text x="612" y="466" fill="#2d3142" font-size="9" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">호출마다 목록이 다르다 (TossErrorCodes)</text>
+<text x="612" y="480" fill="#2d3142" font-size="9" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">승인 — 거절 31 · 경보 10</text>
+<text x="612" y="494" fill="#2d3142" font-size="9" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">조회 — 거절 1 (NOT_FOUND_PAYMENT)</text>
+<text x="612" y="508" fill="#2d3142" font-size="9" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">취소 — 거절 6 · 경보 15</text>
+<rect x="600" y="548" width="320" height="54" rx="4" fill="#ececec" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+<text x="612" y="566" fill="#2d3142" font-size="9" font-weight="600" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">목록에 없으면 모두 결과 불명</text>
+<text x="612" y="580" fill="#2d3142" font-size="9" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">4xx라도 PROVIDER_ERROR처럼 일시 오류가 있다</text>
+<text x="612" y="594" fill="#2d3142" font-size="9" font-weight="400" font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo',sans-serif" text-anchor="start">모르는 코드를 거절로 보면 중복 청구가 된다</text>
+</svg>
+</body>
+</html>
