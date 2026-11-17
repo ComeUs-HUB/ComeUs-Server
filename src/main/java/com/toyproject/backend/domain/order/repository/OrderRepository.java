@@ -104,6 +104,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
      * [Phase 4 · 10단계] 승인 성공을 반영한다. {@code paymentKey}까지 비교해 이전 시도의 늦은 반영을 막는다.
      * [PAYMENT_IN_PROGRESS -> PAID]
      *
+     * <p>{@code readUpdatedAt}이 null이면 요청 경로다. 복구 배치는 주문을 읽을 때 본 값을 넘겨,
+     * 읽은 뒤 누가 행을 바꿨으면 0건이 되게 한다(ADR 0030).
+     *
      * @return 갱신된 행 수. 0이면 다른 경로가 먼저 반영했거나 선점한 시도가 바뀌었다
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -113,9 +116,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
              where o.id = :orderId
                and o.status = :inProgress
                and o.paymentKey = :paymentKey
+               and (:readUpdatedAt is null or o.updatedAt = :readUpdatedAt)
             """)
     int applyPaymentSuccess(@Param("orderId") Long orderId,
                             @Param("paymentKey") String paymentKey,
+                            @Param("readUpdatedAt") LocalDateTime readUpdatedAt,
                             @Param("inProgress") OrderStatus inProgress,
                             @Param("paid") OrderStatus paid,
                             @Param("updatedAt") LocalDateTime updatedAt);
@@ -123,6 +128,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     /**
      * [Phase 4 · 10단계] 승인 거절을 반영한다. {@code paymentKey}를 비워 같은 주문으로 다시 결제할 수 있게 한다.
      * [PAYMENT_IN_PROGRESS -> PENDING]
+     *
+     * <p>{@code readUpdatedAt}의 뜻은 {@link #applyPaymentSuccess}와 같다.
      *
      * @return 갱신된 행 수. 0이면 다른 경로가 먼저 반영했거나 선점한 시도가 바뀌었다
      */
@@ -133,10 +140,42 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
              where o.id = :orderId
                and o.status = :inProgress
                and o.paymentKey = :paymentKey
+               and (:readUpdatedAt is null or o.updatedAt = :readUpdatedAt)
             """)
     int applyPaymentRejection(@Param("orderId") Long orderId,
                               @Param("paymentKey") String paymentKey,
+                              @Param("readUpdatedAt") LocalDateTime readUpdatedAt,
                               @Param("inProgress") OrderStatus inProgress,
                               @Param("pending") OrderStatus pending,
                               @Param("updatedAt") LocalDateTime updatedAt);
+
+    /**
+     * [Phase 4 · 11단계] 복구 판정 대상 id. {@code updated_at}이 {@code (abandonCutoff, judgeCutoff]} 구간인 주문을 오래된 순으로.
+     * {@code idx_orders_status_updated_at}을 탄다.
+     */
+    @Query("""
+            select o.id from Order o
+             where o.status = :status
+               and o.updatedAt > :abandonCutoff
+               and o.updatedAt <= :judgeCutoff
+             order by o.updatedAt
+            """)
+    List<Long> findRecoveryTargetIds(@Param("status") OrderStatus status,
+                                     @Param("abandonCutoff") LocalDateTime abandonCutoff,
+                                     @Param("judgeCutoff") LocalDateTime judgeCutoff,
+                                     Pageable pageable);
+
+    /**
+     * [Phase 4 · 11단계] 1시간 경계를 넘긴 주문. {@code from}이 null이면(기동 후 첫 경보) 넘긴 주문 전체다.
+     */
+    @Query("""
+            select o.orderNumber from Order o
+             where o.status = :status
+               and o.updatedAt <= :abandonCutoff
+               and (:from is null or o.updatedAt > :from)
+             order by o.updatedAt
+            """)
+    List<String> findAbandonedOrderNumbers(@Param("status") OrderStatus status,
+                                           @Param("from") LocalDateTime from,
+                                           @Param("abandonCutoff") LocalDateTime abandonCutoff);
 }

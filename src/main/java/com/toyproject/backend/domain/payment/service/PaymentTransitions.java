@@ -41,6 +41,11 @@ public class PaymentTransitions {
     public record ClaimedOrder(Long orderId, String orderNumber, BigDecimal amount, boolean claimed) {
     }
 
+    /** 복구 배치가 판정 전에 읽어 고정한 주문. {@code updatedAt}은 반영 CAS 조건으로 그대로 넘긴다(ADR 0030). */
+    public record RecoveryTarget(Long orderId, String orderNumber, BigDecimal amount, OrderStatus status,
+                                 String paymentKey, LocalDateTime updatedAt) {
+    }
+
     /**
      * 주문을 확인하고 {@code PENDING → PAYMENT_IN_PROGRESS}로 선점한다. 금액이 다르면 토스를 부르지 않는다.
      *
@@ -87,7 +92,17 @@ public class PaymentTransitions {
      */
     @Transactional(timeout = APPLY_TIMEOUT_SECONDS)
     public Optional<PaymentResponse> applySuccess(Long orderId, String orderNumber, String paymentKey, TossPayment toss) {
-        int updated = orderRepository.applyPaymentSuccess(orderId, paymentKey,
+        return applySuccess(orderId, orderNumber, paymentKey, toss, null);
+    }
+
+    /**
+     * 복구 배치용. {@code readUpdatedAt}은 주문을 읽을 때 본 값이고, 그 뒤 행이 바뀌었으면 0건이다(ADR 0030).
+     * 요청 경로는 null을 넘기는 위 메서드를 쓴다.
+     */
+    @Transactional(timeout = APPLY_TIMEOUT_SECONDS)
+    public Optional<PaymentResponse> applySuccess(Long orderId, String orderNumber, String paymentKey, TossPayment toss,
+                                                  LocalDateTime readUpdatedAt) {
+        int updated = orderRepository.applyPaymentSuccess(orderId, paymentKey, readUpdatedAt,
                 OrderStatus.PAYMENT_IN_PROGRESS, OrderStatus.PAID, LocalDateTime.now());
         if (updated == 0) {
             return Optional.empty();
@@ -103,7 +118,13 @@ public class PaymentTransitions {
      */
     @Transactional(timeout = APPLY_TIMEOUT_SECONDS)
     public boolean applyRejection(Long orderId, String paymentKey) {
-        return orderRepository.applyPaymentRejection(orderId, paymentKey,
+        return applyRejection(orderId, paymentKey, null);
+    }
+
+    /** 복구 배치용. {@code readUpdatedAt}의 뜻은 배치용 {@code applySuccess}와 같다. */
+    @Transactional(timeout = APPLY_TIMEOUT_SECONDS)
+    public boolean applyRejection(Long orderId, String paymentKey, LocalDateTime readUpdatedAt) {
+        return orderRepository.applyPaymentRejection(orderId, paymentKey, readUpdatedAt,
                 OrderStatus.PAYMENT_IN_PROGRESS, OrderStatus.PENDING, LocalDateTime.now()) == 1;
     }
 
@@ -115,6 +136,14 @@ public class PaymentTransitions {
                 .flatMap(order -> paymentRepository.findByOrderId(orderId)
                         .filter(payment -> payment.getPaymentKey().equals(paymentKey))
                         .map(payment -> PaymentResponse.of(order.getOrderNumber(), payment)));
+    }
+
+    /** [11단계] 복구 판정 전에 주문을 읽어 상태·키·시각을 고정한다. 새 트랜잭션이라 커밋된 최신 값이다. */
+    @Transactional(readOnly = true)
+    public RecoveryTarget readForRecovery(Long orderId) {
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        return new RecoveryTarget(order.getId(), order.getOrderNumber(), order.getTotalAmount(), order.getStatus(),
+                order.getPaymentKey(), order.getUpdatedAt());
     }
 
     /** 반영이 0건일 때 현재 상태를 본다. */

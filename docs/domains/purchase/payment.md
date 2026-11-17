@@ -1,7 +1,7 @@
 # payment — 결제
 
 > 이 문서는 **구현할 계약**이고, 진행 현황은 [roadmap.md](../../roadmap.md)가 소유한다.
-> 엔티티, 토스 연동 경계(`PaymentGateway`), 승인 API가 코드에 있다. 조회 API, 환불, 복구 배치는 아직 없다.
+> 엔티티, 토스 연동 경계(`PaymentGateway`), 승인·조회 API, 복구 배치의 승인 판정이 코드에 있다. 환불과 복구 배치의 환불 판정은 아직 없다.
 
 [order.md](order.md)의 주문 하나에 결제 하나가 붙는다. 셋에 걸친 엔티티 관계는 [README.md](README.md)가 소유한다.
 
@@ -160,9 +160,10 @@ API가 아니라 스케줄 작업이다. 서버 장애나 응답 유실로 요�
 PaymentRecoveryScheduler      @Scheduled 1분, 트랜잭션 없음
   ├─ recoverStuckOrders()     5분~1시간 멈춘 주문 판정, 실행당 50초 예산
   │    └─ PaymentRecoveryService.recover(id)        주문마다, 트랜잭션 없음
-  │         ├─ 주문 읽기 (status, paymentKey, updated_at 고정)
+  │         ├─ PaymentTransitions.readForRecovery   주문 읽기 (status, paymentKey, updated_at 고정)
   │         ├─ 토스 조회 (트랜잭션 밖, 읽기 타임아웃 5초)
-  │         └─ ApprovalTransactions / RefundTransactions   요청 경로와 같은 CAS + 읽은 updated_at
+  │         └─ PaymentTransitions.applySuccess / applyRejection   요청 경로와 같은 CAS + 읽은 updated_at
+  │                                                 (환불 반영 메서드는 12단계에서 정한다)
   └─ alertAbandoned()         이번에 1시간을 막 넘긴 주문만 한 번 ERROR
 ```
 
@@ -205,7 +206,8 @@ PaymentRecoveryScheduler      @Scheduled 1분, 트랜잭션 없음
 
 - 기동 후 첫 실행은 1시간 넘은 주문 **전체**를 경보한다. 서버가 내려가 있는 동안 경계를 넘은 주문이 빠지지 않게 한다
 - 기준 시각은 경보 조회가 성공한 뒤에만 갱신한다
-- 대상이 많으면 건수 ERROR 한 줄과 주문 목록 WARN으로 나눈다. 형태는 구현 단계에서 정한다
+- 기준 시각은 인스턴스 메모리에 두므로 다중 서버에서는 경보가 인스턴스 수만큼 중복된다. 필요해지면 기준 시각을 DB 한 행으로 옮기고, CAS로 갱신에 성공한 인스턴스만 경보한다(재시작 시 재경보도 함께 사라진다)
+- 로그는 건수 ERROR 한 줄(`결제 1시간 미판정, 수동 처리 필요 count=N`)과 주문번호 목록 WARN 한 줄이다. 1건이어도 같은 형태라 검색 패턴이 하나다
 
 **수동 처리:** 자동으로 취소하지 않는다. 돈이 빠져나갔을 수 있어서다. 운영자가 토스 개발자센터에서 `paymentKey`로 상태를 확인한다.
 승인됐으면 `PAID`와 `Payment`를 DB에 반영하고, 승인되지 않았으면 `PENDING`으로 되돌리고 `paymentKey`를 비운다.

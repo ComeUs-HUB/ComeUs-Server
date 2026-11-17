@@ -273,7 +273,7 @@ class PaymentServiceTest {
         gateway.onConfirm(() -> {
             // 이 시도가 멈춘 사이 거절로 PENDING이 됐고, 새 시도가 pk-2로 선점했다
             transactionTemplate.executeWithoutResult(status -> {
-                orderRepository.applyPaymentRejection(order.getId(), "pk-1",
+                orderRepository.applyPaymentRejection(order.getId(), "pk-1", null,
                         OrderStatus.PAYMENT_IN_PROGRESS, OrderStatus.PENDING, LocalDateTime.now());
                 orderRepository.claimPayment(order.getId(), "pk-2",
                         OrderStatus.PENDING, OrderStatus.PAYMENT_IN_PROGRESS, LocalDateTime.now());
