@@ -3,6 +3,7 @@ package com.toyproject.backend.domain.order.service;
 import com.toyproject.backend.domain.cart.entity.Cart;
 import com.toyproject.backend.domain.cart.entity.CartItem;
 import com.toyproject.backend.domain.cart.service.CartService;
+import com.toyproject.backend.domain.order.dto.AdminOrderSummaryResponse;
 import com.toyproject.backend.domain.order.dto.OrderCreateResponse;
 import com.toyproject.backend.domain.order.dto.OrderDetailResponse;
 import com.toyproject.backend.domain.order.dto.OrderSummaryResponse;
@@ -23,6 +24,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -103,44 +105,46 @@ public class OrderService {
      *
      * @throws BusinessException 없거나 타인의 주문이면 O001
      */
-    public OrderDetailResponse getMyOrderDetail(Long userId, Long orderId) {
-        return orderRepository.findWithItemsByIdAndUserId(orderId, userId)
+    public OrderDetailResponse getMyOrderDetail(Long userId, String orderNumber) {
+        return orderRepository.findWithItemsByOrderNumberAndUserId(orderNumber, userId)
                 .map(OrderDetailResponse::from)
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
     }
 
     /**
-     * [Phase 4 · 6단계] 결제 전 주문을 취소하고 재고를 복구한다. {@code PAID} 취소는 환불과 함께 Payment에서 연다.
+     * [Phase 4 · 12단계] 회원 취소의 주문 식별. 분기와 취소는 {@link OrderCancelService}가 한다.
      *
-     * @throws BusinessException O001 · O002 · O003 · O004
+     * @throws BusinessException 없거나 타인의 주문이면 O001
      */
-    @Transactional(isolation = Isolation.READ_COMMITTED)
-    public void cancelOrder(Long userId, Long orderId) {
-        if (!orderRepository.existsByIdAndUserId(orderId, userId)) {
-            throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
-        }
-
-        cancelPendingOrder(orderId);
-    }
-
-    /** [Phase 4 · 7단계] 전체 주문 목록. 상한과 정렬은 컨트롤러가 정한다. */
-    public PageResponse<OrderSummaryResponse> getOrderList(Pageable pageable) {
-        return PageResponse.of(orderRepository.findAll(pageable).map(OrderSummaryResponse::from));
+    public Long getMyOrderId(Long userId, String orderNumber) {
+        return orderRepository.findIdByOrderNumberAndUserId(orderNumber, userId)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
     }
 
     /**
-     * [Phase 4 · 7단계] ADMIN 상태 변경. 취소는 회원과 같은 경로이고 그 밖에는 배송 전이만 연다.
+     * [Phase 4 · 12단계] 지금 상태. 취소 분기와 환불 0건 재확인이 쓴다 — 판단용이고 보호는 각 CAS가 한다.
      *
-     * @throws BusinessException O001 · O002 · O003 · O004 · O005
+     * @throws BusinessException 없으면 O001
+     */
+    public OrderStatus getOrderStatus(Long orderId) {
+        return getOrder(orderId).getStatus();
+    }
+
+    /** [Phase 4 · 7단계] 전체 주문 목록. 상한과 정렬은 컨트롤러가 정한다. */
+    public PageResponse<AdminOrderSummaryResponse> getOrderList(Pageable pageable) {
+        return PageResponse.of(orderRepository.findAll(pageable).map(AdminOrderSummaryResponse::from));
+    }
+
+    /**
+     * [Phase 4 · 7단계] ADMIN 배송 전이. {@code CANCELLED}는 환불이 트랜잭션 밖이어야 해서
+     * 컨트롤러가 {@link OrderCancelService}로 보낸다(12단계, ADR 0029). 여기 오면 O005다.
+     *
+     * @throws BusinessException O001 · O005
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void changeOrderStatus(Long orderId, OrderStatus nextStatus) {
         OrderStatus currentStatus = getOrder(orderId).getStatus();
 
-        if (nextStatus == OrderStatus.CANCELLED) {
-            cancelPendingOrder(orderId);
-            return;
-        }
         if (!isDeliveryTransition(currentStatus, nextStatus)
                 || orderRepository.transitionStatus(orderId, currentStatus, nextStatus, LocalDateTime.now()) == 0) {
             throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
@@ -168,7 +172,15 @@ public class OrderService {
                 || (currentStatus == OrderStatus.SHIPPING && nextStatus == OrderStatus.DELIVERED);
     }
 
-    private void cancelPendingOrder(Long orderId) {
+    /**
+     * [Phase 4 · 6단계] 결제 전 주문을 취소하고 재고를 복구한다. 12단계부터 {@link OrderCancelService}가 부른다.
+     *
+     * <p>{@code PENDING}이 아니면 CAS가 0건이고 지금 상태로 거절한다.
+     *
+     * @throws BusinessException O001 · O002 · O003 · O004
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void cancelPendingOrder(Long orderId) {
         int cancelled = orderRepository.transitionStatus(
                 orderId, OrderStatus.PENDING, OrderStatus.CANCELLED, LocalDateTime.now());
         if (cancelled == 0) {
@@ -178,17 +190,22 @@ public class OrderService {
         restoreStock(orderId);
     }
 
-    /** 생성과 같이 상품을 잠근 뒤에 재고를 읽는다. */
-    private void restoreStock(Long orderId) {
+    /**
+     * 생성과 같이 상품을 잠근 뒤에 재고를 읽는다. 12단계 환불 반영도 같은 순서로 쓴다.
+     *
+     * <p>호출자의 트랜잭션 안에서만 돈다. 트랜잭션 밖에서 부르면 바로 예외다.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void restoreStock(Long orderId) {
         List<OrderItem> items = getOrder(orderId).getOrderItems();
         productService.lockProducts(items.stream().map(item -> item.getProduct().getId()).toList());
         items.forEach(item -> item.getProduct().increaseStock(item.getQuantity()));
     }
 
-    /** CAS가 0건이면 지금 상태로 거절 사유를 가린다. */
-    private BusinessException cancelRejection(Long orderId) {
+    /** 취소·환불 선점 CAS가 0건이면 지금 상태로 거절 사유를 가린다. 환불 선점(12단계)도 쓴다. */
+    public BusinessException cancelRejection(Long orderId) {
         return new BusinessException(switch (getOrder(orderId).getStatus()) {
-            case PAYMENT_IN_PROGRESS -> OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS;
+            case PAYMENT_IN_PROGRESS, REFUND_IN_PROGRESS -> OrderErrorCode.ORDER_PAYMENT_IN_PROGRESS;
             case CANCELLED -> OrderErrorCode.ORDER_ALREADY_CANCELLED;
             default -> OrderErrorCode.ORDER_CANCEL_NOT_ALLOWED;
         });

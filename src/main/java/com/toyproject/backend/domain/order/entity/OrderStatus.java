@@ -13,6 +13,8 @@ public enum OrderStatus {
     PAYMENT_IN_PROGRESS,
     /** 결제 완료. */
     PAID,
+    /** [Phase 4 · 12단계] 토스 결제 취소 진행 중. 취소·배송 처리할 수 없다(ADR 0029). */
+    REFUND_IN_PROGRESS,
     /** 배송 중. */
     SHIPPING,
     /** 배송 완료. 최종 상태다. */

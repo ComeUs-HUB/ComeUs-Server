@@ -4,6 +4,7 @@ import com.toyproject.backend.domain.order.dto.OrderCreateRequest;
 import com.toyproject.backend.domain.order.dto.OrderCreateResponse;
 import com.toyproject.backend.domain.order.dto.OrderDetailResponse;
 import com.toyproject.backend.domain.order.dto.OrderSummaryResponse;
+import com.toyproject.backend.domain.order.service.OrderCancelService;
 import com.toyproject.backend.domain.order.service.OrderService;
 import com.toyproject.backend.global.exception.BusinessException;
 import com.toyproject.backend.global.exception.CommonErrorCode;
@@ -32,6 +33,8 @@ import org.springframework.web.bind.annotation.RestController;
  * [Phase 4 · 7단계] 회원 주문 API. 계약은 {@code docs/domains/purchase/order.md}.
  *
  * <p>생성은 멱등 재요청이면 기존 주문을 돌려주므로 201이 아니라 200이다.
+ *
+ * <p>주문은 PK가 아니라 {@code orderNumber}로 가리킨다. 순차 PK를 내보내면 주문량이 드러난다.
  */
 @RestController
 @RequestMapping("/api/orders")
@@ -46,6 +49,7 @@ public class OrderController {
             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
 
     private final OrderService orderService;
+    private final OrderCancelService orderCancelService;
 
     /** 헤더를 필수로 받으면 누락이 500이 되므로 {@code required = false}와 검증으로 C001을 낸다(ADR 0024). */
     @PostMapping
@@ -67,16 +71,16 @@ public class OrderController {
         return ApiResponse.success(orderService.getMyOrderList(principal.getId(), sanitize(pageable)));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{orderNumber}")
     public ApiResponse<OrderDetailResponse> getMyOrderDetail(@AuthenticationPrincipal UserPrincipal principal,
-                                                             @PathVariable Long id) {
-        return ApiResponse.success(orderService.getMyOrderDetail(principal.getId(), id));
+                                                             @PathVariable String orderNumber) {
+        return ApiResponse.success(orderService.getMyOrderDetail(principal.getId(), orderNumber));
     }
 
-    @PostMapping("/{id}/cancel")
+    @PostMapping("/{orderNumber}/cancel")
     public ApiResponse<Void> cancelOrder(@AuthenticationPrincipal UserPrincipal principal,
-                                         @PathVariable Long id) {
-        orderService.cancelOrder(principal.getId(), id);
+                                         @PathVariable String orderNumber) {
+        orderCancelService.cancelByMember(principal.getId(), orderNumber);
         return ApiResponse.success(null);
     }
 

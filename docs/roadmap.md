@@ -14,12 +14,12 @@
 | 1 | 글로벌 기반 — 공통 응답, 예외 처리, 페이지네이션 | ✅ |
 | 2 | 인증/인가 — user/auth 도메인, Security, JWT | ✅ (브라우저 E2E 통과) |
 | 3 | 카테고리 / 상품 | ✅ 카테고리 · 상품 모두 MySQL 실기동 통과 |
-| 4 | 구매 플로우 — Cart · Order · Payment | ⬜ |
+| 4 | 구매 플로우 — Cart · Order · Payment | ✅ Order · Payment MySQL 실기동 통과 |
 | 5 | 리뷰 | ⬜ |
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
-**Phase 4 Cart(1~3단계)와 Order(4~8단계) 구현이 끝났다.** MySQL 최소 검증을 마쳤다. 다음은 Payment다.
+**Phase 4 Cart(1~3단계)·Order(4~8단계)·Payment(9~12단계) 구현이 끝났다.** Cart·Order는 MySQL 최소 검증을, Payment는 MySQL과 토스 테스트 키 실기동을 마쳤다.
 **동시성 제어 방식은 Order 착수 전까지 ADR로 정한다** — 되돌리기 비용이 큰 결정이지만
 재고를 차감하는 것은 Order이고 Cart는 읽기만 하므로 Cart는 그 결정 없이 착수할 수 있다
 ([domains/purchase/order.md](domains/purchase/order.md)).
@@ -258,7 +258,7 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
       멀티파트 업로드·로컬 스토리지·URL 발급은 별도로 다룬다
       ([ADR 0012](decisions/catalog/0012-image-urls-in-separate-table.md))
 
-## Phase 4 — 구매 플로우 ⬜
+## Phase 4 — 구매 플로우 ✅
 
 계약: [domains/purchase/](domains/purchase/README.md).
 결정 근거는 [ADR 0016](decisions/purchase/0016-stock-reserved-at-order-not-cart.md)·[0017](decisions/purchase/0017-order-copies-cart-and-cuts-the-link.md)·[0018](decisions/purchase/0018-no-product-options-yet.md)이 소유한다.
@@ -346,7 +346,7 @@ Javadoc 첫 줄에 `[Phase 4 · N단계]`를 표기한다 — Phase 2·3과 같�
   `READ_COMMITTED`, 격리 수준이 조용히 무시되지 않게 막는 장치(`validateExistingTransaction`)를 함께 고정했다.
   전환은 [측정 계획](performance/order-stock-concurrency.md)의 측정치로만 판단한다
 - [ADR 0026](decisions/purchase/0026-payment-confirm-outside-transaction.md) — 결제 승인은 트랜잭션 밖에서 호출하고
-  주문 상태 선점으로 한 번만 진입시킨다. `open-in-view: false`도 여기서 정했다. 끈 상태의 영향은 코드 확인과 전체 테스트로 봤고 MySQL에서는 호출해 보지 않았다
+  주문 상태 선점으로 한 번만 진입시킨다. `open-in-view: false`도 여기서 정했다. 끈 상태의 영향은 코드 확인과 전체 테스트로 봤고, Payment 실기동에서 MySQL로 조회 API를 호출해 확인했다
 
 상태 전환표, `PENDING` 만료, 배송지 스냅샷 등 주문 계약은 [order.md](domains/purchase/order.md)에 확정했다.
 
@@ -370,18 +370,51 @@ Cart 단계에서 밀린 장바구니 락 확인도 이때 함께 했다. 결과
 - [ ] **성능 측정** — 로컬 소량 부하라 TPS, p99, 커넥션 풀 포화 지점은 재지 않았다. [측정 계획](performance/order-stock-concurrency.md)
 - [ ] **프로세스 강제 종료 시나리오**
 
-### Payment — 9~11단계 ⬜
+### Payment — 9~12단계 ✅
 
-착수 전 정할 것 — 확정 거절을 토스 에러 코드 화이트리스트로 바꾸는 것과 복구 배치의 종결 조건이다. PR #16 리뷰에서 나왔다.
+| 단계 | 내용 | 검증 | |
+|---|---|---|---|
+| 9 | `Payment` 엔티티 + `V6__create_payments.sql` + `PaymentGateway`와 토스 구현 | 엔티티·영속성 테스트 | ✅ |
+| 10 | 승인 API — 선점, 토스 호출, 반영 + `PAY003`~`PAY006` | 서비스·컨트롤러 테스트 | ✅ |
+| 11 | 복구 배치(승인 판정) + 결제 조회 API | 배치·컨트롤러 테스트 | ✅ |
+| 12 | 환불 + `PAID` 취소(회원·ADMIN) + 복구 배치의 환불 판정 | 서비스·배치·컨트롤러 테스트 | ✅ |
+
+환불 흐름은 [ADR 0029](decisions/purchase/0029-refund-outside-transaction.md)가 정했다.
+
+승인 응답 판정과 복구 종결 조건은 [ADR 0028](decisions/purchase/0028-payment-result-whitelist-and-recovery-limit.md)이 정했다.
+
+복구 배치의 실행 시간 상한과 판정하지 못한 주문의 처리는 [ADR 0030](decisions/purchase/0030-recovery-batch-runtime-limits.md)이 정했다.
+11단계는 `PAYMENT_IN_PROGRESS`만 판정했고, `REFUND_IN_PROGRESS` 판정은 환불을 만든 12단계에서 더했다 — 단계마다 테스트할 수 있는 코드만 들어간다.
 
 계약은 [payment.md](domains/purchase/payment.md), 승인 경계는
 [ADR 0026](decisions/purchase/0026-payment-confirm-outside-transaction.md).
 
 착수 전 확인할 것:
 
-- [ ] **거절 뒤 같은 `orderId`로 재결제되는지** 토스 테스트 환경에서 확인한다. 공식 문서에 허용 여부가 없다
-- [ ] **토스 에러 코드 목록을 판정표와 대조한다** — "이미 처리됨"류 4xx를 결과 불명으로 분류하고, 같은 `paymentKey` 재호출의 응답을 본다
-- [ ] **`open-in-view: false`의 영향을 확인한다** — 컨트롤러·응답 변환에서 지연 로딩이 깨지는 곳이 없는지 본다
+- [x] **토스 에러 코드 목록을 판정표와 대조한다** — [ADR 0028](decisions/purchase/0028-payment-result-whitelist-and-recovery-limit.md)·[0029](decisions/purchase/0029-refund-outside-transaction.md)
+- [x] **`open-in-view: false`의 영향을 확인한다** — Order 단계에서 확인했다
+- [x] **테스트 키로 확인한다** (2026-11-11, 문서용 키. 결과는 [payment.md](domains/purchase/payment.md)) — 주문서형 키의 `paymentKey` 조회·취소, 전액 취소 후 `CANCELED`, 거절 뒤 같은 `orderId` 재결제, 같은 `paymentKey` 재승인 응답, 실제 응답 시간과 `method` 값
+
+### Payment MySQL·토스 실기동 (2026-11-18)
+
+MySQL 8.0.41에 별도 검증 DB를 만들어 V1~V6를 적용했다. 토스 문서용 테스트 키로 결제창 인증을 받고, 승인·환불은 실제 API로 호출했다.
+복구 배치 시나리오는 토스를 직접 호출하고 주문 상태를 DB에서 바꿔 반영이 빠진 상황을 만들었다. 검증 DB는 확인 후 삭제했다.
+
+- [x] V1~V6 적용, Hibernate `validate` 통과
+- [x] 같은 승인 요청 동시 2건 — 1건 200(0.95초), 1건 `PAY003`(0.015초, 토스 호출 없음)
+- [x] 회원 취소 — 토스 `CANCELED`, 주문 `CANCELLED`, 결제 `REFUNDED`, 환불 시각이 토스 `canceledAt`과 같다, 재고 복구. 다시 취소하면 `O004`
+- [x] ADMIN 취소(`PUT /api/admin/orders/{id}/status`) — 회원 취소와 같은 결과
+- [x] 복구 배치, 승인 반영 — 토스 `DONE`인 `PAYMENT_IN_PROGRESS` 주문을 `PAID`로, 결제 시각은 토스 `approvedAt`
+- [x] 복구 배치, 환불 미처리 — 토스 `DONE`인 `REFUND_IN_PROGRESS` 주문을 `PAID`로 되돌린다
+- [x] 복구 배치, 환불 반영 — 토스 `CANCELED`인 `REFUND_IN_PROGRESS` 주문을 `CANCELLED`로, 재고 복구
+- [x] `PENDING` 만료 — 15분 지난 주문이 `CANCELLED`가 되고 재고가 돌아온다. 만료된 주문에 승인을 보내면 토스 호출 없이 `PAY005`
+- [x] `open-in-view: false` — 주문 목록·상세, 결제 조회, ADMIN 목록이 200이고 지연 로딩 예외가 없다
+- [x] 전 과정에서 ERROR 로그 0건, 마지막 재고가 처음 값(10)과 같다
+
+확인하지 못한 것:
+
+- [ ] **결과 불명 경로** — 토스 5xx·타임아웃은 테스트 키로 만들 수 없어 자동 테스트로만 확인했다
+- [ ] **상점 키** — 문서용 키로 확인했다. 실서비스 전에 상점 키로 다시 확인한다
 
 ## Phase 5 — 리뷰 ⬜
 

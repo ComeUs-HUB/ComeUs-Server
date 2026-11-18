@@ -82,13 +82,19 @@ public interface ErrorCode {          // global/exception/ErrorCode.java
 | O005 | `INVALID_ORDER_STATUS_TRANSITION` | 409 | 〃 |
 | PAY001 | `PAYMENT_NOT_FOUND` | 404 | `domain.payment.exception.PaymentErrorCode` |
 | PAY002 | `PAYMENT_ALREADY_EXISTS` | 409 | 〃 |
+| PAY003 | `PAYMENT_IN_PROGRESS` | 409 | 〃 |
+| PAY004 | `PAYMENT_AMOUNT_MISMATCH` | 400 | 〃 |
+| PAY005 | `PAYMENT_NOT_ALLOWED` | 409 | 〃 |
+| PAY006 | `PAYMENT_REJECTED` | 402 | 〃 |
+| PAY007 | `PAYMENT_REFUND_REJECTED` | 409 | 〃 |
+| PAY008 | `PAYMENT_REFUND_IN_PROGRESS` | 409 | 〃 |
 | R001 | `REVIEW_NOT_FOUND` | 404 | `domain.review.exception.ReviewErrorCode` |
 | R002 | `REVIEW_ALREADY_EXISTS` | 409 | 〃 |
 | R003 | `REVIEW_NOT_ALLOWED` | 403 | 〃 |
 
-Cart·Order·Payment·Review의 코드는 **해당 도메인 구현 전에 선반영**된 것이다 —
+Review의 코드는 **해당 도메인 구현 전에 선반영**된 것이다 —
 enum은 있지만 이를 던지는 코드가 아직 없다.
-Category·Product는 Phase 3에서 구현돼 CA001~CA004·P001·P002가 모두 실제로 던져진다.
+Category·Product(Phase 3)와 Cart·Order·Payment(Phase 4)의 코드는 모두 실제로 던져진다.
 
 ## 도메인별 구체 예외 클래스
 
