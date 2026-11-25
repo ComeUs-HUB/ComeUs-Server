@@ -12,6 +12,7 @@
 | 주석 작성, "이건 어디에 써야 하나" | [conventions/javadoc.md](conventions/javadoc.md) |
 | 브랜치 생성, 커밋 작성, PR 올리기 | [conventions/git.md](conventions/git.md) |
 | "왜 이렇게 돼 있지?" 싶을 때 | [decisions/](decisions/) |
+| 흐름을 그림으로 보기 (시퀀스·상태·구성도) | [diagrams/](diagrams/README.md) |
 | 부하 측정·성능 목표 확인 | [performance/order-stock-concurrency.md](performance/order-stock-concurrency.md) |
 | 배포·CI/CD·운영 | [deployment.md](deployment.md) |
 | 로컬 실행 환경 세팅 | [local-setup.md](local-setup.md) |
