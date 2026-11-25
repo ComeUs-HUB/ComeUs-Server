@@ -14,17 +14,15 @@
 | 1 | 글로벌 기반 — 공통 응답, 예외 처리, 페이지네이션 | ✅ |
 | 2 | 인증/인가 — user/auth 도메인, Security, JWT | ✅ (브라우저 E2E 통과) |
 | 3 | 카테고리 / 상품 | ✅ 카테고리 · 상품 모두 MySQL 실기동 통과 |
-| 4 | 구매 플로우 — Cart · Order · Payment | ✅ Order · Payment MySQL 실기동 통과 |
+| 4 | 구매 플로우 — Cart · Order · Payment | ✅ Cart · Order MySQL 최소 검증, Payment MySQL · 토스 테스트 키 실기동 통과 |
 | 5 | 리뷰 | ⬜ |
 | 6 | 마무리 — RBAC 최종 점검 | ⬜ |
 | 7 | 배포 — Docker, CI/CD, 서버, 모니터링 | ⬜ ([deployment.md](deployment.md)) |
 
 **Phase 4 Cart(1~3단계)·Order(4~8단계)·Payment(9~12단계) 구현이 끝났다.** Cart·Order는 MySQL 최소 검증을, Payment는 MySQL과 토스 테스트 키 실기동을 마쳤다.
-**동시성 제어 방식은 Order 착수 전까지 ADR로 정한다** — 되돌리기 비용이 큰 결정이지만
-재고를 차감하는 것은 Order이고 Cart는 읽기만 하므로 Cart는 그 결정 없이 착수할 수 있다
-([domains/purchase/order.md](domains/purchase/order.md)).
+다음은 **Phase 5 리뷰**다. 착수 전에 중복 방지 단위와 평균 평점 집계 방식을 정한다([domains/review.md](domains/review.md)).
 
-**현재 규모**: main 79개 파일 · 테스트 27개 클래스 353개 케이스.
+**현재 규모**: main 119개 파일 · 테스트 39개 클래스 469개 케이스.
 케이스 수는 `./gradlew test` 리포트 기준이라 **파라미터라이즈는 실행 횟수로 센다**.
 
 ## Phase 0 — 환경 설정 ✅
@@ -266,9 +264,9 @@ Specification 도입), soft delete, 도메인 간 **양방향** 참조
 구현 순서는 **Cart → Order → Payment**다. Cart만 구매 플로우 안에서 들어오는 의존이 없고
 재고를 점유하지 않아 되돌리기 비용이 가장 낮다. Payment는 Order 없이 엔티티가 성립하지 않는다.
 
-**동시성 제어 방식은 Cart 다음으로 미룬다.** 재고 차감은 Order의 일이고 Cart는 재고를 읽기만
+**동시성 제어 방식은 Cart 다음으로 미뤘다.** 재고 차감은 Order의 일이고 Cart는 재고를 읽기만
 하므로([ADR 0016](decisions/purchase/0016-stock-reserved-at-order-not-cart.md)) Cart는 그 결정 없이
-착수할 수 있다. Order 착수 전까지 정하고 ADR로 남긴다.
+착수할 수 있었다. Order 착수 전에 비관적 락 기준선으로 정했다([ADR 0025](decisions/purchase/0025-pessimistic-lock-as-stock-concurrency-baseline.md)).
 
 ### Cart — 1~3단계 ✅
 

@@ -19,6 +19,14 @@ Dockerfile과 docker-compose.yml이 부재하고, `.github/workflows`에는 코�
 
 이것이 배포 방식이 인증 설계를 되짚는 유일한 지점이므로, 호스팅을 고르기 전에 확인한다.
 
+### 서버를 여러 대로 늘릴 때 — 스케줄러
+
+`@Scheduled` 작업 두 개(`PENDING` 만료, 결제 복구)는 **인스턴스마다 돈다.** 분산 락(ShedLock 등)은 없다.
+
+- 상태 전환은 모두 CAS라 겹쳐 돌아도 **결과는 한 번만 반영된다.** 복구 배치는 읽은 `updated_at`까지 비교한다([ADR 0030](decisions/purchase/0030-recovery-batch-runtime-limits.md))
+- 대신 토스 조회가 인스턴스 수만큼 나가고, 1시간 미판정 경보가 **인스턴스 수만큼 중복된다.** 줄이는 방법은 [payment.md의 복구 배치 규칙](domains/purchase/payment.md#규칙)
+- 단일 서버로 시작하면 해당 없다. 늘리기 전에 경보 중복을 받아들일지, 락을 둘지 정한다
+
 ## Dockerfile
 
 최소 크기 이미지를 만든다.
@@ -38,7 +46,7 @@ Dockerfile과 docker-compose.yml이 부재하고, `.github/workflows`에는 코�
 
 - 앱이 DB의 준비 상태를 기다리도록 **헬스체크 기반 의존성 순서**를 건다
 - DB 데이터는 **볼륨으로 분리**해 컨테이너 재시작 후에도 유지
-- DB 접속 정보·JWT 시크릿은 `.env`로 분리 (이미 `.gitignore` 대상)
+- DB 접속 정보·JWT 시크릿·토스 시크릿 키는 `.env`로 분리 (이미 `.gitignore` 대상)
 
 확인할 것:
 - [ ] DB 준비 전에 앱이 먼저 뜨지 않음
@@ -71,11 +79,14 @@ Dockerfile과 docker-compose.yml이 부재하고, `.github/workflows`에는 코�
 | `jwt.secret` (`JWT_SECRET`) | `JwtProvider` 생성자 | `WeakKeyException` — 32바이트 미만도 거부 |
 | `app.frontend.base-url` | `AppProperties` 생성자 | `IllegalArgumentException` |
 
+`toss.secret-key`(`TOSS_SECRET_KEY`)는 기동을 막지 않는다. 비어 있으면 토스 호출이 전부 `UNAUTHORIZED_KEY`로 실패해
+결과 불명(경보)이 되므로, 배포 후 첫 결제 전에 반드시 확인한다.
+
 나머지(`app.cors.allowed-origins`, `app.cookie.secure`)는 비어 있으면 **안전한 쪽 기본값**으로
 흡수되고 기동은 된다 — 각각 "모든 cross-origin 차단", `Secure=true`다.
 
 ⚠️ `application-prod.yml`에는 현재 `app.cookie.secure`만 있다. 배포 전에 위 두 값과
-`kakao.*`(client-id·client-secret·admin-key·redirect-uri), `app.cors.allowed-origins`를
+`kakao.*`(client-id·client-secret·admin-key·redirect-uri), `toss.secret-key`, `app.cors.allowed-origins`를
 프로파일 파일이나 환경변수로 채워야 한다.
 
 확인할 것:
@@ -127,8 +138,12 @@ Dockerfile과 docker-compose.yml이 부재하고, `.github/workflows`에는 코�
 
 전 API가 [공통 응답 포맷](conventions/api-response.md)과 `PageResponse` 구조를 지키는지 함께 확인한다.
 
+토스는 **상점 키(라이브 또는 상점 테스트 키)로 다시 확인한다.** 로컬 확인은 문서용 공개 테스트 키로 했다
+([payment.md의 테스트 키 확인 결과](domains/purchase/payment.md#테스트-키-확인-결과)). 승인·조회·전액 취소와 거절 코드 분류가 같은지 본다.
+
 확인할 것:
 - [ ] 전체 시나리오 통과
+- [ ] 상점 키로 승인 · 조회 · 전액 취소 확인
 - [ ] 응답 포맷 전 API 준수
 
 ## 운영 · 보안
@@ -144,5 +159,5 @@ Dockerfile과 docker-compose.yml이 부재하고, `.github/workflows`에는 코�
 
 확인할 것:
 - [ ] 운영 서버 에러 로그 모니터링 체계
-- [ ] `JWT_SECRET`이 소스코드·Git에 노출되지 않음
+- [ ] `JWT_SECRET`·`TOSS_SECRET_KEY`가 소스코드·Git에 노출되지 않음
 - [ ] DB 백업 스크립트 동작

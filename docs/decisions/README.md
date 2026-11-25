@@ -64,6 +64,7 @@
 | [0028](purchase/0028-payment-result-whitelist-and-recovery-limit.md) | 승인 거절은 확인된 코드만 인정하고 복구는 1시간 뒤 수동으로 넘긴다 | 채택 (0029·0030이 보강) |
 | [0029](purchase/0029-refund-outside-transaction.md) | 환불은 승인과 같이 선점·호출·반영으로 나누고 토스 취소가 끝난 뒤에 재고를 푼다 | 채택 (0030이 보강) |
 | [0030](purchase/0030-recovery-batch-runtime-limits.md) | 복구 배치는 실행 시간에 상한을 두고 판정하지 못한 주문은 건드리지 않는다 | 채택 |
+| [0031](purchase/0031-payment-uses-order-repository-for-state-cas.md) | 결제는 주문 상태 CAS를 `OrderRepository`로 직접 실행한다 | 채택 |
 
 ### platform — 전역 기반
 

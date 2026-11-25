@@ -26,6 +26,10 @@ KAKAO_ADMIN_KEY=<카카오 Admin 키>
 # 최소 32바이트. 짧으면 기동 시 WeakKeyException.
 # 키 길이가 알고리즘을 정한다 — 32+ HS256, 48+ HS384, 64+ HS512
 JWT_SECRET=<32바이트 이상 문자열>
+
+# 토스페이먼츠 시크릿 키. 비어 있어도 기동은 되지만 토스 호출이 전부 UNAUTHORIZED_KEY(결과 불명·경보)가 된다.
+# 로컬은 토스 문서의 공개 테스트 키(test_gsk_docs_…)나 개발자센터의 테스트 키를 쓴다
+TOSS_SECRET_KEY=<토스 시크릿 키>
 ```
 
 ## 3. `src/main/resources/application-local.yml`

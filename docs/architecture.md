@@ -13,6 +13,8 @@
 | 프로젝트 | 커머스 플랫폼 백엔드 REST API |
 | 기술 스택 | Spring Boot 3.5.0 · Java 21 · JPA · MySQL · Gradle (Kotlin DSL) |
 | 인증 | 카카오 OAuth + JWT ([ADR 0001](decisions/auth/0001-kakao-only-oauth.md)) |
+| 결제 | 토스페이먼츠 결제위젯 · 승인·조회·취소 API ([payment.md](domains/purchase/payment.md)) |
+| 배치 | `@Scheduled` 두 개 — `PENDING` 만료, 결제 복구. 1분 주기, 풀 크기 2 |
 | 스키마 | Flyway 소유, Hibernate는 `validate`만 ([ADR 0008](decisions/platform/0008-flyway-owns-schema.md)) |
 | 테스트 DB | H2 인메모리 (`MODE=MySQL`, `ddl-auto: create-drop`, Flyway 비활성) |
 
@@ -67,10 +69,38 @@ com.toyproject.backend
 │   │   ├── dto                 #   ProductListResponse, ProductDetailResponse,
 │   │   │                       #   ProductSearchRequest, ProductSearchCondition
 │   │   └── exception           #   ProductErrorCode
-│   ├── cart        ─┐
-│   ├── order        ├─ exception/*ErrorCode 만 존재. 나머지는 착수 시점에 만든다
-│   ├── payment      │
-│   └── review      ─┘
+│   ├── cart                    # 장바구니
+│   │   ├── controller          #   CartController
+│   │   ├── service             #   CartService
+│   │   ├── repository          #   CartRepository
+│   │   ├── entity              #   Cart, CartItem
+│   │   ├── dto                 #   CartItemAddRequest, CartItemQuantityRequest,
+│   │   │                       #   CartItemResponse, CartResponse
+│   │   └── exception           #   CartErrorCode
+│   ├── order                   # 주문 (재고 점유 · 상태 전환)
+│   │   ├── controller          #   OrderController, AdminOrderController
+│   │   ├── service             #   OrderService, OrderCancelService,
+│   │   │                       #   OrderExpirationScheduler (PENDING 만료 배치)
+│   │   ├── repository          #   OrderRepository
+│   │   ├── entity              #   Order, OrderItem, OrderStatus, ShippingAddress
+│   │   ├── dto                 #   OrderCreateRequest·Response, OrderSummaryResponse,
+│   │   │                       #   OrderDetailResponse, AdminOrderSummaryResponse 외
+│   │   └── exception           #   OrderErrorCode
+│   ├── payment                 # 결제 · 환불 (토스페이먼츠)
+│   │   ├── controller          #   PaymentController
+│   │   ├── service             #   PaymentService, RefundService (흐름 · TX 없음),
+│   │   │                       #   PaymentTransitions, RefundTransitions (선점 · 반영 TX),
+│   │   │                       #   PaymentQueryService, PaymentRecoveryService,
+│   │   │                       #   PaymentRecoveryScheduler (복구 배치)
+│   │   ├── gateway             #   PaymentGateway, TossPayment, TossPaymentStatus
+│   │   │   └── toss            #   TossPaymentGateway, TossErrorCodes,
+│   │   │                       #   TossProperties, TossRestClientConfig
+│   │   ├── repository          #   PaymentRepository
+│   │   ├── entity              #   Payment, PaymentStatus
+│   │   ├── dto                 #   PaymentConfirmRequest, PaymentResponse
+│   │   └── exception           #   PaymentErrorCode, PaymentRejectedException,
+│   │                           #   PaymentResultUnknownException
+│   └── review                  # exception/ReviewErrorCode 만 존재. 나머지는 착수 시점에 만든다
 └── global
     ├── config       # SecurityConfig, AppProperties, JpaConfig, SchedulingConfig
     ├── exception    # ErrorCode(interface), CommonErrorCode,
@@ -109,7 +139,6 @@ com.toyproject.backend
     유일하게 Service가 아니라 Repository(`ProductRepository.existsByCategoryId`)를 직접 읽는데,
     Service를 경유하면 생성자 주입 순환이 된다
     ([ADR 0014](decisions/catalog/0014-category-reads-product-repository.md))
-  - **아래 둘은 Phase 4 착수 시점에 들어온다.**
   - 엔티티 참조 다섯 — `cart → user`(`Cart.user`), `cart → product`(`CartItem.product`),
     `order → user`(`Order.user`), `order → product`(`OrderItem.product`),
     `payment → order`(`Payment.order`). `product → category`와 같은 모양이고, 참조할 엔티티는
@@ -121,6 +150,13 @@ com.toyproject.backend
     주문이 장바구니에서 **읽고 지우는** 둘을 하므로 빈 장바구니 처리 같은 규칙이 `CartService`에
     모여 있어야 한다
     ([ADR 0017](decisions/purchase/0017-order-copies-cart-and-cuts-the-link.md))
+  - `payment → order` — **두 번째 Repository 직접 의존이다.** 결제의 상태 CAS(선점·반영)와 복구 대상 조회는
+    `OrderRepository`로 직접 실행한다. 지킬 규칙이 쿼리 조건 자체라 서비스로 감쌀 이유가 없다.
+    재고 복구(`restoreStock`)와 선점 실패 응답(`cancelRejection`)은 규칙이 서비스에 있어 `OrderService`를 경유한다
+    ([ADR 0031](decisions/purchase/0031-payment-uses-order-repository-for-state-cas.md))
+  - `order → payment` — `PAID` 주문 취소가 환불을 불러야 해서 `OrderCancelService`가 `RefundService`를 부른다.
+    트랜잭션 없는 `OrderCancelService`가 부르므로 `OrderService`와 순환하지 않는다
+    ([ADR 0029](decisions/purchase/0029-refund-outside-transaction.md))
 - `BusinessException`이 `ErrorCode`를 **인터페이스 타입**으로 들고 있어, 새 도메인이 에러 코드를
   추가해도 `global`을 고치지 않는다 ([conventions/error-codes.md](conventions/error-codes.md))
 
