@@ -1,6 +1,6 @@
 # order — 주문
 
-> 이 문서는 **구현할 계약**이고, 진행 현황은 [roadmap.md](../../roadmap.md)가 소유한다.
+> 이 문서는 **계약**이고, 진행 현황은 [roadmap.md](../../roadmap.md)가 소유한다.
 > 모든 API와 만료 배치가 코드에 있다. `PAID` 취소(환불)는 12단계에서 붙었다.
 
 [cart.md](cart.md)의 항목을 값으로 복사해 성립하고, 결제는 [payment.md](payment.md)가 잇는다.

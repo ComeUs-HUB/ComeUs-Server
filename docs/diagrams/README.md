@@ -10,14 +10,24 @@
 | [카카오 로그인](auth/seq-auth-login.md) | 로그인부터 첫 API 호출까지 토큰이 어디서 만들어져 어디에 실리는가 | [auth.md](../domains/auth.md) |
 | [OAuth · JWT 패키지 구조](auth/package-auth.md) | 로그인에 참여하는 클래스가 어느 패키지에 있고, 의존은 어느 방향으로만 흐르는가 | [auth.md](../domains/auth.md) |
 | [상품 목록 조회](catalog/seq-product-list.md) | 필터·정렬·페이징이 어떻게 SQL이 되고, 이미지 N+1을 어떻게 피하는가 | [product.md](../domains/catalog/product.md) |
-| [장바구니 담기](purchase/seq-cart-add.md) | 동시 담기에서 수량이 사라지지 않고, 첫 담기 경합이 왜 409가 되는가 | [cart.md](../domains/purchase/cart.md) |
-| [주문 생성](purchase/seq-order-create.md) | 동시 주문에서 재고가 초과 판매되지 않고, 같은 요청이 왜 주문을 두 번 만들지 않는가 | [order.md](../domains/purchase/order.md) |
-| [결제 승인](purchase/seq-payment-confirm.md) | 토스 승인을 어떻게 한 번만 호출하고, 결과를 모를 때 어떻게 넘기는가 | [payment.md](../domains/purchase/payment.md) |
-| [결제 게이트웨이](purchase/payment-gateway.md) | 서비스는 토스를 어디까지 알고, 토스 응답은 어떻게 성공 · 확정 거절 · 결과 불명으로 갈리는가 | [payment.md](../domains/purchase/payment.md) |
-| [환불](purchase/seq-refund.md) | 되돌릴 수 없는 토스 취소를 어떻게 한 번만 부르고, 돈이 돌아간 뒤에만 재고를 푸는가 | [payment.md](../domains/purchase/payment.md) |
-| [결제 복구 배치](purchase/seq-payment-recovery.md) | 결과를 모른 채 멈춘 승인 · 환불 주문을 어떻게 토스 기준으로 바로잡는가 | [payment.md](../domains/purchase/payment.md) |
-| [주문 상태](purchase/state-order.md) | 주문은 어떤 상태를 거치고, 언제 재고를 점유·복구하는가 | [order.md](../domains/purchase/order.md) |
 | [ERD](images/erd.png) | 테이블과 관계 | `src/main/resources/db/migration` |
+
+## 구매 플로우
+
+장바구니부터 환불·복구까지 8장이다. 읽는 순서와 공통 규칙은 [purchase/README.md](purchase/README.md)에 있다.
+
+| # | 그림 | 답하는 질문 |
+|---|---|---|
+| 0 | [주문 · 결제 전체 흐름](purchase/seq-purchase-overview.md) | 주문 생성부터 결제 승인까지, 재고는 언제 확보되고 돈은 언제 확정되는가 |
+| 1 | [주문 상태](purchase/state-order.md) | 주문은 어떤 상태를 거치고, 언제 재고를 점유·복구하는가 |
+| 2 | [장바구니 담기](purchase/seq-cart-add.md) | 동시 담기에서 수량이 사라지지 않고, 첫 담기 경합이 왜 409가 되는가 |
+| 3 | [주문 생성](purchase/seq-order-create.md) | 동시 주문에서 재고가 초과 판매되지 않고, 같은 요청이 왜 주문을 두 번 만들지 않는가 |
+| 4 | [결제 승인](purchase/seq-payment-confirm.md) | 토스 승인을 어떻게 한 번만 호출하고, 결과를 모를 때 어떻게 넘기는가 |
+| 5 | [결제 게이트웨이](purchase/payment-gateway.md) | 서비스는 토스를 어디까지 알고, 토스 응답은 어떻게 성공 · 확정 거절 · 결과 불명으로 갈리는가 |
+| 6 | [환불](purchase/seq-refund.md) | 되돌릴 수 없는 토스 취소를 어떻게 한 번만 부르고, 돈이 돌아간 뒤에만 재고를 푸는가 |
+| 7 | [결제 복구 배치](purchase/seq-payment-recovery.md) | 결과를 모른 채 멈춘 승인 · 환불 주문을 어떻게 토스 기준으로 바로잡는가 |
+
+원천 문서: [cart.md](../domains/purchase/cart.md) · [order.md](../domains/purchase/order.md) · [payment.md](../domains/purchase/payment.md)
 
 ## 폴더 구조
 
@@ -28,7 +38,7 @@ diagrams/
 ├── global/     시스템 전반 — 구성도 · 요청 파이프라인
 ├── auth/       로그인 · 인증
 ├── catalog/    상품 · 카테고리
-├── purchase/   장바구니 · 주문
+├── purchase/   장바구니 · 주문 · 결제 · 환불
 ├── images/     모든 PNG (장에서 ../images/ 로 참조)
 └── src/        손으로 배치를 잡은 원본 (*.mmd, *.html)
 ```
